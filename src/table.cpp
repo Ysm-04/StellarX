@@ -1,7 +1,7 @@
-﻿#include "table.h"
+﻿#include "Table.h"
 // 绘制表格的当前页
 // 使用双循环绘制行和列，考虑分页偏移
-void table::drawTable()
+void Table::drawTable()
 {
 	dX = x;
 	dY = uY;
@@ -24,7 +24,7 @@ void table::drawTable()
 	uY = y + lineHeights.at(0) + 10;
 }
 
-void table::drawHeader()
+void Table::drawHeader()
 {
 	
 	uY = dY + lineHeights.at(0) + 10;
@@ -41,7 +41,7 @@ void table::drawHeader()
 // 初始化文本宽度和高度计算
 // 遍历所有数据和表头，计算每列的最大宽度和行高
 // 此方法在数据变更时自动调用
-void table::initTextWaH()
+void Table::initTextWaH()
 {
 	this->colWidths.resize(this->headers.size());
 	this->lineHeights.resize(this->headers.size());
@@ -91,15 +91,15 @@ void table::initTextWaH()
 	}
 }
 
-void table::initButton()
+void Table::initButton()
 {
 	int x1, x2;
 	int y1, y2;
 	x1 = pX - 70;
 	x2 = pX + textwidth(LPCTSTR(pageNumtext.c_str())) + 10;
 	y1 = y2 = pY;
-	this->prevButton = new button(x1, y1, 60, textheight(LPCTSTR(pageNumtext.c_str())), "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
-	this->nextButton = new button(x2, y2, 60, textheight(LPCTSTR(pageNumtext.c_str())), "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	this->prevButton = new Button(x1, y1, 60, textheight(LPCTSTR(pageNumtext.c_str())), "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	this->nextButton = new Button(x2, y2, 60, textheight(LPCTSTR(pageNumtext.c_str())), "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
 	prevButton->setOnClickListener([this]() 
 		{if (this->currentPage > 1)
 	{
@@ -117,7 +117,7 @@ void table::initButton()
 	}});
 }
 
-void table::initPageNum()
+void Table::initPageNum()
 {
 	if (0 == pY)
 		pY = uY + lineHeights.at(0) * rowsPerPage + rowsPerPage * 10+10;
@@ -126,12 +126,12 @@ void table::initPageNum()
 	this->pX -= textwidth(LPCTSTR(pageNumtext.c_str()));
 	this->pX /= 2;
 	this->pX += x;
-	this->pageNum = new label(this->pX, pY, pageNumtext);
-	//pageNum->setTxtdisap(true);
+	this->pageNum = new Label(this->pX, pY, pageNumtext);
+	//pageNum->setTextdisap(true);
 	pageNum->textStyle = this->textStyle;
 }
 
-void table::drawPageNum()
+void Table::drawPageNum()
 {
 	if (nullptr == pageNum)
 		initPageNum();
@@ -144,7 +144,7 @@ void table::drawPageNum()
 	
 }
 
-void table::drawButton()
+void Table::drawButton()
 {
 	if (nullptr == prevButton || nullptr == nextButton)
 		initButton();
@@ -153,13 +153,13 @@ void table::drawButton()
 
 }
 
-table::table(int x, int y)
+Table::Table(int x, int y)
 	:Control(x, y, 0,0)
 {	
 	//this->saveBkImage = new IMAGE(this->width,this->height);
 }
 
-table::~table()
+Table::~Table()
 {
 	if (this->prevButton)
 		delete this->prevButton;
@@ -175,7 +175,7 @@ table::~table()
 	this->saveBkImage = nullptr;
 }
 
-void table::draw()
+void Table::draw()
 {
 	if (this->dirty)
 	{
@@ -260,7 +260,7 @@ void table::draw()
 	}
 }
 
-void table::handleEvent(const ExMessage& msg)
+void Table::handleEvent(const ExMessage& msg)
 {
 	if(!this->isShowPageButton)
 		return;
@@ -271,7 +271,7 @@ void table::handleEvent(const ExMessage& msg)
 	}
 }
 
-void table::setHeaders(std::initializer_list<std::string> headers)
+void Table::setHeaders(std::initializer_list<std::string> headers)
 {
 	this->headers.clear();
 	for (auto lis : headers)
@@ -281,7 +281,7 @@ void table::setHeaders(std::initializer_list<std::string> headers)
 	dirty = true;
 }
 
-void table::setData(const std::vector<std::string>& data)
+void Table::setData(const std::vector<std::string>& data)
 {
 	this->data.push_back(data);
 	totalPages = (this->data.size() + rowsPerPage - 1) / rowsPerPage;
@@ -291,7 +291,7 @@ void table::setData(const std::vector<std::string>& data)
 	dirty = true;
 }
 
-void table::setData(const std::initializer_list<std::vector<std::string>>& data)
+void Table::setData(const std::initializer_list<std::vector<std::string>>& data)
 {
 	for (auto lis : data)
 		this->data.push_back(lis);
@@ -302,7 +302,7 @@ void table::setData(const std::initializer_list<std::vector<std::string>>& data)
 	dirty = true;
 }
 
-void table::setRowsPerPage(int rows)
+void Table::setRowsPerPage(int rows)
 {
 	this->rowsPerPage = rows;
 	totalPages = (data.size() + rowsPerPage - 1) / rowsPerPage;
@@ -312,90 +312,90 @@ void table::setRowsPerPage(int rows)
 	dirty = true;
 }
 
-void table::showPageButton(bool isShow)
+void Table::showPageButton(bool isShow)
 {
 	this->isShowPageButton = isShow;
 }
 
-void table::settableBorder(COLORREF color)
+void Table::setTableBorder(COLORREF color)
 {
 	this->tableBorderClor = color;
 }
 
-void table::settableBk(COLORREF color)
+void Table::setTableBk(COLORREF color)
 {
 	this->tableBkClor = color;
 }
 
-void table::settableFillMode(StellarX::fillMode mode)
+void Table::setTableFillMode(StellarX::FillMode mode)
 {
-	if (StellarX::fillMode::Solid == mode || StellarX::fillMode::Null == mode)
+	if (StellarX::FillMode::Solid == mode || StellarX::FillMode::Null == mode)
 		this->tableFillMode = mode;
 	else
-		this->tableFillMode = StellarX::fillMode::Solid;
+		this->tableFillMode = StellarX::FillMode::Solid;
 }
 
-void table::settableLineStyle(StellarX::lineStyle style)
+void Table::setTableLineStyle(StellarX::LineStyle style)
 {
 	this->tableLineStyle = style;
 }
 
-void table::settableBorderWidth(int width)
+void Table::setTableBorderWidth(int width)
 {
 	this->tableBorderWidth = width;
 }
 
-int table::getCurrentPage() const
+int Table::getCurrentPage() const
 {
 	return this->currentPage;
 }
 
-int table::getTotalPages() const
+int Table::getTotalPages() const
 {
 	return this->totalPages;;
 }
 
-int table::getRowsPerPage() const
+int Table::getRowsPerPage() const
 {
 	return this->rowsPerPage;
 }
 
-bool table::getShowPageButton() const
+bool Table::getShowPageButton() const
 {
 	return this->isShowPageButton;
 }
 
-COLORREF table::gettableBorder() const
+COLORREF Table::getTableBorder() const
 {
 	return this->tableBorderClor;
 }
 
-COLORREF table::gettableBk() const
+COLORREF Table::getTableBk() const
 {
 	return this->tableBkClor;
 }
 
-StellarX::fillMode table::gettableFillMode() const
+StellarX::FillMode Table::getTableFillMode() const
 {
 	return this->tableFillMode;
 }
 
-StellarX::lineStyle table::gettableLineStyle() const
+StellarX::LineStyle Table::getTableLineStyle() const
 {
 	return this->tableLineStyle;
 }
 
-std::vector<std::string> table::getHeaders() const
+std::vector<std::string> Table::getHeaders() const
 {
 	return this->headers;
 }
 
-std::vector<std::vector<std::string>> table::getData() const
+std::vector<std::vector<std::string>> Table::getData() const
 {
 	return this->data;
 }
 
-int table::gettableBorderWidth() const
+int Table::getTableBorderWidth() const
 {
 	return this->tableBorderWidth;
 }

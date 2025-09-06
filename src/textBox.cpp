@@ -1,22 +1,22 @@
-﻿// TxtBox.cpp
-#include "textBox.h"
+﻿// TextBox.cpp
+#include "TextBox.h"
 
 
-textBox::textBox(int x, int y, int width, int height, std::string text, StellarX::textBoxmode mode, StellarX::controlShape shape)
+TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX::TextBoxmode mode, StellarX::ControlShape shape)
 	:Control(x,y,width,height),text(text), mode(mode), shape(shape)
 {
 }
 
-void textBox::draw()
+void TextBox::draw()
 {
     if(dirty)
     {
         saveStyle();
         setfillcolor(textBoxBkClor);
         setlinecolor(textBoxBorderClor);
-        if (textStyle.nHeight > height - y)
+        if (textStyle.nHeight > height)
             textStyle.nHeight = height;
-        if (textStyle.nWidth > width - x)
+        if (textStyle.nWidth > width)
             textStyle.nWidth = width;
         settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
             textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
@@ -31,21 +31,21 @@ void textBox::draw()
         //根据形状绘制
         switch (shape)
         {
-        case StellarX::controlShape::RECTANGLE:
-            fillrectangle(x, y, width, height);//有边框填充矩形
-            outtextxy(x + 10, (y + (height - y - text_height) / 2), LPCTSTR(text.c_str()));
+        case StellarX::ControlShape::RECTANGLE:
+            fillrectangle(x,y,x+width,y+height);//有边框填充矩形
+            outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
             break;
-        case StellarX::controlShape::B_RECTANGLE:
-            solidrectangle(x, y, width, height);//无边框填充矩形
-            outtextxy(x + 10, (y + (height - y - text_height) / 2), LPCTSTR(text.c_str()));
+        case StellarX::ControlShape::B_RECTANGLE:
+            solidrectangle(x, y, x + width, y + height);//无边框填充矩形
+            outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
             break;
-        case StellarX::controlShape::ROUND_RECTANGLE:
-            fillroundrect(x, y, width, height, 20, 20);//有边框填充圆角矩形
-            outtextxy(x + 10, (y + (height - y - text_height) / 2), LPCTSTR(text.c_str()));
+        case StellarX::ControlShape::ROUND_RECTANGLE:
+            fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//有边框填充圆角矩形
+            outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
             break;
-        case StellarX::controlShape::B_ROUND_RECTANGLE:
-            solidroundrect(x, y, width, height, 20, 20);//无边框填充圆角矩形
-            outtextxy(x + 10, (y + (height - y - text_height) / 2), LPCTSTR(text.c_str()));
+        case StellarX::ControlShape::B_ROUND_RECTANGLE:
+            solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//无边框填充圆角矩形
+            outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
             break;
         }
         
@@ -54,26 +54,26 @@ void textBox::draw()
     dirty = false;     //标记不需要重绘
 }
 
-void textBox::handleEvent(const ExMessage& msg)
+void TextBox::handleEvent(const ExMessage& msg)
 {
     bool hover = false;
     bool oldClick = click;
 
     switch (shape)
     {
-    case StellarX::controlShape::RECTANGLE:
-    case StellarX::controlShape::B_RECTANGLE:
-    case StellarX::controlShape::ROUND_RECTANGLE:
-    case StellarX::controlShape::B_ROUND_RECTANGLE:
-        hover = (msg.x > x && msg.x < width && msg.y > y && msg.y < height);//判断鼠标是否在矩形按钮内
+    case StellarX::ControlShape::RECTANGLE:
+    case StellarX::ControlShape::B_RECTANGLE:
+    case StellarX::ControlShape::ROUND_RECTANGLE:
+    case StellarX::ControlShape::B_ROUND_RECTANGLE:
+        hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));//判断鼠标是否在矩形按钮内
         break;
     }
     if (hover && msg.message == WM_LBUTTONUP)
     {
         click = true;
-        if(StellarX::textBoxmode::INPUT_MODE == mode)
+        if(StellarX::TextBoxmode::INPUT_MODE == mode)
             dirty =  InputBox(LPTSTR(text.c_str()), maxCharLen,"输入框",NULL,text.c_str(), NULL ,NULL,false);
-        else if (StellarX::textBoxmode::READONLY_MODE == mode)
+        else if (StellarX::TextBoxmode::READONLY_MODE == mode)
         {
             dirty = false;
             InputBox(NULL, maxCharLen, "输出框（输入无效！）", NULL, text.c_str(), NULL, NULL, false);
@@ -87,47 +87,47 @@ void textBox::handleEvent(const ExMessage& msg)
         click = false;
 }
 
-void textBox::setMode(StellarX::textBoxmode mode)
+void TextBox::setMode(StellarX::TextBoxmode mode)
 {
     this->mode = mode;
 }
 
-void textBox::setmaxCharLen(int len)
+void TextBox::setMaxCharLen(int len)
 {
     if (len > 0)
         maxCharLen = len;
 }
 
-void textBox::settextBoxshape(StellarX::controlShape shape)
+void TextBox::setTextBoxshape(StellarX::ControlShape shape)
 {
     switch (shape)
     {
-    case StellarX::controlShape::RECTANGLE:
-    case StellarX::controlShape::B_RECTANGLE:
-    case StellarX::controlShape::ROUND_RECTANGLE:
-    case StellarX::controlShape::B_ROUND_RECTANGLE:
+    case StellarX::ControlShape::RECTANGLE:
+    case StellarX::ControlShape::B_RECTANGLE:
+    case StellarX::ControlShape::ROUND_RECTANGLE:
+    case StellarX::ControlShape::B_ROUND_RECTANGLE:
         this->shape = shape;
         break;
-	case StellarX::controlShape::CIRCLE:
-    case StellarX::controlShape::B_CIRCLE:
-    case StellarX::controlShape::ELLIPSE:
-    case StellarX::controlShape::B_ELLIPSE:
-        this->shape = StellarX::controlShape::RECTANGLE;
+	case StellarX::ControlShape::CIRCLE:
+    case StellarX::ControlShape::B_CIRCLE:
+    case StellarX::ControlShape::ELLIPSE:
+    case StellarX::ControlShape::B_ELLIPSE:
+        this->shape = StellarX::ControlShape::RECTANGLE;
         break;
     }
 }
 
-void textBox::settextBoxBorder(COLORREF color)
+void TextBox::setTextBoxBorder(COLORREF color)
 {
     textBoxBorderClor = color;
 }
 
-void textBox::settextBoxBk(COLORREF color)
+void TextBox::setTextBoxBk(COLORREF color)
 {
     textBoxBkClor = color;
 }
 
-std::string textBox::gettext()
+std::string TextBox::getText() const
 {
     return this->text;
 }

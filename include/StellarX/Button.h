@@ -12,7 +12,7 @@
 #pragma once
 #include "Control.h"
 
-class button : public Control
+class Button : public Control
 {
     
     std::string text;             // 按钮上的文字
@@ -25,27 +25,26 @@ class button : public Control
     COLORREF         buttonHoverColor;                   // 按钮被鼠标悬停的颜色
     COLORREF         buttonBorderColor = RGB(0,0,0);// 按钮边框颜色
 
-    StellarX::buttonMode  mode;	    // 按钮模式
-    StellarX::controlShape shape;     // 按钮形状
+    StellarX::ButtonMode  mode;	    // 按钮模式
+    StellarX::ControlShape shape;     // 按钮形状
 
     int         buttonFillMode = BS_SOLID;   //按钮填充模式
-    StellarX::fillStyle   buttonFillIma  = StellarX::fillStyle::BDiagonal;        //按钮填充图案
+    StellarX::FillStyle   buttonFillIma  = StellarX::FillStyle::BDiagonal;        //按钮填充图案
     IMAGE*      buttonFileIMAGE = nullptr;      //按钮填充图像
 
-    int         ROUND_RECTANGLEwidth = 20;   //构成圆角矩形的圆角的椭圆的宽度。     
-    int         ROUND_RECTANGLEheight = 20;  //构成圆角矩形的圆角的椭圆的高度。
+    
     
     std::function<void()> onClickCallback;      //回调函数
     std::function<void()> onToggleOnCallback;   //TOGGLE模式下的回调函数
     std::function<void()> onToggleOffCallback;  //TOGGLE模式下的回调函数
 
-    StellarX::controlText oldStyle = textStyle;   // 按钮文字样式
+    StellarX::ControlText oldStyle = textStyle;   // 按钮文字样式
     int oldtext_width = -1;
     int oldtext_height = -1;
     int text_width = 0;
     int text_height = 0;
 public:
-    StellarX::controlText textStyle;  // 按钮文字样式
+    StellarX::ControlText textStyle;  // 按钮文字样式
 
 public:
     /*************************************************************************/
@@ -53,18 +52,18 @@ public:
     /*************************************************************************/
     
     //默认按钮颜色
-    button(int x, int y, int width, int height, const std::string text, 
-        StellarX::buttonMode mode = StellarX::buttonMode::NORMAL, StellarX::controlShape shape = StellarX::controlShape::RECTANGLE);
+    Button(int x, int y, int width, int height, const std::string text, 
+        StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
     //自定义按钮未被点击和被点击颜色
-    button(int x, int y, int width, int height, const std::string text,
-           COLORREF ct, COLORREF cf, StellarX::buttonMode mode = StellarX::buttonMode::NORMAL,
-        StellarX::controlShape shape = StellarX::controlShape::RECTANGLE);
+    Button(int x, int y, int width, int height, const std::string text,
+           COLORREF ct, COLORREF cf, StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL,
+        StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
     //自定义按钮颜色和悬停颜色
-    button(int x, int y, int width, int height, const std::string text,
+    Button(int x, int y, int width, int height, const std::string text,
              COLORREF ct, COLORREF cf,COLORREF ch,
-        StellarX::buttonMode mode = StellarX::buttonMode::NORMAL, StellarX::controlShape shape = StellarX::controlShape::RECTANGLE);
+        StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
     //析构函数 释放图形指针内存
-    ~button();
+    ~Button();
 
 /*************************************************************************/
 /********************************Set方法**********************************/
@@ -78,7 +77,7 @@ public:
     //设置回调函数
     //************************************
     // 名称:    setOnClickListener | setOnToggleOnListener | setOnToggleOffListener
-    // 全名:  button::setOnClickListener
+    // 全名:  Button::setOnClickListener
     // 访问:    public 
     // 返回类型:   void
 	// Parameter: const std::function<> & & callback 设置回调函数  传入回调函数名即可，不需要传入()，不需要传入参数，不需要传入返回值
@@ -90,7 +89,7 @@ public:
     //设置TOGGLE模式下取消点击的回调函数
     void setOnToggleOffListener(const std::function<void()>&& callback);
     //设置按钮模式
-    void setbuttonMode(StellarX::buttonMode mode);
+    void setbuttonMode(StellarX::ButtonMode mode);
     //设置圆角矩形椭圆宽度
     int setROUND_RECTANGLEwidth(int width);
     //设置圆角矩形椭圆高度
@@ -98,16 +97,16 @@ public:
     //设置按钮填充模式
     void setFillMode(int mode);
     //设置按钮填充图案
-    void setFillIma(StellarX::fillStyle ima);
+    void setFillIma(StellarX::FillStyle ima);
     //设置按钮填充图像
     void setFillIma(std::string imaName);
     //设置按钮边框颜色
-    void setbuttonBorder(COLORREF Border);
+    void setButtonBorder(COLORREF Border);
     //设置按钮文本
-    void setbuttonText(const char* text);
-    void setbuttonText(std::string text);
+    void setButtonText(const char* text);
+    void setButtonText(std::string text);
     //设置按钮形状
-    void setbuttonShape(StellarX::controlShape shape);
+    void setButtonShape(StellarX::ControlShape shape);
 
     //判断按钮是否被点击
     bool isClicked() const;
@@ -117,28 +116,28 @@ public:
     /*************************************************************************/
 	
     //获取按钮文字
-    std::string getbuttonText() const;
-    const char* getbuttonText_c() const;
+    std::string getButtonText() const;
+    const char* getButtonText_c() const;
     //获取按钮模式
-    StellarX::buttonMode getbuttonMode() const;
+    StellarX::ButtonMode getButtonMode() const;
     //获取按钮形状
-    StellarX::controlShape getbuttonShape() const;
+    StellarX::ControlShape getButtonShape() const;
     //获取按钮填充模式
     int getFillMode() const;
 	//获取按钮填充图案
-    StellarX::fillStyle getFillIma() const;
+    StellarX::FillStyle getFillIma() const;
 	//获取按钮填充图像
 	IMAGE* getFillImaImage() const;
 	//获取按钮边框颜色
-    COLORREF getbuttonBorder() const;
+    COLORREF getButtonBorder() const;
 	//获取按钮文字颜色
-    COLORREF getbuttonTxtColor() const;
+    COLORREF getButtonTextColor() const;
 	//获取按钮文字样式
-    StellarX::controlText getbuttonTextStyle() const;
+    StellarX::ControlText getButtonTextStyle() const;
 	
 private:
     //初始化按钮
-    void initButton(const std::string text, StellarX::buttonMode mode, StellarX::controlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);
+    void initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);
     //判断鼠标是否在圆形按钮内
     bool isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius);
     //判断鼠标是否在椭圆按钮内

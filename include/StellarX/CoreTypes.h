@@ -38,7 +38,7 @@ namespace StellarX
  *   此枚举类仅支持图案填充模式
  *   枚举类在使用时，需要使用::进行调用，还要注意大小写
  */
-    enum class fillStyle {
+    enum class FillStyle {
         Horizontal = HS_HORIZONTAL,	// 水平线
         Vertical = HS_VERTICAL,	// 垂直线
         FDiagonal = HS_FDIAGONAL,	// 反斜线
@@ -47,7 +47,7 @@ namespace StellarX
         DiagCross = HS_DIAGCROSS	// 网格
     };
     /**
-     * @枚举类名称: fillMode
+     * @枚举类名称: FillMode
      * @功能描述:   用来定义控件填充模式的枚举类
      *
      * @详细说明:
@@ -65,12 +65,12 @@ namespace StellarX
      *
      * @使用示例:
      *   // 示例代码展示如何使用此枚举类
-     *   fillMode var = fillMode::Solid;
+     *   FillMode var = FillMode::Solid;
      *
      * @备注:
      *  枚举类在使用时，需要使用::进行调用，还要注意大小写
      */
-    enum class fillMode
+    enum class FillMode
     {
         Solid = BS_SOLID,       //固实填充
         Null = BS_NULL,       // 不填充
@@ -98,12 +98,12 @@ namespace StellarX
      *
      * @使用示例:
      *   // 示例代码展示如何使用此枚举类
-     *   lineStyle var = lineStyle::Solid;
+     *   LineStyle var = LineStyle::Solid;
      *
      * @备注:
      *   枚举类在使用时，需要使用::进行调用，还要注意大小写
      */
-    enum class lineStyle {
+    enum class LineStyle {
         Solid = PS_SOLID,       // 实线
         Dash = PS_DASH,         // 虚线
         Dot = PS_DOT,           // 点线
@@ -113,7 +113,7 @@ namespace StellarX
     };
 
     /**
-     * @结构体名称: controlText
+     * @结构体名称: ControlText
      * @功能描述: 控件字体样式  可以自定义不同的样式
      *
      * @详细说明:
@@ -131,10 +131,10 @@ namespace StellarX
      *	     bool     bUnderline = false;   - 是否下划线
      *	     bool     bStrikeOut = false;   - 是否删除线
 
-     *	       bool  operator!=(const controlText& text);
-     *	controlText& operator=(const controlText& text
+     *	       bool  operator!=(const ControlText& text);
+     *	ControlText& operator=(const ControlText& text
      */
-    struct controlText
+    struct ControlText
     {
         int  nHeight = 0;           //- 字体高度
         int  nWidth = 0;            //- 字体宽度 如果为0则自适应
@@ -147,13 +147,13 @@ namespace StellarX
         bool bUnderline = false;    //- 是否下划线
         bool bStrikeOut = false;     //- 是否删除线
 
-        bool operator!=(const controlText& text);
-        controlText& operator=(const controlText& text);
+        bool operator!=(const ControlText& text);
+        ControlText& operator=(const ControlText& text);
 
     };
 
     /**
-     * @枚举名称: controlShape
+     * @枚举名称: ControlShape
      * @功能描述: 枚举控件的不同几何样式
      *
      * @详细说明:
@@ -174,12 +174,12 @@ namespace StellarX
      *  	B_ELLIPSE          //无边框椭圆
      *
      * @使用示例:
-     *   controlShape shape = ELLIPSE;
+     *   ControlShape shape = ELLIPSE;
      *
      * @备注:
      *   按钮类支持所有形状，部分控件只支持部分形状，具体请参考控件类。
      */
-    enum class controlShape
+    enum class ControlShape
     {
         RECTANGLE = 1,     //有边框矩形
         B_RECTANGLE,       //无边框矩形
@@ -194,7 +194,7 @@ namespace StellarX
         B_ELLIPSE          //无边框椭圆
     };
     /**
-     * @枚举类名称: textBoxmode
+     * @枚举类名称: TextBoxmode
      * @功能描述: 定义了文本框的两种模式 
      * 
      * @详细说明:
@@ -206,19 +206,19 @@ namespace StellarX
      * 
      * @使用示例:
      *   // 示例代码展示如何使用此枚举类
-     *   StellarX::textBoxmode var = EnumClassName::VALUE1;
+     *   StellarX::TextBoxmode var = EnumClassName::VALUE1;
      * 
      * @备注:
      *   枚举类的特性、与普通枚举的区别
      */
-	enum class textBoxmode
+	enum class TextBoxmode
 	{
 		INPUT_MODE,  // 用户可输入模式
 		READONLY_MODE // 只读模式
 	};
 
     /**
- * @枚举名称: buttonMode
+ * @枚举名称: ButtonMode
  * @功能描述: brief
  *
  * @详细说明:
@@ -231,13 +231,18 @@ namespace StellarX
  *	 DISABLED    -  禁用模式，按钮不可点击，显示为灰色，文本显示删除线。
  *
  * @使用示例:
- * button b1(100, 100, 120, 120, "测试按钮", RGB(128, 0, 0), RGB(255, 9, 9));
+ * Button b1(100, 100, 120, 120, "测试按钮", RGB(128, 0, 0), RGB(255, 9, 9));
  *
  */
-    enum class buttonMode
+    enum class ButtonMode
     {
-        NORMAL = 1,
-        TOGGLE,
-        DISABLED
+        NORMAL = 1, //普通模式，点击后触发回调，但不会保持状态。
+        TOGGLE,     //切换模式，点击后会在选中和未选中之间切换，触发不同的回调函数。
+        DISABLED    //禁用模式，按钮不可点击，显示为灰色，文本显示删除线。
+    };
+	struct RouRectangle
+    {
+        int ROUND_RECTANGLEwidth = 20;  //构成圆角矩形的圆角的椭圆的宽度。     
+        int ROUND_RECTANGLEheight = 20;  //构成圆角矩形的圆角的椭圆的高度。
     };
 };

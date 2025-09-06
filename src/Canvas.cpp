@@ -15,17 +15,17 @@ void Canvas::draw()
 	//根据画布形状绘制
 	switch (shape)
 	{
-	case StellarX::controlShape::RECTANGLE:
-		fillrectangle(x, y, width, height);//有边框填充矩形
+	case StellarX::ControlShape::RECTANGLE:
+		fillrectangle(x,y,x+width,y+height);//有边框填充矩形
 		break;
-	case StellarX::controlShape::B_RECTANGLE:
-		solidrectangle(x, y, width, height);//无边框填充矩形
+	case StellarX::ControlShape::B_RECTANGLE:
+		solidrectangle(x, y, x + width, y + height);//无边框填充矩形
 		break;
-	case StellarX::controlShape::ROUND_RECTANGLE:
-		fillroundrect(x, y, width, height, 20, 20);//有边框填充圆角矩形
+	case StellarX::ControlShape::ROUND_RECTANGLE:
+		fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//有边框填充圆角矩形
 		break;
-	case StellarX::controlShape::B_ROUND_RECTANGLE:
-		solidroundrect(x, y, width, height, 20, 20);//无边框填充圆角矩形
+	case StellarX::ControlShape::B_ROUND_RECTANGLE:
+		solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//无边框填充圆角矩形
 		break;
 	}
 	// 绘制所有子控件
@@ -48,26 +48,26 @@ void Canvas::addControl(std::unique_ptr<Control> control)
 	controls.push_back(std::move(control));
 }
 
-void Canvas::setShape(StellarX::controlShape shape)
+void Canvas::setShape(StellarX::ControlShape shape)
 {
 	switch (shape)
 	{
-	case StellarX::controlShape::RECTANGLE:
-	case StellarX::controlShape::B_RECTANGLE:
-	case StellarX::controlShape::ROUND_RECTANGLE:
-	case StellarX::controlShape::B_ROUND_RECTANGLE:
+	case StellarX::ControlShape::RECTANGLE:
+	case StellarX::ControlShape::B_RECTANGLE:
+	case StellarX::ControlShape::ROUND_RECTANGLE:
+	case StellarX::ControlShape::B_ROUND_RECTANGLE:
 		this->shape = shape;
 		break;
-	case StellarX::controlShape::CIRCLE:
-	case StellarX::controlShape::B_CIRCLE:
-	case StellarX::controlShape::ELLIPSE:
-	case StellarX::controlShape::B_ELLIPSE:
-		this->shape = StellarX::controlShape::RECTANGLE;
+	case StellarX::ControlShape::CIRCLE:
+	case StellarX::ControlShape::B_CIRCLE:
+	case StellarX::ControlShape::ELLIPSE:
+	case StellarX::ControlShape::B_ELLIPSE:
+		this->shape = StellarX::ControlShape::RECTANGLE;
 		break;
 	}
 }
 
-void Canvas::setcanvasfillMode(StellarX::fillMode mode)
+void Canvas::setCanvasfillMode(StellarX::FillMode mode)
 {
 	this->canvasFillMode = mode;
 }
@@ -82,13 +82,13 @@ void Canvas::setCanvasBkColor(COLORREF color)
 	this->canvasBkClor = color;	
 }
 
-void Canvas::setcanvasLineStyle(StellarX::lineStyle style)
+void Canvas::setCanvasLineStyle(StellarX::LineStyle style)
 {
 	this->canvasLineStyle = style;
 }
 
 
-void Canvas::setlinewidth(int width)
+void Canvas::setLinewidth(int width)
 {
 	this->canvaslinewidth = width;
 }

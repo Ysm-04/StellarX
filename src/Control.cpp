@@ -1,6 +1,6 @@
 ﻿#include "Control.h"
 
-StellarX::controlText& StellarX::controlText::operator=(const controlText& text)
+StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
 {
 	{
 		nHeight = text.nHeight;
@@ -17,7 +17,7 @@ StellarX::controlText& StellarX::controlText::operator=(const controlText& text)
 	}
 }
 
-bool StellarX::controlText::operator!=(const controlText& text)
+bool StellarX::ControlText::operator!=(const ControlText& text)
 {
 	if(nHeight != text.nHeight)
 		return true;

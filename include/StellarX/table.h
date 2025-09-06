@@ -1,5 +1,5 @@
 ﻿/*******************************************************************************
- * @文件: table.h
+ * @文件: Table.h
  * @摘要: 高级表格控件，支持分页显示
  * @描述:
  *     提供完整的数据表格功能，包括表头、数据行、分页和导航按钮。
@@ -19,9 +19,9 @@
 #pragma once
 #include "Control.h"
 #include "Button.h"
-#include "label.h"
+#include "Label.h"
 
-class table :public Control
+class Table :public Control
 {
 private:
 	std::vector<std::vector<std::string>> data; // 表格数据
@@ -44,9 +44,9 @@ private:
 	bool isNeedDrawHeaders = true;              // 是否需要绘制表头
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
 
-	button* prevButton = nullptr;               // 上一页按钮
-	button* nextButton = nullptr;			    // 下一页按钮
-	label*  pageNum = nullptr;                   //页码文本
+	Button* prevButton = nullptr;               // 上一页按钮
+	Button* nextButton = nullptr;			    // 下一页按钮
+	Label*  pageNum = nullptr;                   //页码文本
 	
 	int dX = x, dY = y;							// 单元格的开始坐标
 	int uX = x, uY = y;							// 单元格的结束坐标
@@ -54,8 +54,8 @@ private:
 	int pX = 0;                                 //标签左上角坐标
 	int pY = 0;                                 //标签左上角坐标
 
-	StellarX::fillMode  tableFillMode = StellarX::fillMode::Solid;    //填充模式
-	StellarX::lineStyle tableLineStyle = StellarX::lineStyle::Solid; // 线型
+	StellarX::FillMode  tableFillMode = StellarX::FillMode::Solid;    //填充模式
+	StellarX::LineStyle tableLineStyle = StellarX::LineStyle::Solid; // 线型
 	COLORREF tableBorderClor = RGB(0, 0, 0);     // 表格边框颜色
 	COLORREF tableBkClor = RGB(255, 255, 255);         // 表格背景颜色
 
@@ -68,11 +68,11 @@ private:
 	void drawPageNum();  //绘制页码信息
 	void drawButton();   //绘制翻页按钮
 public:
-	StellarX::controlText textStyle; // 文本样式
+	StellarX::ControlText textStyle; // 文本样式
 
 public:
-	table(int x, int y);
-	~table();
+	Table(int x, int y);
+	~Table();
 
 	// 绘制表格
 	void draw() override;
@@ -91,15 +91,15 @@ public:
 	//设置是否显示翻页按钮
 	void showPageButton(bool isShow);
 	//设置表格边框颜色
-	void settableBorder(COLORREF color);
+	void setTableBorder(COLORREF color);
 	//设置表格背景颜色
-	void settableBk(COLORREF color);
+	void setTableBk(COLORREF color);
 	//设置填充模式
-	void settableFillMode(StellarX::fillMode mode);
+	void setTableFillMode(StellarX::FillMode mode);
 	//设置线型
-	void settableLineStyle(StellarX::lineStyle style);
+	void setTableLineStyle(StellarX::LineStyle style);
 	//设置边框宽度
-	void settableBorderWidth(int width);
+	void setTableBorderWidth(int width);
 
 	//************************** 获取属性 *****************************/
 
@@ -112,19 +112,19 @@ public:
 	//获取是否显示翻页按钮
 	bool getShowPageButton() const;
 	//获取表格边框颜色
-	COLORREF gettableBorder() const;
+	COLORREF getTableBorder() const;
 	//获取表格背景颜色
-	COLORREF gettableBk() const;
+	COLORREF getTableBk() const;
 	//获取填充模式
-	StellarX::fillMode gettableFillMode() const;
+	StellarX::FillMode getTableFillMode() const;
 	//获取线型
-	StellarX::lineStyle gettableLineStyle() const;
+	StellarX::LineStyle getTableLineStyle() const;
 	//获取表头
 	std::vector<std::string> getHeaders () const;
 	//获取表格数据
 	std::vector<std::vector<std::string>> getData() const;
 	//获取表格边框宽度
-	int gettableBorderWidth() const;
+	int getTableBorderWidth() const;
 
 
 };

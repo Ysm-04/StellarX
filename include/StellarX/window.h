@@ -6,7 +6,7 @@
 //#define EX_NOMINIMIZE    3   - 禁用绘图窗口的最小化按钮。
 //#define EX_SHOWCONSOLE   4   - 显示控制台窗口。
 /*******************************************************************************
- * @类: window
+ * @类: Window
  * @摘要: 应用程序主窗口类
  * @描述:
  *     负责创建和管理应用程序的主窗口，是所有控件的根容器。
@@ -17,7 +17,7 @@
  *     - 使用 BeginBatchDraw()/EndBatchDraw() 实现双缓冲
  *     - 使用 getmessage() 处理消息循环
  ******************************************************************************/
-class window
+class Window
 {
 	            int           width;                 //窗口宽度
 	            int           height;                //窗口高度
@@ -29,10 +29,10 @@ class window
 std::vector<std::unique_ptr<Control>> controls;               //控件管理
 
 public:
-	window(int width, int height, int mode);
-	window(int width, int height, int mode, COLORREF bkcloc);
-	window(int width, int height, int mode , COLORREF bkcloc, std::string headline = "窗口");
-	~window();
+	Window(int width, int height, int mode);
+	Window(int width, int height, int mode, COLORREF bkcloc);
+	Window(int width, int height, int mode , COLORREF bkcloc, std::string headline = "窗口");
+	~Window();
 	//绘制窗口
 	void draw();
 	void draw(std::string pImgFile);

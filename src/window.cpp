@@ -1,13 +1,13 @@
-﻿#include "window.h"
+﻿#include "Window.h"
 
-window::window(int width, int height, int mode)
+Window::Window(int width, int height, int mode)
 {
 	this->width = width;
 	this->height = height;
 	this->windowMode = mode;
 }
 
-window::window(int width, int height, int mode, COLORREF bkcloc)
+Window::Window(int width, int height, int mode, COLORREF bkcloc)
 {
 	this->width = width;
 	this->height = height;
@@ -15,7 +15,7 @@ window::window(int width, int height, int mode, COLORREF bkcloc)
 	this->wBkcolor = bkcloc;
 }
 
-window::window(int width, int height, int mode, COLORREF bkcloc, std::string headline)
+Window::Window(int width, int height, int mode, COLORREF bkcloc, std::string headline)
 {
 	this->width = width;
 	this->height = height;
@@ -24,7 +24,7 @@ window::window(int width, int height, int mode, COLORREF bkcloc, std::string hea
     this->headline = headline;
 }
 
-window::~window()
+Window::~Window()
 {
 	if (background)
 		delete background;
@@ -32,7 +32,7 @@ window::~window()
 	closegraph(); // 确保关闭图形上下文
 }
 
-void window::draw()
+void Window::draw()
 {
 	hWnd = initgraph(width, height, windowMode);
 	SetWindowText(hWnd,headline.c_str());
@@ -47,9 +47,9 @@ void window::draw()
 // 使用背景图片绘制窗口
 // @参数 pImgFile: 图片文件路径，支持常见图片格式
 // @备注: 会拉伸图片以适应窗口尺寸
-void window::draw(std::string pImgFile)
+void Window::draw(std::string pImgFile)
 {
-	this->background = new IMAGE;
+	this->background = new IMAGE(width, height);
 	hWnd = initgraph(width, height, windowMode);
 	SetWindowText(hWnd, headline.c_str());
 	loadimage(background, pImgFile.c_str(), width, height, true);
@@ -64,7 +64,7 @@ void window::draw(std::string pImgFile)
 }
 // 运行主事件循环，处理用户输入和窗口消息
 // 此方法会阻塞直到窗口关闭
-void window::runEventLoop()
+void Window::runEventLoop()
 {
 	ExMessage msg;
 	bool running = true;
@@ -81,7 +81,7 @@ void window::runEventLoop()
 	}
 }
 
-void window::setBkImage(std::string pImgFile)
+void Window::setBkImage(std::string pImgFile)
 {
 	if(nullptr == background)
 		this->background = new IMAGE;
@@ -92,18 +92,18 @@ void window::setBkImage(std::string pImgFile)
 	putimage(0, 0, background);
 }
 
-void window::setBkcolor(COLORREF c)
+void Window::setBkcolor(COLORREF c)
 {
 	wBkcolor = c;
 }
 
-void window::setHeadline(std::string headline)
+void Window::setHeadline(std::string headline)
 {
 	this->headline = headline;
 	SetWindowText(this->hWnd, headline.c_str());
 }
 
-void window::addControl(std::unique_ptr<Control> control)
+void Window::addControl(std::unique_ptr<Control> control)
 {
 	this->controls.push_back(std::move(control));
 }

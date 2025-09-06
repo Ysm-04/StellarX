@@ -1,6 +1,6 @@
-﻿#include "label.h"
+﻿#include "Label.h"
 
-label::label()
+Label::Label()
 	:Control(0, 0, 0, 0)
 {
 	this->text = "默认标签";
@@ -8,7 +8,7 @@ label::label()
 	textBkColor = RGB(255, 255, 255);; //默认白色背景
 }
 
-label::label(int x, int y, std::string text, COLORREF textcolor, COLORREF bkColor)
+Label::Label(int x, int y, std::string text, COLORREF textcolor, COLORREF bkColor)
 	:Control(x, y, 0, 0)
 {
 	this->text = text;
@@ -16,7 +16,7 @@ label::label(int x, int y, std::string text, COLORREF textcolor, COLORREF bkColo
 	textBkColor = bkColor; //默认白色背景
 }
 
-void label::draw()
+void Label::draw()
 {
 	saveStyle();
 	if (textBkDisap)
@@ -34,22 +34,22 @@ void label::draw()
 	restoreStyle();
 }
 
-void label::setTxtdisap(bool key)
+void Label::setTextdisap(bool key)
 {
 	textBkDisap = key;
 }
 
-void label::setTxtColor(COLORREF color)
+void Label::setTextColor(COLORREF color)
 {
 	textColor = color;
 }
 
-void label::setTxtBkColor(COLORREF color)
+void Label::setTextBkColor(COLORREF color)
 {
 	textBkColor = color;
 }
 
-void label::setText(std::string text)
+void Label::setText(std::string text)
 {
 	this->text = text;
 }

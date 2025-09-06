@@ -10,7 +10,7 @@
  *     内部包含顺序经过精心设计，确保所有依赖关系正确解析。
  *
  * @作者: 我在人间做废物
- * @邮箱: [您的邮箱或联系方式]
+ * @邮箱: [3150131407@qq.com][]
  * @仓库: https://github.com/yourusername/stellarx
  *
  * @许可证: MIT License
@@ -30,8 +30,8 @@
 #include "CoreTypes.h"
 #include "Control.h"
 #include"Button.h"
-#include"window.h"
-#include"label.h"
-#include"textBox.h"
+#include"Window.h"
+#include"Label.h"
+#include"TextBox.h"
 #include"Canvas.h"
-#include"table.h"
+#include"Table.h"
