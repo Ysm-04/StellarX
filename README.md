@@ -86,7 +86,7 @@ StellarX/
 
 1.  **克隆项目**:
     ```bash
-    git clone https://github.com/Ysm-04/StellarX
+    git clone https://github.com/Ysm-04/StellarX.git
     cd StellarX
     ```
 
