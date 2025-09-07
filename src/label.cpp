@@ -1,4 +1,4 @@
-﻿#include "Label.h"
+﻿#include "StellarX/Label.h"
 
 Label::Label()
 	:Control(0, 0, 0, 0)

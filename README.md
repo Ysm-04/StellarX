@@ -117,42 +117,42 @@ StellarX/
 
 ```cpp
 // 只需包含这一个头文件即可使用所有功能
-#include "StellarX/StellarX.h"
+#include "StellarX.h"
 
 // 程序入口点（请使用WinMain以获得更好的兼容性）
 int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd) {
-    
-    // 1. 创建一个640x480的窗口，背景为白色，标题为"我的应用"
-    StellarX::Window mainWindow(640, 480, 0, RGB(255, 255, 255), "我的第一个星垣应用");
 
-    // 2. 创建一个按钮 (使用智能指针管理)
-    auto myButton = std::make_unique<StellarX::Button>(
-        250, 200, 140, 40, // x, y, 宽度, 高度
-        "点击我",           // 按钮文本
-        StellarX::ButtonMode::NORMAL,
-        StellarX::ControlShape::ROUND_RECTANGLE
-    );
+	// 1. 创建一个640x480的窗口，背景为白色，标题为"我的应用"
+	Window mainWindow(640, 480, 0, RGB(255, 255, 255), "我的第一个星垣应用");
 
-    // 3. 为按钮设置点击事件（使用Lambda表达式）
-    myButton->setOnClickListener([]() {
-        MessageBox(nullptr, L"Hello, 星垣！", L"问候", MB_OK | MB_ICONINFORMATION);
-    });
+	// 2. 创建一个按钮 (使用智能指针管理)
+	auto myButton = std::make_unique<Button>(
+		250, 200, 140, 40, // x, y, 宽度, 高度
+		"点击我",           // 按钮文本
+		StellarX::ButtonMode::NORMAL,
+		StellarX::ControlShape::ROUND_RECTANGLE
+	);
 
-    // 4. (可选)设置按钮样式
-    myButton->textStyle.nHeight = 20;
-    myButton->textStyle.color = RGB(0, 0, 128); // 深蓝色文字
-    myButton->setButtonBorder(RGB(0, 128, 255)); // 蓝色边框
+	// 3. 为按钮设置点击事件（使用Lambda表达式）
+	myButton->setOnClickListener([]() {
+		MessageBox(nullptr, "Hello, 星垣！",  "问候", MB_OK | MB_ICONINFORMATION);
+		});
 
-    // 5. 将按钮添加到窗口
-    mainWindow.addControl(std::move(myButton));
+	// 4. (可选)设置按钮样式
+	myButton->textStyle.nHeight = 20;
+	myButton->textStyle.color = RGB(0, 0, 128); // 深蓝色文字
+	myButton->setButtonBorder(RGB(0, 128, 255)); // 蓝色边框
 
-    // 6. 绘制窗口
-    mainWindow.draw();
+	// 5. 将按钮添加到窗口
+	mainWindow.addControl(std::move(myButton));
 
-    // 7. 进入消息循环，等待用户交互
-    mainWindow.runEventLoop();
+	// 6. 绘制窗口
+	mainWindow.draw();
 
-    return 0;
+	// 7. 进入消息循环，等待用户交互
+	mainWindow.runEventLoop();
+
+	return 0;
 }
 ```
 

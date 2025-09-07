@@ -1,4 +1,4 @@
-﻿#include "Table.h"
+﻿#include "StellarX/Table.h"
 // 绘制表格的当前页
 // 使用双循环绘制行和列，考虑分页偏移
 void Table::drawTable()

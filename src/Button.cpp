@@ -1,4 +1,4 @@
-﻿#include "Button.h"
+﻿#include "StellarX/Button.h"
 
 Button::Button(int x, int y, int width, int height, const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape)
 	: Control(x, y, width, height)
@@ -52,7 +52,7 @@ void Button::draw()
 		}
 		else
 		{
-			// 修改这里：确保点击状态的颜色正确显示
+			// 确保点击状态的颜色正确显示
 			// 点击状态优先级最高，然后是悬停状态，最后是默认状态
 			if (click)
 				setfillcolor(buttonTrueColor);

@@ -1,4 +1,4 @@
-﻿#include "Canvas.h"
+﻿#include "StellarX/Canvas.h"
 
 Canvas::Canvas(int x, int y, int width, int height)
 	:Control(x, y, width, height) {}

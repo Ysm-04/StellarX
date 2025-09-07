@@ -1,4 +1,4 @@
-﻿#include "Window.h"
+﻿#include "StellarX/Window.h"
 
 Window::Window(int width, int height, int mode)
 {

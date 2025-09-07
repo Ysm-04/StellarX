@@ -1,4 +1,4 @@
-﻿#include "Control.h"
+﻿#include "StellarX/Control.h"
 
 StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
 {
