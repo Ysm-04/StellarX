@@ -5,14 +5,28 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [1.0.0] - 2025-09-06
+## [1.0.0] - 2025-09-08
+
+### 发布摘要
+首个稳定版本 (Stable Release)
 
 ### 新增
+
 - StellarX 框架的第一个稳定版本
 - 完整的控件库：按钮、标签、文本框、画布、表格和窗口
 - 基于 CMake 的构建系统
 - 详细的文档和示例代码
 - **明确声明：本框架专为 Windows 平台设计**
+
+### Released
+-   **首次发布预编译的二进制库文件**，方便用户快速集成，无需从源码编译。
+-   提供的发布包包括：
+    -   `StellarX-v1.0.0-x64-Windows-msvc-x64.zip`
+        -   **编译环境**: Visual Studio 2022 (MSVC v143)
+        -   **架构**: x64 (64位)
+        -   **运行时库**: `/MD` 
+        -   **构建模式**: `Release | Debug`
+        -   **内容**: 包含所有必要的头文件(`include/`)和静态库文件(``lib/StellarX-Debug.lib StellarX-Release.lib`)
 
 ### 核心特性
 - 模块化设计，遵循 SOLID 原则

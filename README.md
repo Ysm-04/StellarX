@@ -1,5 +1,8 @@
 # 星垣 (StellarX) GUI Framework
 
+![Version](https://img.shields.io/badge/Version-1.0.0-brightgreen.svg) <!-- 新增版本徽章 -->
+![Download](https://img.shields.io/badge/Download-1.0.0_Release-blue.svg) <!-- 新增下载徽章 -->
+
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
@@ -69,6 +72,9 @@ StellarX/
 -   **标准项目结构**: 采用标准的include/src分离结构，支持CMake构建，易于集成和使用。
 
 ## ⚡ 快速开始（5分钟上手）
+
+> **🎯 最新版本下载**
+> 从 [GitHub Releases](https://github.com/Ysm-04/StellarX/releases/latest) 下载预编译的库文件和头文件，即可快速集成到你的项目中。
 
 ### 环境要求
 
