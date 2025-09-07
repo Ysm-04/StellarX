@@ -11,7 +11,7 @@
  *
  * @作者: 我在人间做废物
  * @邮箱: [3150131407@qq.com][]
- * @仓库: https://github.com/yourusername/stellarx
+ * @仓库: https://github.com/Ysm-04/StellarX
  *
  * @许可证: MIT License
  * @版权: Copyright (c) 2025 我在人间做废物
