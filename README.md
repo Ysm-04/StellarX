@@ -1,5 +1,7 @@
 # 星垣 (StellarX) GUI Framework
 
+![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
+
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
 ![Version](https://img.shields.io/badge/Version-2.0.0-brightgreen.svg) 
