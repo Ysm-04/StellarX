@@ -1,4 +1,5 @@
-﻿#include "StellarX/Control.h"
+﻿#include "Control.h"
+#include<assert.h>
 
 StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
 {
@@ -45,20 +46,21 @@ bool StellarX::ControlText::operator!=(const ControlText& text)
 // 在控件绘制前调用，确保不会影响全局绘图状态
 void Control::saveStyle()
 {
-	gettextstyle(&currentFont); // 获取当前字体样式
-	currentColor = gettextcolor(); // 获取当前字体颜色
-	currentBorderColor = getlinecolor(); //保存当前边框颜色
+
+	gettextstyle(currentFont); // 获取当前字体样式
+	*currentColor = gettextcolor(); // 获取当前字体颜色
+	*currentBorderColor = getlinecolor(); //保存当前边框颜色
 	getlinestyle(currentLineStyle); //保存当前线型
-	currentBkColor = getfillcolor(); //保存当前填充色
+	*currentBkColor = getfillcolor(); //保存当前填充色
 }
 // 恢复之前保存的绘图状态
 // 在控件绘制完成后调用，恢复全局绘图状态
 void Control::restoreStyle()
 {
-	settextstyle(&currentFont); // 恢复默认字体样式
-	settextcolor(currentColor); // 恢复默认字体颜色
-	setfillcolor(currentBkColor);
+	settextstyle(currentFont); // 恢复默认字体样式
+	settextcolor(*currentColor); // 恢复默认字体颜色
+	setfillcolor(*currentBkColor);
 	setlinestyle(currentLineStyle);
-	setlinecolor(currentBorderColor);
+	setlinecolor(*currentBorderColor);
 	setfillstyle(BS_SOLID);//恢复填充
 }

@@ -1,4 +1,4 @@
-﻿#include "StellarX/Table.h"
+﻿#include "Table.h"
 // 绘制表格的当前页
 // 使用双循环绘制行和列，考虑分页偏移
 void Table::drawTable()
@@ -7,9 +7,9 @@ void Table::drawTable()
 	dY = uY;
 	uY = dY + lineHeights.at(0) + 10;
 	
-	for (int i = (currentPage * rowsPerPage - rowsPerPage); i < (currentPage*rowsPerPage) && i < data.size(); i++)
+	for (size_t i = (currentPage * rowsPerPage - rowsPerPage); i < (currentPage*rowsPerPage) && i < data.size(); i++)
 	{
-		for (int j = 0; j < data[i].size(); j++)
+		for (size_t j = 0; j < data[i].size(); j++)
 		{
 			uX = dX + colWidths.at(j) + 20;
 			fillrectangle(dX, dY, uX, uY);
@@ -28,7 +28,7 @@ void Table::drawHeader()
 {
 	
 	uY = dY + lineHeights.at(0) + 10;
-	for(int i = 0; i < headers.size(); i++)
+	for(size_t i = 0; i < headers.size(); i++)
 	{
 	    uX = dX + colWidths.at(i) + 20;
 		fillrectangle(dX, dY, uX, uY);
@@ -38,9 +38,8 @@ void Table::drawHeader()
 
 	
 }
-// 初始化文本宽度和高度计算
-// 遍历所有数据和表头，计算每列的最大宽度和行高
-// 此方法在数据变更时自动调用
+// 遍历所有数据单元和表头，计算每列的最大宽度和每行的最大高度，
+// 为后续绘制表格单元格提供尺寸依据。此计算在数据变更时自动触发。
 void Table::initTextWaH()
 {
 	this->colWidths.resize(this->headers.size());
@@ -48,9 +47,9 @@ void Table::initTextWaH()
 	int width = 0;
 	int height = 0;
 	//计算数据尺寸
-	for (int i = 0; i < data.size(); i++)
+	for (size_t i = 0; i < data.size(); i++)
 	{
-		for (int j = 0; j < data[i].size(); j++)
+		for (size_t j = 0; j < data[i].size(); j++)
 		{
 			width = textwidth(LPCTSTR(data[i][j].c_str()));
 			height = textheight(LPCTSTR(data[i][j].c_str()));
@@ -61,7 +60,7 @@ void Table::initTextWaH()
 		}
 	}
 
-	for (int i = 0; i < this->headers.size(); i++)
+	for (size_t i = 0; i < this->headers.size(); i++)
 	{
 		width = textwidth(LPCTSTR(headers[i].c_str()));
 		height = textheight(LPCTSTR(headers[i].c_str()));
@@ -73,7 +72,7 @@ void Table::initTextWaH()
 
 	// 计算表格总宽度和高度
 	this->width = 0;
-	for (int i = 0; i < colWidths.size(); i++)
+	for (size_t i = 0; i < colWidths.size(); i++)
 		this->width += colWidths.at(i) + 20;
 	LINESTYLE currentStyle;
 	
@@ -81,6 +80,9 @@ void Table::initTextWaH()
 
 	this->height = lineHeights.at(0) * (rowsPerPage + 1) + rowsPerPage * 10+20 ; // 表头+数据行+页码区域
 
+
+    // 由于表格绘制会覆盖原有区域，需要先保存背景以便在下次绘制前恢复，
+    // 避免重叠绘制造成的残影问题。
 	// 如果背景图像不存在或尺寸不匹配，创建或重新创建
 	if (saveBkImage == nullptr) {
 		saveBkImage = new IMAGE(width, height);
@@ -95,11 +97,15 @@ void Table::initButton()
 {
 	int x1, x2;
 	int y1, y2;
-	x1 = pX - 70;
+	x1 = pX - 72;
 	x2 = pX + textwidth(LPCTSTR(pageNumtext.c_str())) + 10;
 	y1 = y2 = pY;
-	this->prevButton = new Button(x1, y1, 60, textheight(LPCTSTR(pageNumtext.c_str())), "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
-	this->nextButton = new Button(x2, y2, 60, textheight(LPCTSTR(pageNumtext.c_str())), "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	this->prevButton = new Button(x1, y1, 62, textheight(LPCTSTR(pageNumtext.c_str())), "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	this->nextButton = new Button(x2, y2, 62, textheight(LPCTSTR(pageNumtext.c_str())), "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	this->prevButton->textStyle = this->textStyle;
+	this->nextButton->textStyle = this->textStyle;
+	this->prevButton->setFillMode(tableFillMode);
+	this->nextButton->setFillMode(tableFillMode);
 	prevButton->setOnClickListener([this]() 
 		{if (this->currentPage > 1)
 	{
@@ -120,23 +126,25 @@ void Table::initButton()
 void Table::initPageNum()
 {
 	if (0 == pY)
-		pY = uY + lineHeights.at(0) * rowsPerPage + rowsPerPage * 10+10;
-	for (int i = 0; i < colWidths.size(); i++)
+		pY = uY + lineHeights.at(0) * rowsPerPage + rowsPerPage * 10+20;
+	for (size_t i = 0; i < colWidths.size(); i++)
 		this->pX += colWidths.at(i) + 20;
 	this->pX -= textwidth(LPCTSTR(pageNumtext.c_str()));
 	this->pX /= 2;
 	this->pX += x;
 	this->pageNum = new Label(this->pX, pY, pageNumtext);
-	//pageNum->setTextdisap(true);
 	pageNum->textStyle = this->textStyle;
+	if (StellarX::FillMode::Null == tableFillMode)
+		pageNum->setTextdisap(true);
 }
 
 void Table::drawPageNum()
 {
 	if (nullptr == pageNum)
 		initPageNum();
-	pageNumtext = std::to_string(currentPage);
-	pageNumtext += "页/第";
+	pageNumtext = "第";
+	pageNumtext+= std::to_string(currentPage);
+	pageNumtext += "页/共";
 	pageNumtext += std::to_string(totalPages);
 	pageNumtext += "页";
 	pageNum->setText(pageNumtext);
@@ -154,9 +162,8 @@ void Table::drawButton()
 }
 
 Table::Table(int x, int y)
-	:Control(x, y, 0,0)
-{	
-	//this->saveBkImage = new IMAGE(this->width,this->height);
+	:Control(x, y, 0, 0)
+{
 }
 
 Table::~Table()
@@ -200,12 +207,15 @@ void Table::draw()
 			isNeedCellSize = false;
 		}
 
-		// 在绘制表格之前捕获背景
-		// 只有在第一次绘制或者尺寸变化时才需要重新捕获背景
+		// 优化性能：仅在首次绘制或表格尺寸变化时捕获背景图像。
+        // 由于表格绘制会覆盖原有区域，需要先保存背景以便在下次绘制前恢复，
+        // 避免重叠绘制造成的残影问题。
 		static bool firstDraw = true;
-		if (firstDraw || isNeedDrawHeaders) {
+		if (firstDraw || isNeedDrawHeaders) 
+		{
 			// 确保在绘制任何表格内容之前捕获背景
-			if (saveBkImage) {
+			if (saveBkImage) 
+			{
 				// 临时恢复样式，确保捕获正确的背景
 				restoreStyle();
 				if(tableBorderWidth>1)
@@ -229,7 +239,8 @@ void Table::draw()
 		}
 
 		// 恢复背景（清除旧内容）
-		if (saveBkImage) {
+		if (saveBkImage)
+		{
 			if (tableBorderWidth > 1)
 				putimage(this->x - tableBorderWidth, this->y - tableBorderWidth, saveBkImage);
 			else
@@ -260,15 +271,18 @@ void Table::draw()
 	}
 }
 
-void Table::handleEvent(const ExMessage& msg)
+bool Table::handleEvent(const ExMessage& msg)
 {
+	bool consume = false;
 	if(!this->isShowPageButton)
-		return;
+		return consume;
 	else
 	{
-		prevButton->handleEvent(msg);
-		nextButton->handleEvent(msg);
+		consume = prevButton->handleEvent(msg);
+		if (!consume)
+			consume = nextButton->handleEvent(msg);
 	}
+	return consume;
 }
 
 void Table::setHeaders(std::initializer_list<std::string> headers)
@@ -281,21 +295,32 @@ void Table::setHeaders(std::initializer_list<std::string> headers)
 	dirty = true;
 }
 
-void Table::setData(const std::vector<std::string>& data)
+void Table::setData( std::vector<std::string> data)
 {
+	if (data.size() < headers.size())
+		for (int i = 0; data.size() <= headers.size(); i++)
+			data.push_back("");
 	this->data.push_back(data);
-	totalPages = (this->data.size() + rowsPerPage - 1) / rowsPerPage;
+	totalPages = ((int)this->data.size() + rowsPerPage - 1) / rowsPerPage;
 	if (totalPages < 1)
 		totalPages = 1;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	dirty = true;
 }
 
-void Table::setData(const std::initializer_list<std::vector<std::string>>& data)
+void Table::setData( std::initializer_list<std::vector<std::string>> data)
 {
 	for (auto lis : data)
-		this->data.push_back(lis);
-	totalPages = (this->data.size() + rowsPerPage - 1) / rowsPerPage;
+		if (lis.size() < headers.size())
+		{
+			for (size_t i = lis.size(); i< headers.size(); i++)
+				lis.push_back("");
+			this->data.push_back(lis);
+		}
+		else
+			this->data.push_back(lis);
+		
+	totalPages = ((int)this->data.size() + rowsPerPage - 1) / rowsPerPage;
 	if (totalPages < 1)
 		totalPages = 1;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
@@ -305,7 +330,7 @@ void Table::setData(const std::initializer_list<std::vector<std::string>>& data)
 void Table::setRowsPerPage(int rows)
 {
 	this->rowsPerPage = rows;
-	totalPages = (data.size() + rowsPerPage - 1) / rowsPerPage;
+	totalPages = ((int)data.size() + rowsPerPage - 1) / rowsPerPage;
 	if (totalPages < 1)
 		totalPages = 1;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
@@ -315,16 +340,19 @@ void Table::setRowsPerPage(int rows)
 void Table::showPageButton(bool isShow)
 {
 	this->isShowPageButton = isShow;
+	this->dirty = true;
 }
 
 void Table::setTableBorder(COLORREF color)
 {
 	this->tableBorderClor = color;
+	this->dirty = true;
 }
 
 void Table::setTableBk(COLORREF color)
 {
 	this->tableBkClor = color;
+	this->dirty = true;
 }
 
 void Table::setTableFillMode(StellarX::FillMode mode)
@@ -333,16 +361,30 @@ void Table::setTableFillMode(StellarX::FillMode mode)
 		this->tableFillMode = mode;
 	else
 		this->tableFillMode = StellarX::FillMode::Solid;
+
+	this->prevButton->textStyle = this->textStyle;
+	this->nextButton->textStyle = this->textStyle;
+	this->prevButton->setFillMode(tableFillMode);
+	this->nextButton->setFillMode(tableFillMode);
+	if (StellarX::FillMode::Null == tableFillMode)
+		pageNum->setTextdisap(true);
+	this->prevButton->setDirty(true);
+	this->nextButton->setDirty(true);
+	this->prevButton->setDirty(true);
+	this->nextButton->setDirty(true);
+	this->dirty = true;
 }
 
 void Table::setTableLineStyle(StellarX::LineStyle style)
 {
 	this->tableLineStyle = style;
+	this->dirty = true;
 }
 
 void Table::setTableBorderWidth(int width)
 {
 	this->tableBorderWidth = width;
+	this->dirty = true;
 }
 
 int Table::getCurrentPage() const
@@ -352,7 +394,7 @@ int Table::getCurrentPage() const
 
 int Table::getTotalPages() const
 {
-	return this->totalPages;;
+	return this->totalPages;
 }
 
 int Table::getRowsPerPage() const

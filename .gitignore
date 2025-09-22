@@ -1,25 +1,13 @@
-# 编译生成文件
-*.exe
-*.ilk
-*.obj
-*.pdb
-*.o
-*.a
-*.lib
-*.dll
-*.exp
-*.so
-*.dylib
+# 编译输出目录
+/build/
+/bin/
+/lib/
 
-# 构建目录
-build/
-bin/
-obj/
-Debug/
-Release/
-x64/
-x86/
-Win32/
+# CMake 生成文件
+/CMakeFiles/
+/CMakeCache.txt
+/cmake_install.cmake
+/Makefile
 
 # Visual Studio 文件
 .vs/
@@ -27,51 +15,15 @@ Win32/
 *.vcxproj
 *.vcxproj.filters
 *.vcxproj.user
-*.suo
-*.ncb
-*.user
-*.sdf
-ipch/
-*.aps
-*.res
-*.tlog
-*.lastbuildstate
-*.idb
-*.pch
 
-# CMake 生成文件
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-*.cmake
-*.cmake.*
-CTestTestfile.cmake
-Testing/
-_deps/
-
-# 文档生成
-docs/html/
-docs/latex/
-docs/man/
-docs/rtf/
-docs/xml/
+# 编译产物
+*.obj
+*.pdb
+*.log
+*.exe
+*.dll
+*.lib
 
 # 临时文件
-*.tmp
-*.temp
-*.log
-*.swp
-*.swo
-
-# EasyX 临时文件
-*.jpg
-*.bmp
-*.png
-*.tga
-
-# 其他
-.DS_Store
-Thumbs.db
-ehthumbs.db
-Desktop.ini
+*.cache
+*.zip

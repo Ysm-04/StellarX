@@ -1,5 +1,5 @@
 ﻿// TextBox.cpp
-#include "StellarX/TextBox.h"
+#include "TextBox.h"
 
 
 TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX::TextBoxmode mode, StellarX::ControlShape shape)
@@ -48,16 +48,17 @@ void TextBox::draw()
             outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
             break;
         }
-        
+		restoreStyle();
+		dirty = false;     //标记不需要重绘
     }
-    restoreStyle();
-    dirty = false;     //标记不需要重绘
+    
 }
 
-void TextBox::handleEvent(const ExMessage& msg)
+bool TextBox::handleEvent(const ExMessage& msg)
 {
     bool hover = false;
     bool oldClick = click;
+    bool consume = false;
 
     switch (shape)
     {
@@ -66,17 +67,22 @@ void TextBox::handleEvent(const ExMessage& msg)
     case StellarX::ControlShape::ROUND_RECTANGLE:
     case StellarX::ControlShape::B_ROUND_RECTANGLE:
         hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));//判断鼠标是否在矩形按钮内
+        consume = false;
         break;
     }
     if (hover && msg.message == WM_LBUTTONUP)
     {
         click = true;
         if(StellarX::TextBoxmode::INPUT_MODE == mode)
-            dirty =  InputBox(LPTSTR(text.c_str()), maxCharLen,"输入框",NULL,text.c_str(), NULL ,NULL,false);
+		{
+			dirty = InputBox(LPTSTR(text.c_str()), (int)maxCharLen, "输入框", NULL, text.c_str(), NULL, NULL, false);
+			consume = true;
+		}
         else if (StellarX::TextBoxmode::READONLY_MODE == mode)
         {
             dirty = false;
-            InputBox(NULL, maxCharLen, "输出框（输入无效！）", NULL, text.c_str(), NULL, NULL, false);
+            InputBox(NULL, (int)maxCharLen, "输出框（输入无效！）", NULL, text.c_str(), NULL, NULL, false);
+            consume = true;
         }
         flushmessage(EX_MOUSE | EX_KEY);
     }
@@ -85,17 +91,20 @@ void TextBox::handleEvent(const ExMessage& msg)
 
     if (click)
         click = false;
+    return consume;
 }
 
 void TextBox::setMode(StellarX::TextBoxmode mode)
 {
     this->mode = mode;
+    this->dirty = true;
 }
 
-void TextBox::setMaxCharLen(int len)
+void TextBox::setMaxCharLen(size_t len)
 {
     if (len > 0)
         maxCharLen = len;
+    this->dirty = true;
 }
 
 void TextBox::setTextBoxshape(StellarX::ControlShape shape)
@@ -107,12 +116,14 @@ void TextBox::setTextBoxshape(StellarX::ControlShape shape)
     case StellarX::ControlShape::ROUND_RECTANGLE:
     case StellarX::ControlShape::B_ROUND_RECTANGLE:
         this->shape = shape;
+        this->dirty = true;
         break;
 	case StellarX::ControlShape::CIRCLE:
     case StellarX::ControlShape::B_CIRCLE:
     case StellarX::ControlShape::ELLIPSE:
     case StellarX::ControlShape::B_ELLIPSE:
         this->shape = StellarX::ControlShape::RECTANGLE;
+        this->dirty = true;
         break;
     }
 }
@@ -120,11 +131,13 @@ void TextBox::setTextBoxshape(StellarX::ControlShape shape)
 void TextBox::setTextBoxBorder(COLORREF color)
 {
     textBoxBorderClor = color;
+    this->dirty = true;
 }
 
 void TextBox::setTextBoxBk(COLORREF color)
 {
     textBoxBkClor = color;
+    this->dirty = true;
 }
 
 std::string TextBox::getText() const

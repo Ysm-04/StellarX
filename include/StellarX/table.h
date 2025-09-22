@@ -1,19 +1,20 @@
 ﻿/*******************************************************************************
- * @文件: Table.h
- * @摘要: 高级表格控件，支持分页显示
+ * @类: Table
+ * @摘要: 高级表格控件，支持分页显示和大数据量展示
  * @描述:
- *     提供完整的数据表格功能，包括表头、数据行、分页和导航按钮。
- *     自动计算列宽和行高，支持自定义样式
+ *     提供完整的数据表格功能，包括表头、数据行、分页导航等。
+ *     自动计算列宽行高，支持自定义样式和交互。
  *
- * @实现机制:
- *     1. 使用二维向量存储数据
- *     2. 通过分页算法计算显示范围
- *     3. 使用内部按钮和标签实现分页UI
- *     4. 通过背景缓存优化渲染性能
+ * @特性:
+ *     - 自动分页和页码计算
+ *     - 可配置的每页行数
+ *     - 自定义边框样式和填充模式
+ *     - 翻页按钮和页码显示
+ *     - 背景缓存优化渲染性能
  *
+ * @使用场景: 数据展示、报表生成、记录浏览等表格需求
  * @所属框架: 星垣(StellarX) GUI框架
  * @作者: 我在人间做废物
- * @日期: September 2025
  ******************************************************************************/
   
 #pragma once
@@ -40,7 +41,6 @@ private:
 	int totalPages  = 1;                         // 总页数
 
 	bool isShowPageButton = true;			    // 是否显示翻页按钮
-	bool dirty = true;						    // 是否需要重绘
 	bool isNeedDrawHeaders = true;              // 是否需要绘制表头
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
 
@@ -67,6 +67,11 @@ private:
 	void drawHeader();   //绘制表头
 	void drawPageNum();  //绘制页码信息
 	void drawButton();   //绘制翻页按钮
+
+	//检查是否对话框是否可见
+	bool IsVisible() const override { return false; }
+	//获取对话框类型
+	bool model() const override { return false; }
 public:
 	StellarX::ControlText textStyle; // 文本样式
 
@@ -77,15 +82,13 @@ public:
 	// 绘制表格
 	void draw() override;
 	//事件处理
-	void handleEvent(const ExMessage& msg) override;
-
-	//************************** 设置属性 *****************************/
+	bool handleEvent(const ExMessage& msg) override;
 
 	//设置表头
 	void setHeaders(std::initializer_list<std::string> headers);
 	//设置表格数据
-	void setData(const std::vector<std::string>& data);
-	void setData(const std::initializer_list<std::vector<std::string>>& data);
+	void setData(std::vector<std::string> data);
+	void setData(std::initializer_list<std::vector<std::string>> data);
 	//设置每页显示的行数
 	void setRowsPerPage(int rows);
 	//设置是否显示翻页按钮

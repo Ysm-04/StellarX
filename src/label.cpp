@@ -1,4 +1,4 @@
-﻿#include "StellarX/Label.h"
+﻿#include "Label.h"
 
 Label::Label()
 	:Control(0, 0, 0, 0)
@@ -18,38 +18,46 @@ Label::Label(int x, int y, std::string text, COLORREF textcolor, COLORREF bkColo
 
 void Label::draw()
 {
-	saveStyle();
-	if (textBkDisap)
-		setbkmode(TRANSPARENT); //设置背景透明
-	else
+	if(dirty)
 	{
-		setbkmode(OPAQUE); //设置背景不透明
-		setbkcolor(textBkColor); //设置背景颜色
+		saveStyle();
+		if (textBkDisap)
+			setbkmode(TRANSPARENT); //设置背景透明
+		else
+		{
+			setbkmode(OPAQUE); //设置背景不透明
+			setbkcolor(textBkColor); //设置背景颜色
+		}
+		settextcolor(textColor);
+		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
+			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
+		outtextxy(x, y, LPCTSTR(text.c_str()));
+		restoreStyle();
+		dirty = false;
 	}
-	settextcolor(textColor);
-	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-		      textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-		        textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
-	outtextxy(x,y, LPCTSTR(text.c_str()));
-	restoreStyle();
 }
 
 void Label::setTextdisap(bool key)
 {
 	textBkDisap = key;
+	this->dirty = true;
 }
 
 void Label::setTextColor(COLORREF color)
 {
 	textColor = color;
+	this->dirty = true;
 }
 
 void Label::setTextBkColor(COLORREF color)
 {
 	textBkColor = color;
+	this->dirty = true;
 }
 
 void Label::setText(std::string text)
 {
 	this->text = text;
+	this->dirty = true;
 }

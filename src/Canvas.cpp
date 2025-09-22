@@ -1,10 +1,21 @@
-﻿#include "StellarX/Canvas.h"
+﻿#include "Canvas.h"
+
+void Canvas::clearAllControls()
+{
+	controls.clear();
+}
+
+Canvas::Canvas()
+	:Control(0,0,100,100)
+{
+}
 
 Canvas::Canvas(int x, int y, int width, int height)
 	:Control(x, y, width, height) {}
 
 void Canvas::draw()
 {
+	if (!dirty)return;
 	saveStyle();
 
 	setlinecolor(canvasBorderClor);//设置线色
@@ -34,18 +45,21 @@ void Canvas::draw()
 	
 	
 	restoreStyle();
+	dirty = false;	 //标记画布不需要重绘
 }
 
-void Canvas::handleEvent(const ExMessage& msg)
+bool Canvas::handleEvent(const ExMessage& msg)
 {
-	for (auto& control : controls) {
-		control->handleEvent(msg);
-	}
+	for (auto& control : controls)
+		if (control->handleEvent(msg))
+			return true;//事件被消费短路传递，立即返回true 否则返回false
+	return false;
 }
 
 void Canvas::addControl(std::unique_ptr<Control> control)
 {
 	controls.push_back(std::move(control));
+	dirty = true;
 }
 
 void Canvas::setShape(StellarX::ControlShape shape)
@@ -57,12 +71,14 @@ void Canvas::setShape(StellarX::ControlShape shape)
 	case StellarX::ControlShape::ROUND_RECTANGLE:
 	case StellarX::ControlShape::B_ROUND_RECTANGLE:
 		this->shape = shape;
+		dirty = true;
 		break;
 	case StellarX::ControlShape::CIRCLE:
 	case StellarX::ControlShape::B_CIRCLE:
 	case StellarX::ControlShape::ELLIPSE:
 	case StellarX::ControlShape::B_ELLIPSE:
 		this->shape = StellarX::ControlShape::RECTANGLE;
+		dirty = true;
 		break;
 	}
 }
@@ -70,26 +86,31 @@ void Canvas::setShape(StellarX::ControlShape shape)
 void Canvas::setCanvasfillMode(StellarX::FillMode mode)
 {
 	this->canvasFillMode = mode;
+	dirty = true;
 }
 
 void Canvas::setBorderColor(COLORREF color)
 {
 	this->canvasBorderClor = color;
+	dirty = true;
 }
 
 void Canvas::setCanvasBkColor(COLORREF color)
 {
 	this->canvasBkClor = color;	
+	dirty = true;
 }
 
 void Canvas::setCanvasLineStyle(StellarX::LineStyle style)
 {
 	this->canvasLineStyle = style;
+	dirty = true;
 }
 
 
 void Canvas::setLinewidth(int width)
 {
 	this->canvaslinewidth = width;
+	dirty = true;
 }
 

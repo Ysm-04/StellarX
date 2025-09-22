@@ -1,4 +1,4 @@
-﻿#include "StellarX/Button.h"
+﻿#include "Button.h"
 
 Button::Button(int x, int y, int width, int height, const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape)
 	: Control(x, y, width, height)
@@ -52,7 +52,6 @@ void Button::draw()
 		}
 		else
 		{
-			// 确保点击状态的颜色正确显示
 			// 点击状态优先级最高，然后是悬停状态，最后是默认状态
 			if (click)
 				setfillcolor(buttonTrueColor);
@@ -77,7 +76,7 @@ void Button::draw()
 				textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
 		}
 		//设置按钮填充模式
-		setfillstyle(buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
+		setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
 
 		//获取字符串像素高度和宽度
 		if ((this->oldtext_width != this->text_width || this->oldtext_height != this->text_height)
@@ -132,10 +131,11 @@ void Button::draw()
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
-void Button::handleEvent(const ExMessage& msg)
+bool Button::handleEvent(const ExMessage& msg)
 {
 	bool oldHover = hover;
 	bool oldClick = click;
+	bool consume = false;//是否消耗事件
 
 	// 检测悬停状态（根据不同形状）
 	switch (shape)
@@ -163,13 +163,15 @@ void Button::handleEvent(const ExMessage& msg)
 		{
 			click = true;
 			dirty = true;
+			consume = true;
 		}
 		else if (mode == StellarX::ButtonMode::TOGGLE)
 		{
 			// TOGGLE模式在鼠标释放时处理
 		}
 	}
-	// 处理鼠标释放事件
+	// NORMAL 模式：鼠标在按钮上释放时才触发点击回调，如果移出区域则取消点击状态。
+    // TOGGLE 模式：在释放时切换状态，并触发相应的开/关回调。
 	else if (msg.message == WM_LBUTTONUP && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
 		if (mode == StellarX::ButtonMode::NORMAL && click)
@@ -177,7 +179,8 @@ void Button::handleEvent(const ExMessage& msg)
 			if (onClickCallback) onClickCallback();
 			click = false;
 			dirty = true;
-			// 使用新的flushmessage函数刷新消息队列:cite[2]:cite[3]
+			consume = true;
+			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 			flushmessage(EX_MOUSE | EX_KEY);
 		}
 		else if (mode == StellarX::ButtonMode::TOGGLE)
@@ -186,11 +189,13 @@ void Button::handleEvent(const ExMessage& msg)
 			if (click && onToggleOnCallback) onToggleOnCallback();
 			else if (!click && onToggleOffCallback) onToggleOffCallback();
 			dirty = true;
-			// 使用新的flushmessage函数刷新消息队列:cite[2]:cite[3]
+			consume = true;
+			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 			flushmessage(EX_MOUSE | EX_KEY);
 		}
 	}
 	// 处理鼠标移出区域的情况
+
 	else if (msg.message == WM_MOUSEMOVE)
 	{
 		if (!hover && mode == StellarX::ButtonMode::NORMAL && click)
@@ -215,6 +220,7 @@ void Button::handleEvent(const ExMessage& msg)
 	{
 		draw();
 	}
+	return consume;
 }
 
 void Button::setOnClickListener(const std::function<void()>&& callback)
@@ -237,14 +243,17 @@ void Button::setbuttonMode(StellarX::ButtonMode mode)
     this->mode = mode;
 }
 
-int Button::setROUND_RECTANGLEwidth(int width)
+void Button::setROUND_RECTANGLEwidth(int width)
 {
-    return rouRectangleSize.ROUND_RECTANGLEwidth = width;
+     rouRectangleSize.ROUND_RECTANGLEwidth = width;
+	this->dirty = true; // 标记需要重绘
+
 }
 
-int Button::setROUND_RECTANGLEheight(int height)
+void Button::setROUND_RECTANGLEheight(int height)
 {
-    return rouRectangleSize.ROUND_RECTANGLEheight = height;
+    rouRectangleSize.ROUND_RECTANGLEheight = height;
+	this->dirty = true; // 标记需要重绘
 }
 
 bool Button::isClicked() const
@@ -252,26 +261,41 @@ bool Button::isClicked() const
     return this->click;
 }
 
-void Button::setFillMode(int mode)
+void Button::setFillMode(StellarX::FillMode mode)
 {
     buttonFillMode = mode;
+	this->dirty = true; // 标记需要重绘
 }
 
 void Button::setFillIma(StellarX::FillStyle ima)
 {
     buttonFillIma = ima;
+	this->dirty = true;
 }
 
 void Button::setFillIma(std::string imaNAme)
 {
+	if (buttonFileIMAGE)
+	{
+		delete buttonFileIMAGE;
+		buttonFileIMAGE = nullptr;
+	}
     buttonFileIMAGE = new IMAGE;
-    loadimage(buttonFileIMAGE, imaNAme.c_str(),width-x,height-y);
+    loadimage(buttonFileIMAGE, imaNAme.c_str(),width,height);
+	this->dirty = true;
 }
 
 
 void Button::setButtonBorder(COLORREF Border)
 {
-    buttonBorderColor = Border;
+	buttonBorderColor = Border;
+		this->dirty = true;
+}
+
+void Button::setButtonFalseColor(COLORREF color)
+{
+	this->buttonFalseColor = color;
+	this->dirty = true;
 }
 
 void Button::setButtonText(const char* text)
@@ -279,6 +303,7 @@ void Button::setButtonText(const char* text)
     this->text = std::string(text);
 	this->text_width = textwidth(LPCTSTR(this->text.c_str()));
 	this->text_height = textheight(LPCTSTR(this->text.c_str()));
+	this->dirty = true;
 }
 
 void Button::setButtonText(std::string text)
@@ -292,6 +317,7 @@ void Button::setButtonText(std::string text)
 void Button::setButtonShape(StellarX::ControlShape shape)
 {
     this->shape = shape;
+	this->dirty = true;
 }
 
 
@@ -315,7 +341,7 @@ StellarX::ControlShape Button::getButtonShape() const
     return this->shape;
 }
 
-int Button::getFillMode() const
+StellarX::FillMode Button::getFillMode() const
 {
     return this->buttonFillMode;
 }
@@ -345,6 +371,26 @@ StellarX::ControlText Button::getButtonTextStyle() const
     return this->textStyle;
 }
 
+int Button::getButtonWidth() const
+{
+	return this->width;
+}
+
+int Button::getButtonHeight() const
+{
+	return this->height;
+}
+
+int Button::getButtonX() const
+{
+	return this->x;
+}
+
+int Button::getButtonY() const
+{
+	return this->y;
+}
+
 
 bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
 {
@@ -357,10 +403,10 @@ bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
 
 bool Button::isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, int height)
 {
-    int centerX = (x + width) / 2;
-    int centerY = (y + height) / 2;
-    int majorAxis = (width - x) / 2;
-    int minorAxis = (height - y) / 2;
+	int centerX = (x + width) / 2;
+	int centerY = (y + height) / 2;
+	int majorAxis = (width - x) / 2;
+	int minorAxis = (height - y) / 2;
     double dx = mouseX - centerX;
     double dy = mouseY - centerY;
     double normalizedDistance = (dx * dx) / (majorAxis * majorAxis) + (dy * dy) / (minorAxis * minorAxis);

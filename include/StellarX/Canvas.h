@@ -1,15 +1,27 @@
-﻿#pragma once
+﻿/*******************************************************************************
+ * @类: Canvas
+ * @摘要: 画布容器控件，用于分组和管理子控件
+ * @描述:
+ *     作为其他控件的父容器，提供统一的背景和边框样式。
+ *     负责将事件传递给子控件并管理它们的绘制顺序。
+ *
+ * @特性:
+ *     - 支持四种矩形形状（普通、圆角，各有边框和无边框版本）
+ *     - 可自定义填充模式、边框颜色和背景颜色
+ *     - 自动管理子控件的生命周期和事件传递
+ *     - 支持嵌套容器结构
+ *
+ * @使用场景: 用于分组相关控件、实现复杂布局或作为对话框基础
+ * @所属框架: 星垣(StellarX) GUI框架
+ * @作者: 我在人间做废物
+ ******************************************************************************/
+
+#pragma once
 #include "Control.h"
-// 画布容器控件，可以作为其他控件的父容器
-// 功能:
-//   - 包含和管理子控件
-//   - 将事件传递给子控件
-//   - 提供统一的背景和边框
-// 使用场景: 用于分组相关控件或实现复杂布局
 
 class Canvas : public Control
 {
-private:
+protected:
     std::vector<std::unique_ptr<Control>> controls;
     
     StellarX::ControlShape          shape = StellarX::ControlShape::RECTANGLE;   //容器形状
@@ -21,12 +33,20 @@ private:
     COLORREF              canvasBorderClor = RGB(0, 0, 0);//边框颜色
     COLORREF              canvasBkClor = RGB(255,255,255);    //背景颜色
 
+	void clearAllControls(); // 清除所有子控件
+
+	//检查是否对话框是否可见
+    bool IsVisible() const override { return false; }
+	//获取对话框类型
+	bool model() const override { return false; }
+
 public:
+    Canvas();
     Canvas(int x, int y, int width, int height);
     ~Canvas() {}
     //绘制容器及其子控件
     void draw() override;
-    void handleEvent(const ExMessage& msg) override;
+    bool handleEvent(const ExMessage& msg) override;
     //添加控件
     void addControl(std::unique_ptr<Control> control);
 
