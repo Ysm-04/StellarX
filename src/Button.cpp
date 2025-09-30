@@ -263,7 +263,7 @@ bool Button::isClicked() const
 
 void Button::setFillMode(StellarX::FillMode mode)
 {
-    buttonFillMode = mode;
+    this->buttonFillMode = mode;
 	this->dirty = true; // 标记需要重绘
 }
 
@@ -318,6 +318,30 @@ void Button::setButtonShape(StellarX::ControlShape shape)
 {
     this->shape = shape;
 	this->dirty = true;
+}
+
+//允许通过外部函数修改按钮的点击状态，并执行相应的回调函数
+void Button::setButtonClick(BOOL click)
+{
+	this->click = click;
+	
+	if (mode == StellarX::ButtonMode::NORMAL && click)
+	{
+		if (onClickCallback) onClickCallback();
+		dirty = true;
+		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
+		flushmessage(EX_MOUSE | EX_KEY);
+	}
+	else if (mode == StellarX::ButtonMode::TOGGLE)
+	{
+		if (click && onToggleOnCallback) onToggleOnCallback();
+		else if (!click && onToggleOffCallback) onToggleOffCallback();
+		dirty = true;
+		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
+		flushmessage(EX_MOUSE | EX_KEY);
+	}
+	if (dirty)
+		draw();
 }
 
 

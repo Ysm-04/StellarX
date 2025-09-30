@@ -102,6 +102,8 @@ public:
     void setButtonText(std::string text);
     //设置按钮形状
     void setButtonShape(StellarX::ControlShape shape);
+    //设置按钮点击状态
+    void setButtonClick(BOOL click);
 
     //判断按钮是否被点击
     bool isClicked() const;
