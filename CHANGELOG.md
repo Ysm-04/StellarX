@@ -5,7 +5,11 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
+## [v2.0.1] - 2025 - 09 - 30
 
+### 新增
+
+- 文本框新增`setText`接口，可在外部设置文本框内容
 
 ## [v2.0.0] - 2025-09-21
 

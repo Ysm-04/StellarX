@@ -140,6 +140,14 @@ void TextBox::setTextBoxBk(COLORREF color)
     this->dirty = true;
 }
 
+void TextBox::setText(std::string text)
+{
+    if(text.size() > maxCharLen)
+        text = text.substr(0, maxCharLen);
+    this->text = text;
+    this->dirty = true;
+}
+
 std::string TextBox::getText() const
 {
     return this->text;

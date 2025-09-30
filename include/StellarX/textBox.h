@@ -49,7 +49,9 @@ public:
     //设置边框颜色
     void setTextBoxBorder(COLORREF color);
     //设置背景颜色
-    void setTextBoxBk(COLORREF color);       
+    void setTextBoxBk(COLORREF color);    
+    //设置文本
+    void setText(std::string text);
 
     //获取文本
     std::string getText() const;  
