@@ -1,5 +1,9 @@
 # 星垣 (StellarX) GUI Framework
 
+[English document](README.en.md)
+
+------
+
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
@@ -321,7 +325,9 @@ StellarX::MessageBox::ShowAsync(
 );
 ```
 
-
+## 示例
+- **寄存器查看器 (≈450 行)** — 一个基于 StellarX 实现的交互式 32 位寄存器可视化工具（支持位取反、左/右移、十六进制/十进制转换、带有符号/无符号切换、二进制分组显示）。  
+  路径：`examples/register-viewer/`
 
 ## 🔧 高级主题与最佳实践
 

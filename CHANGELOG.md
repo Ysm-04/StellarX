@@ -5,12 +5,18 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
 
-## [v2.0.1] - 2025 - 10 - 01
+[English document](CHANGELOG.en.md)
+
+## [v2.0.1] - 2025 - 10 - 03
 
 ### 新增
 
+- 新增示例：基于 StellarX 实现的 32 位寄存器查看工具（支持位取反、左移、右移，十六进制/十进制带符号/无符号切换，分组二进制显示）。
+  - 示例路径：`examples/register-viewer/`
 - `TextBox`新增`setText`API，可在外部设置文本框内容
+- `TextBox::setText`API修改：在设置文本后立即调用`draw`方法重绘
 - `Button`新增`setButtonClick`API,允许通过外部函数修改按钮的点击状态，并执行相应的回调函数
+- ==所有文档更新对应英文版本==
 
 ## [v2.0.0] - 2025-09-21
 

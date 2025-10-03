@@ -146,6 +146,7 @@ void TextBox::setText(std::string text)
         text = text.substr(0, maxCharLen);
     this->text = text;
     this->dirty = true;
+    draw();
 }
 
 std::string TextBox::getText() const
