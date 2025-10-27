@@ -7,11 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
-## [v2.1.0] - 2025-10-05
+## [v2.1.0] - 2025-10-27
 
 **Focus**: Resizable/maximized window (EasyX reinforced by Win32), first-phase layout manager (HBox/VBox), early Tabs control. We also fixed black borders, maximize “ghosts”, flicker, and the issue where controls only appeared after interaction. Control-level **background snapshot/restore**, **single-line truncation**, and **tooltips** are now standardized.
 
 ### ✨ Added
+
+- **Bilingual API Documentation (Chinese and English)**
+  - The documentation provides a detailed introduction of each class, including API descriptions, functionalities, and points to note, with a comprehensive explanation of each control.
 
 - **Window resize/maximize reinforcement (EasyX + Win32)**
   - `Window::enableResize(bool enable, int minW, int minH)`; toggle at runtime and set min track size.

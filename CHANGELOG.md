@@ -13,6 +13,9 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 ### ✨ 新增
 
+- **中英文双语 API文档**
+  - 文档详细介绍了每个类，以及API描述、功能和需要注意的地方，详细介绍了每个控件
+
 - **窗口拉伸 / 最大化补强（在 EasyX 基础上用 Win32 加固）**
   - 新增 `Window::enableResize(bool enable, int minW, int minH)`；运行时开关可拉伸并设置最小跟踪尺寸。
   - 子类化窗口过程：处理 `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT`，并启用 `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`，解决 EasyX 窗口原生不可拉伸问题。

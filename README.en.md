@@ -5,11 +5,10 @@
 ------
 
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
-
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.0.0-brightgreen.svg) 
-![Download](https://img.shields.io/badge/Download-2.0.0_Release-blue.svg) 
+![Version](https://img.shields.io/badge/Version-2.1.0-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-2.1.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -18,434 +17,308 @@
 ![Architecture](https://img.shields.io/badge/Architecture-Modular%20OOP-brightgreen)
 ![CMake](https://img.shields.io/badge/Build-CMake-064F8C?logo=cmake)
 
-> **"Bound by Stars, Light as Dust"** — A native C++ GUI framework for Windows platform, featuring extreme lightweight and high modularity.
+> **"Bound by Stars, Light as Dust"** — A native C++ GUI framework for Windows, featuring extreme lightness and high modularity.
 
-`StellarX` was born from resistance against "overly bloated" modern GUI frameworks. It rejects dependencies that often reach hundreds of MB, long compilation times, and steep learning curves, choosing to return to the essence: solving core desktop application development needs with the most concise code, clearest architecture, and highest efficiency.
+`StellarX` was born from resistance against bloat. It avoids huge dependencies, long build times, and steep learning curves, returning to the essence: using concise code, clear architecture, and high efficiency to solve desktop GUI needs.
 
-It is a **pure teaching-level, tool-level framework** designed to help developers deeply understand GUI principles and quickly build lightweight Windows tools.
+It is a **pure teaching/tool-level framework** that helps developers understand GUI principles and quickly build lightweight Windows tools.
 
 ---
 
+## 🆕 What's New in v2.1.0
 
+**Bilingual API Documentation (Chinese and English)**
+
+- The documentation provides a detailed introduction of each class, including API descriptions, functionalities, and points to note, with a comprehensive explanation of each control.
+
+- **Resizable/Maximizable Window (EasyX + Win32 reinforcement)**  
+  Subclassed WndProc with `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT` and window styles `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`. Full-surface background paint in `WM_PAINT` eliminates black borders and maximize “ghosts”. Coalesced resize with one-shot redraw.
+- **Layout Manager (Phase 1)**  
+  `Canvas` now supports `LayoutKind::{Absolute, HBox, VBox, Grid(placeholder), Flow(placeholder), Stack(placeholder)}` with `LayoutParams` (`margins`, `fixedW/fixedH`, `weight`, `Align{Start,Center,End,Stretch}`). Implemented **HBox/VBox** auto layout (containers remain absolutely positioned; nesting supported).
+- **Tabs (early)**  
+  Tab strip + page container separated; background snapshot avoids trails on transparent themes.
+- **Button Single-Line Truncation (MBCS, CN/EN aware)**  
+  Pixel-width based `...` truncation prevents half-glyph artifacts.
+- **Hover Tooltip**  
+  Implemented via `Label`, supports delay and auto-hide; per-control background snapshot/restore.
+
+See details in `CHANGELOG.en.md`.
+
+---
 
 ## 📦 Project Structure & Design Philosophy
 
-StellarX framework adopts classic **Object-Oriented** and **modular** design with a clear and standardized project structure:
+StellarX adopts classic **OOP** and **modular** design with a clear structure:
 
 ```markdown
-
 StellarX/
-├── include/               # Header files directory
-│   └── StellarX/          # Framework header files
-│       ├── StellarX.h     # Main include header - one-click import of entire framework
-│       ├── CoreTypes.h    # ★ Core ★ - Single source of truth for all enums and structs
-│       ├── Control.h      # Abstract base class - defines unified interface for all controls
-│       ├── Button.h       # Button control
-│       ├── Window.h       # Window management
-│       ├── Label.h        # Label control
-│       ├── TextBox.h      # Text box control
-│       ├── Canvas.h       # Canvas container
-│       ├── Dialog.h       # Dialog control (new in v2.0.0)
-│       ├── MessageBox.h   # Message box factory (new in v2.0.0)
-│       └── Table.h        # Table control
-├── src/                   # Source files directory
+├── include/
+│   └── StellarX/
+│       ├── StellarX.h
+│       ├── CoreTypes.h       # Single source of truth for enums/structs
+│       ├── Control.h
+│       ├── Button.h
+│       ├── Window.h
+│       ├── Label.h
+│       ├── TextBox.h
+│       ├── Canvas.h
+│       ├── Dialog.h          
+│       ├── MessageBox.h      
+│       └── Table.h
+├── src/
 │   ├── Control.cpp
 │   ├── Button.cpp
 │   ├── Window.cpp
 │   ├── Label.cpp
 │   ├── TextBox.cpp
 │   ├── Canvas.cpp
-│   ├── Table.cpp     
-│   ├── Dialog.cpp        # v2.0.0 new
-│   └── MessageBox.cpp    # v2.0.0 new
-├── examples/              # Example code directory
-│   └── demo.cpp          # Basic demonstration
-├── docs/                  # Documentation directory
-│   └── CODE_OF_CONDUCT.md # Code of Conduct
-├── CMakeLists.txt        # CMake build configuration
-├── CONTRIBUTING.md       # Contribution guide
-├── CHANGELOG.md          # Changelog
-├── Doxyfile              # Doxygen configuration
-├── LICENSE               # MIT License
-└── README.md             # Project description
+│   ├── Table.cpp
+│   ├── Dialog.cpp            
+│   └── MessageBox.cpp        
+├── examples/
+│   └── demo.cpp
+├── docs/
+│   └── CODE_OF_CONDUCT.md
+├── CMakeLists.txt
+├── CONTRIBUTING.md
+├── CHANGELOG.en.md
+├── CHANGELOG.md
+├── Doxyfile
+├── LICENSE
+├──API 文档.md
+├──API Documentation.en.md
+└── README.en.md
 ```
 
-### **Design Philosophy:**
+### Design Philosophy
 
-1. **Single Responsibility Principle (SRP)**: Each class/file is responsible for one thing only.
-2. **Dependency Inversion Principle (DIP)**: High-level modules (like `Window`) don't depend on low-level modules (like `Button`), both depend on abstractions (`Control`).
-3. **Open/Closed Principle (OCP)**: New controls can be easily extended by inheriting the `Control` base class without modifying existing code.
-4. **Consistency**: All controls share unified `draw()` and `handleEvent()` interfaces.
+1. **SRP**: each class/file does one thing.
+2. **DIP**: high-level modules depend on abstractions (`Control`), not concrete controls.
+3. **OCP**: new controls extend `Control` without touching existing code.
+4. **Consistency**: all controls expose `draw()` and `handleEvent()`.
 
 ## 🚀 Core Features
 
-- **Extreme Lightweight**: Core library compiles to only ~12MB, with zero external dependencies. Generated applications are compact.
-- **Clear Modular Architecture**: Uses `CoreTypes.h` to uniformly manage all types, eliminating duplicate definitions and greatly improving maintainability.
-- **Native C++ Performance**: Built directly on EasyX and Win32 API, providing near-native execution efficiency with very low memory footprint (typically <10MB).
-- **Complete Control System**: Button, Label, TextBox, Canvas, Table, Dialog, and MessageBox factory.
-- **Highly Customizable**: From control colors, shapes (rectangle, rounded, circle, ellipse) to fill modes and font styles, all have detailed enum support for easy customization.
-- **Simple & Intuitive API**: Uses classic object-oriented design, code as documentation, low learning curve.
-- **Standard Project Structure**: Adopts standard include/src separation structure, supports CMake build, easy to integrate and use.
-- **Enhanced Event System**: v2.0.0 introduces event consumption mechanism, all `handleEvent` methods return `bool` indicating whether event was consumed, supporting finer-grained event propagation control.
-- **Dialog System**: New complete dialog support, including modal and non-modal dialogs, automatically handling background saving and restoration.
+- **Extreme Lightweight**: tiny footprint with zero external dependencies beyond EasyX.
+- **Clear Modular Architecture**: `CoreTypes.h` centralizes types and enums.
+- **Native C++ Performance**: EasyX + Win32 API for near-native speed, low memory (<10MB typical).
+- **Complete Control Set**: Button, Label, TextBox, Canvas, Table, Dialog, and MessageBox factory.
+- **Highly Customizable**: colors, shapes (rectangle/rounded/circle/ellipse), fill modes, fonts via enums.
+- **Simple, Intuitive API**: OOP-oriented, code as documentation.
+- **Standard Project Layout**: include/src split, CMake build.
+- **Enhanced Event System**: `handleEvent` returns `bool` for consumption (since v2.0.0).
+- **Dialog System**: modal and modeless; auto background save/restore.
 
-## ⚡ Quick Start (5 Minutes to Get Started)
+------
 
-> **🎯 Latest Version Download**
-> Download pre-compiled library files and header files from [GitHub Releases](https://github.com/Ysm-04/StellarX/releases/latest) for quick integration into your project.
+## ⚡ Quick Start (5 Minutes)
 
-### Environment Requirements
+> Download prebuilt headers/libs from [Releases](https://github.com/Ysm-04/StellarX/releases/latest).
 
-- **OS**: Windows 10 or higher
-- **Compiler**: C++17 supported compiler (e.g., **Visual Studio 2019+**)
-- **Graphics Library**: [EasyX](https://easyx.cn/) (2022 version or higher, please select the version matching your compiler during installation)
-- **Build Tool**: CMake 3.12+ (optional, recommended)
+### Requirements
+
+- **OS**: Windows 10+
+- **Compiler**: C++17 (e.g., Visual Studio 2019+)
+- **Graphics**: [EasyX](https://easyx.cn/) 2022+ (match your compiler)
+- **Build**: CMake 3.12+ (optional)
 
 ### Install EasyX
 
-1. Visit [EasyX official website](https://easyx.cn/) to download the latest version
-2. Run the installer, select the version matching your Visual Studio version
-3. After installation, no additional configuration is needed, StellarX framework will automatically link EasyX
+1. Download latest EasyX
+2. Install matching your Visual Studio
+3. No extra configuration needed for StellarX
 
-### Method 1: Using CMake Build (Recommended)
+### CMake Build (Recommended)
 
-1. **Clone the project**:
+```
+git clone https://github.com/Ysm-04/StellarX.git
+cd StellarX
+mkdir build && cd build
+cmake ..
+cmake --build .
+./examples/Demo
+```
 
-   ```bash
-   git clone https://github.com/Ysm-04/StellarX.git
-   cd StellarX
-   ```
+### Manual Integration
 
-2. **Generate build system**:
+- Copy `include` and `src` into your project
+- Add include paths for `include/StellarX/`
+- Add all `.cpp` files to your build
 
-   ```bash
-   mkdir build
-   cd build
-   cmake ..
-   ```
+### Your First App (now Resizable)
 
-3. **Compile the project**:
-
-   ```bash
-   cmake --build .
-   ```
-
-4. **Run the example**:
-
-   ```bash
-   ./examples/Demo
-   ```
-
-### Method 2: Manual Integration into Existing Project
-
-1. **Copy the include and src directories** to your project
-2. **Configure include paths** to ensure the compiler can find the `include/StellarX/` directory
-3. **Add all .cpp files** to your project for compilation
-
-### Create Your First StellarX Application
-
-```cpp
-// Just include this one header to use all features
+```
 #include "StellarX.h"
 
-// Program entry point (use WinMain for better compatibility)
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
-{
-    // 1. Create a 640x480 window with white background, titled "My App"
-    Window mainWindow(640, 480, 0, RGB(255, 255, 255), "My First StellarX App");
-
-    // 2. Create a button (managed with smart pointer)
-    auto myButton = std::make_unique<Button>(
-        250, 200, 140, 40, // x, y, width, height
-        "Click Me",         // button text
-        StellarX::ButtonMode::NORMAL,
-        StellarX::ControlShape::ROUND_RECTANGLE
-    );
-
-    // 3. Set click event for the button (using Lambda expression)
-    myButton->setOnClickListener([&mainWindow]() {
-        // Use message box factory to create modal dialog
-        auto result = StellarX::MessageBox::ShowModal(
-            mainWindow, 
-            "Welcome to StellarX GUI\r\nAuthor: Ysm-04", 
-            "Greeting", 
-            StellarX::MessageBoxType::OKCancel
-        );
-           // Handle dialog result
-        if (result == StellarX::MessageBoxResult::OK) {
-            // User clicked OK button
-        }
-    });
-        
-     
-
-    // 4. (Optional) Set button style
-    myButton->textStyle.nHeight = 20;
-    myButton->textStyle.color = RGB(0, 0, 128); // Dark blue text
-    myButton->setButtonBorder(RGB(0, 128, 255)); // Blue border
-
-    // 5. Add button to window
-    mainWindow.addControl(std::move(myButton));
-
-    // 6. Draw the window
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
+    Window mainWindow(800, 600, 0, RGB(255,255,255), "StellarX App");
     mainWindow.draw();
 
-    // 7. Enter message loop, wait for user interaction
-    mainWindow.runEventLoop();
+    // Enable resize + minimum track size
+    mainWindow.enableResize(true, 480, 360);
 
+    // Add your controls here...
+    // mainWindow.addControl(std::move(btn));
+
+    mainWindow.runEventLoop();
     return 0;
 }
 ```
 
-1. **Compile and run!** You'll see a window with a blue rounded button, clicking it will pop up a message box.
+> Internally, we paint the **entire client area** in `WM_PAINT` (solid/image) and use EasyX batch drawing to avoid flicker and black borders.
 
-## 📚 Core Types Detailed Explanation (`CoreTypes.h`)
+------
 
-All visual and behavioral properties of the StellarX framework are controlled through the elegant enums and structs defined in `CoreTypes.h`.
+## 📚 Core Types (`CoreTypes.h`)
 
-### Enum Types (Enums)
+### Enums (selection)
 
-| Enum Type              | Description             | Common Values                                                |
-| :--------------------- | :---------------------- | :----------------------------------------------------------- |
-| **`ControlShape`**     | Control geometric shape | `RECTANGLE`, `B_RECTANGLE`, `ROUND_RECTANGLE`, `CIRCLE`, `ELLIPSE`, etc. |
-| **`ButtonMode`**       | Button behavior mode    | `NORMAL`, `TOGGLE`, `DISABLED`                               |
-| **`TextBoxMode`**      | Text box mode           | `INPUT_MODE`, `READONLY_MODE`                                |
-| **`FillMode`**         | Graphics fill mode      | `SOLID`, `NULL`, `HATCHED`, etc.                             |
-| **`FillStyle`**        | Pattern fill style      | `HORIZONTAL`, `CROSS`, etc.                                  |
-| **`LineStyle`**        | Border line style       | `SOLID`, `DASH`, `DOT`, etc.                                 |
-| **`MessageBoxType`**   | Message box type        | `OK`, `OKCancel`, `YesNo`, `YesNoCancel`, `RetryCancel`, `AbortRetryIgnore` |
-| **`MessageBoxResult`** | Message box result      | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
+| Enum               | Description | Values                                                       |
+| ------------------ | ----------- | ------------------------------------------------------------ |
+| `ControlShape`     | geometry    | `RECTANGLE`, `B_RECTANGLE`, `ROUND_RECTANGLE`, `CIRCLE`, `ELLIPSE`, ... |
+| `ButtonMode`       | behavior    | `NORMAL`, `TOGGLE`, `DISABLED`                               |
+| `TextBoxMode`      | modes       | `INPUT_MODE`, `READONLY_MODE`                                |
+| `FillMode`         | fill        | `SOLID`, `NULL`, `HATCHED`, ...                              |
+| `FillStyle`        | pattern     | `HORIZONTAL`, `CROSS`, ...                                   |
+| `LineStyle`        | border      | `SOLID`, `DASH`, `DOT`, ...                                  |
+| `MessageBoxType`   | dialog      | `OK`, `OKCancel`, `YesNo`, ...                               |
+| `MessageBoxResult` | result      | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
 
-### Structs (Structs)
+### Structs
 
-| Struct             | Description                                                  |
-| :----------------- | :----------------------------------------------------------- |
-| **`ControlText`**  | Encapsulates all text style attributes, including font, size, color, bold, italic, underline, strikethrough, etc. |
-| **`RouRectangle`** | Defines rounded rectangle corner ellipse dimensions, contains width and height properties. |
+| Struct         | Description                                  |
+| -------------- | -------------------------------------------- |
+| `ControlText`  | font/size/color/bold/italic/underline/strike |
+| `RouRectangle` | rounded-rectangle corner ellipse size        |
 
-**Usage Example:**
+------
 
-```c++
-// Create a complex text style
-StellarX::ControlText myStyle;
-myStyle.nHeight = 25; // Font height
-myStyle.lpszFace = _T("Microsoft YaHei"); // Font
-myStyle.color = RGB(255, 0, 0); // Red color
-myStyle.nWeight = FW_BOLD; // Bold
-myStyle.bUnderline = true; // Underline
+## 🧩 Control Library
 
-// Apply to controls
-myLabel->textStyle = myStyle;
-myButton->textStyle = myStyle;
+### 1) Basic
+
+| Control | Header      | Description             | Key Points                                                   |
+| ------- | ----------- | ----------------------- | ------------------------------------------------------------ |
+| Button  | `Button.h`  | multi-functional button | shapes/modes, hover/click colors, callbacks, **single-line truncation** + **tooltip** (v2.1.0) |
+| Label   | `Label.h`   | text label              | transparent/opaque backgrounds, custom font styles           |
+| TextBox | `TextBox.h` | input/display           | input & read-only, integrates EasyX `InputBox`               |
+
+### 2) Containers
+
+| Control | Header     | Description                                                  |
+| ------- | ---------- | ------------------------------------------------------------ |
+| Canvas  | `Canvas.h` | parent container, custom border/background, **auto layout HBox/VBox** (v2.1.0) |
+| Window  | `Window.h` | top-level container, message loop/dispatch, **resizable** (v2.1.0) |
+
+### 3) Advanced
+
+| Control | Header     | Description | Key Points                                                   |
+| ------- | ---------- | ----------- | ------------------------------------------------------------ |
+| Table   | `Table.h`  | data table  | pagination, header/data, auto column widths, page controls fixed overlap/centering (v2.1.0) |
+| Dialog  | `Dialog.h` | dialogs     | modal/modeless, layout & background save/restore             |
+
+### 4) Static Factory
+
+| Control    | Header         | Description    | Key Points                                  |
+| ---------- | -------------- | -------------- | ------------------------------------------- |
+| MessageBox | `MessageBox.h` | dialog factory | static API; modal/modeless; dedup mechanism |
+
+------
+
+## 📐 Layout Management (HBox/VBox)
+
+- **Container-level**: `Canvas::layout.kind = HBox / VBox / Absolute (default)`; optional container `padding`.
+- **Child-level**: `LayoutParams`
+  - `margin{L,R,T,B}`
+  - `fixedW/fixedH` (`-1` = keep current)
+  - `weight` (distribute along main axis; width in HBox, height in VBox)
+  - `alignX/alignY` = `Start/Center/End/Stretch` (cross-axis)
+
+**Example** (3 items HBox, center vertically, stretch height):
+
+```
+Canvas row(20, 20, 760, 120);
+row.layout.kind = LayoutKind::HBox;
+
+auto mk = [](int w, int h, float weight){
+    auto c = std::make_unique<Control>(0,0,w,h);
+    c->layout.marginL = 8; c->layout.marginR = 8;
+    c->layout.alignY = LayoutParams::Stretch;
+    c->layout.weight = weight;
+    return c;
+};
+row.addControl(mk(100,40, 1.f));
+row.addControl(mk(100,40, 2.f));
+row.addControl(mk(100,40, 1.f));
 ```
 
-## 🧩 Complete Control Library
+------
 
-### 1. Basic Controls
+## 🗂 Tabs (Early)
 
-| Control     | Header File | Description           | Key Features                                                 |
-| :---------- | :---------- | :-------------------- | :----------------------------------------------------------- |
-| **Button**  | `Button.h`  | Multi-function button | Supports multiple modes/shapes/states, hover/click colors, custom callbacks |
-| **Label**   | `Label.h`   | Text label            | Supports transparent/opaque background, custom font styles   |
-| **TextBox** | `TextBox.h` | Input box/Display box | Supports input and read-only modes, integrates EasyX's `InputBox` |
+- Tab strip (buttons) + page container (`Canvas`)
+- Transparent themes: page area uses **background snapshot** on switch
+- API sketch: `tabs.addPage(title, canvasPtr); tabs.setActive(index);`
 
-### 2. Container Controls
+------
 
-| Control    | Header File | Description                                                  |
-| :--------- | :---------- | :----------------------------------------------------------- |
-| **Canvas** | `Canvas.h`  | Container control, can serve as parent container for other controls, supports custom borders and background. |
-| **Window** | `Window.h`  | Top-level window, ultimate container for all controls, responsible for message loop and dispatching. |
+## ✂️ Single-Line Truncation & 🫧 Tooltip
 
-### 3. Advanced Controls
+- **Button truncation**: MBCS CN/EN aware pixel-width threshold + `...`
+- **Tooltip**: delayed show, auto-hide; default text = button label; customizable; uses per-control **background snapshot/restore**.
 
-| Control    | Header File | Description  | Key Features                                                 |
-| :--------- | :---------- | :----------- | :----------------------------------------------------------- |
-| **Table**  | `Table.h`   | Data table   | **Framework highlight feature**, supports paginated display, custom headers and data, automatic column width calculation, page turn buttons. |
-| **Dialog** | `Dialog.h`  | Dialog class | Implements complete dialog functionality, supports multiple button combinations and asynchronous result callbacks. Automatically handles layout, background save/restore and lifecycle management. |
+------
 
-**Table Control Example:**
+## 🧊 Transparent Background & Background Snapshot
 
-```c++
-// Create a table
-auto myTable = std::make_unique<Table>(50, 50);
+- **Convention**: `captureBackground(rect)` before first draw; `restoreBackground()` before hiding/overdraw.
+- **Table**: snapshot area now **includes header**; pagination re-centers controls and restores backgrounds immediately.
 
-// Set headers
-myTable->setHeaders({ "ID", "Name", "Age", "Occupation" });
-
-// Add data rows
-myTable->setData({ "1", "Zhang San", "25", "Engineer" });
-myTable->setData({ "2", "Li Si", "30", "Designer" });
-myTable->setData({ "3", "Wang Wu", "28", "Product Manager" });
-
-// Set rows per page
-myTable->setRowsPerPage(2);
-
-// Set table style
-myTable->textStyle.nHeight = 16;
-myTable->setTableBorder(RGB(50, 50, 50));
-myTable->setTableBk(RGB(240, 240, 240));
-
-// Add to window
-mainWindow.addControl(std::move(myTable));
-```
-
-### 4. Static Factory Class
-
-| Control        | Header File    | Description          | Key Features                                                 |
-| :------------- | :------------- | :------------------- | :----------------------------------------------------------- |
-| **MessageBox** | `MessageBox.h` | Dialog factory calls | Static method calls, no instantiation needed, automatically handles modal and non-modal logic differences, integrated into window's dialog management system, provides deduplication mechanism to prevent duplicate dialogs |
-
-**MessageBox Usage Example:**
-
-```c++
-// Modal message box (blocks until closed)
-auto result = StellarX::MessageBox::ShowModal(
-    mainWindow, 
-    "Confirm to perform this operation?", 
-    "Confirmation", 
-    StellarX::MessageBoxType::YesNo
-);
-
-if (result == StellarX::MessageBoxResult::Yes)
-{
-    // User selected "Yes"
-}
-
-// Non-modal message box (asynchronous callback)
-StellarX::MessageBox::ShowAsync(
-    mainWindow,
-    "Operation completed", 
-    "Notification", 
-    StellarX::MessageBoxType::OK,
-    [](StellarX::MessageBoxResult result) {
-        // Asynchronously handle result
-    }
-);
-```
-
-## Examples
-
-- **Register Viewer (≈450 lines)** — An interactive 32-bit register visualization tool implemented based on StellarX (supports bit inversion, left/right shift, hex/decimal conversion, signed/unsigned toggle, binary grouping display).
-  Path: `examples/register-viewer/`
+------
 
 ## 🔧 Advanced Topics & Best Practices
 
-### 1. Custom Controls
+- Custom controls: inherit `Control` and implement `draw()` / `handleEvent()`.
+- Performance:
+  - **Dirty rendering**: set `dirty=true` when state changes; framework repaints as needed.
+  - **Avoid extra `cleardevice()`**: background is already handled in `WM_PAINT` full-surface path.
+  - Use `SetWorkingImage(nullptr)` before drawing to the screen.
+- Event consumption: return `true` if handled to stop propagation.
 
-You can create custom controls by inheriting from the `Control` base class. Just implement the two pure virtual functions `draw()` and `handleEvent()`.
+------
 
-```c++
-class MyCustomControl : public Control {
-public:
-    MyCustomControl(int x, int y) : Control(x, y, 100, 100) {}
-    
-    void draw() override {
-        saveStyle();
-        // Your custom drawing logic
-        setfillcolor(RGB(255, 100, 100));
-        fillrectangle(x, y, x + width, y + height);
-        restoreStyle();
-    }
-    
-    bool handleEvent(const ExMessage& msg) override {
-        // Your custom event handling logic
-        if (msg.message == WM_LBUTTONDOWN && 
-            msg.x > x && msg.x < x + width && 
-            msg.y > y && msg.y < y + height) {
-            // Handle click
-            return true; // Event consumed
-        }
-        return false; // Event not consumed
-    }
-    
-    bool IsVisible() const override { return true; }
-    bool model() const override { return false; }
-};
-```
+## ⚠️ Limitations & When Not To Use
 
-### 2. Layout Management
+- High-performance games or complex animations
+- High DPI scaling extremes (re-verify coordinates/metrics)
+- Accessibility requirements
+- Cross-platform targets (Windows-only)
+- Heavy enterprise frontends (consider Qt/wxWidgets/ImGui/Electron)
 
-Current version of StellarX primarily uses **absolute positioning**. For simple layouts, you can achieve this by calculating coordinates. For complex layouts, consider:
-
-- Nesting controls in `Canvas` to achieve relative positioning.
-- Implementing simple flow layout or grid layout managers yourself.
-
-### 3. Performance Optimization
-
-- **Dirty Rectangle Rendering**: Implemented internally in the framework, controls set `dirty=true` when state changes, only redraw when necessary.
-- **Image Resources**: Use `IMAGE` objects to load images, then reuse them to avoid multiple loads.
-- **Reduce Operations in Loops**: Avoid heavy calculations in `draw()` and `handleEvent()`.
-- **Event Consumption Mechanism**: Use event consumption return values appropriately to avoid unnecessary event propagation.
-
-### 4. Dialog Usage Tips
-
-- **Modal Dialogs**: Use `ShowModal` method, blocks current thread until dialog closes, suitable for important operations requiring user confirmation.
-- **Non-modal Dialogs**: Use `ShowAsync` method, doesn't block main thread, suitable for informational prompts or background tasks.
-- **Dialog Deduplication**: Framework has built-in non-modal dialog deduplication mechanism to prevent multiple dialogs for the same message from appearing simultaneously.
-
-## ⚠️ Important Limitations & Suitable Scenarios
-
-**StellarX framework's design goals are lightness, clarity, and teaching value, therefore it explicitly is NOT suitable for the following scenarios:**
-
-- **High-performance games or complex animations**: Rendering is based on EasyX's CPU software rendering, performance is limited.
-- **Applications requiring high DPI scaling**: Limited support for high DPI displays, interface may not display correctly.
-- **Applications requiring accessibility features**: No support for screen readers and other assistive technologies.
-- **Cross-platform applications**: Deeply dependent on Windows API and EasyX, cannot run directly on Linux/macOS.
-- **Complex commercial software frontends**: Lacks advanced controls (like tree views, rich text boxes, tabs, advanced lists) and mature automatic layout managers.
-
-**If you need to develop the aforementioned types of applications, please consider the following mature solutions:**
-
-- **Qt**: Extremely powerful, cross-platform, suitable for large commercial applications.
-- **wxWidgets**: Native appearance, cross-platform.
-- **Dear ImGui**: Immediate mode GUI, very suitable for tools and debug interfaces.
-- **Web Technology Stack (Electron/CEF)**: Suitable for scenarios requiring web technologies.
+------
 
 ## 📜 License
 
-This project uses the **MIT License**.
+MIT License (see `LICENSE`).
 
-You are free to:
+## 👥 Contributing
 
-- Use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the framework.
-- Use it for private or commercial projects.
-
-The only requirement is:
-
-- Please retain the original copyright notice in your projects.
-
-See the [LICENSE](https://license/) file in the project root directory for details.
-
-## 👥 Contribution Guide
-
-We welcome all forms of contributions! If you want to contribute to the StellarX framework, please read the following guidelines:
-
-1. **Code Style**: Please follow the existing Google C++ style guide (use spaces for indentation, braces on new lines, etc.).
-2. **New Features**: Must provide **example code** and update relevant parts of this README document.
-3. **Submitting PRs**: Please ensure your code is tested before submission and clearly describe your changes and motivation.
-4. **Issue Reporting**: If you find a bug or have new ideas, welcome to submit Issues on GitHub.
-
-Detailed contribution guide please refer to [CONTRIBUTING.md](CONTRIBUTING.en.md).
+- Follow the existing C++ style (spaces, brace on new line).
+- New features should include an example and README update.
+- Test before PR; describe changes and motivation.
+- Use Issues for bugs/ideas.
 
 ## 🙏 Acknowledgements
 
-- Thanks to [EasyX Graphics Library](https://easyx.cn/) for providing the simple and easy-to-use graphics foundation for this project, making C++ GUI programming education possible.
-- Thanks to all developers pursuing the **concise, efficient, clear** coding philosophy, you are the inspiration for StellarX's birth.
+- Thanks to [EasyX](https://easyx.cn/).
+- Thanks to developers who value **concise, efficient, clear** code.
 
 ------
 
 **Star Ocean Vast, Code as Boat.**
 
-May `StellarX` become a reliable cornerstone for your exploration of the GUI world, whether for learning, teaching, or creating practical tools.
-
 ## 📞 Support & Feedback
 
-If you encounter problems during use or have any suggestions:
-
-1. Check [Example Code](examples/) for usage reference
-2. Check [Changelog](CHANGELOG.en.md) to learn about latest changes
-3. Submit Issues on GitHub repository to report problems
-
-------
-
-*StellarX Framework - Light as Dust, Bound by Stars*
-
+- See [examples/](examples/)
+- See [Changelog](CHANGELOG.en.md)
+- Open Issues on GitHub
