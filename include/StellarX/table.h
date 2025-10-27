@@ -34,8 +34,6 @@ private:
 	std::vector<int> colWidths;                // 每列的宽度
 	std::vector<int> lineHeights;			   // 每行的高度
 
-	IMAGE* saveBkImage = nullptr;
-
 	int rowsPerPage = 5;                        // 每页显示的行数
 	int currentPage = 1;                        // 当前页码
 	int totalPages  = 1;                         // 总页数
@@ -67,11 +65,9 @@ private:
 	void drawHeader();   //绘制表头
 	void drawPageNum();  //绘制页码信息
 	void drawButton();   //绘制翻页按钮
-
-	//检查是否对话框是否可见
-	bool IsVisible() const override { return false; }
-	//获取对话框类型
-	bool model() const override { return false; }
+private:
+	//用来检查对话框是否模态,此控件不做实现
+	bool model() const override { return false; };
 public:
 	StellarX::ControlText textStyle; // 文本样式
 

@@ -7,6 +7,62 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v2.1.0] - 2025-10-27
+
+**重点**：窗口可拉伸/最大化补强（EasyX + Win32）、布局管理器（HBox/VBox 第一阶段）、选项卡控件雏形；系统性修复黑边、最大化残影、频闪与“控件需交互才出现”等历史问题。并统一了**背景快照/恢复**、**按钮单行截断**、**Tooltip** 的机制。
+
+### ✨ 新增
+
+- **窗口拉伸 / 最大化补强（在 EasyX 基础上用 Win32 加固）**
+  - 新增 `Window::enableResize(bool enable, int minW, int minH)`；运行时开关可拉伸并设置最小跟踪尺寸。
+  - 子类化窗口过程：处理 `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT`，并启用 `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`，解决 EasyX 窗口原生不可拉伸问题。
+  - **整窗背景绘制**：在 `WM_PAINT` 用 GDI 直写客户区（纯色/图片均支持），彻底消除黑边与最大化残影。
+  - **一次性重绘**：合并连续 `WM_SIZE`，使用 `pendingW/H + needResizeDirty` 在主循环尾部统一置脏重绘，避免死循环与抖动。
+- **布局管理器（第一阶段）**
+  - 在 `Canvas` 引入布局元数据：`LayoutKind::{Absolute, HBox, VBox, Grid(预留), Flow(预留), Stack(预留)}` 与 `LayoutParams`（`margin{L,R,T,B}`、`fixedW/fixedH(-1=沿用)`、`weight`、`Align{Start,Center,End,Stretch}`）。
+  - 实装 **HBox/VBox** 自动布局（容器内部自动排布；容器本身仍绝对定位，可嵌套）。
+- **选项卡（Tabs）控件雏形**
+  - 页签条与页面容器解耦；多页签切换；为透明主题提供**背景快照**避免叠影。
+- **按钮文本单行截断（MBCS：中/英分治）**
+  - 基于像素宽度阈值的 `...` 截断，避免半字节/半汉字。
+- **悬停提示（Tooltip）**
+  - 以 `Label` 为载体，支持延时出现、自动隐藏、自定义文案（默认回退到按钮文本）；使用控件级**背景快照/恢复**。
+
+### 🔧 变更
+
+- **Window 渲染路径**
+  - 弱化“离屏 frame→整屏贴图”的依赖；在 `WM_PAINT` 走 **GDI 整窗背景 + EasyX 批量绘制**（`BeginBatchDraw/EndBatchDraw + FlushBatchDraw`）以抑制频闪。
+  - 尺寸变化仅重建 `zoomBackground`（图片背景的缩放副本），显示延后到下一帧。
+- **Control 基类**
+  - 标准化 **captureBackground/restoreBackground**；统一透明/叠放控件行为。
+  - 统一 `dirty` 语义：容器自身脏才重画背景，但**子控件每帧评估并按需绘制**，不再出现“容器不脏→子控件不画”的空窗。
+- **Table**
+  - 透明模式下，分页按钮与页码标签跟随表格的文本/填充风格，避免风格漂移。
+  - **分页度量与整体居中**重做：可用宽度含表头；“上一页/下一页+页码”作为**一个块**水平居中。
+  - 修复**背景快照区域**未计入表头导致恢复失败的问题。
+- **事件循环**
+  - 合并 `WM_SIZE` 到循环尾统一处理，降低输入延迟与重绘风暴。
+
+### ✅ 修复
+
+- **黑边 / 最大化残影 / 频闪**：`WM_ERASEBKGND` 返回 1 禁止系统擦背景；`WM_PAINT` 全面覆盖；清空裁剪区防止旧帧残留。
+- **容器不画、控件需交互后才出现**：首帧与输入后触发**全树置脏**；子控件在容器未脏时也能正常绘制。
+- **Table 翻页重叠与透明叠影**：修正快照区域、重算坐标并即时恢复+重绘。
+
+### ⚠️ 可能不兼容
+
+- 若外部代码直接访问 `Window` 私有成员（如 `dialogs`），请改用 `getControls()` / `getdialogs()`。
+- `Table` 的分页与表头度量变化可能影响外部硬编码偏移；需要对齐新公式。
+- 自定义控件若未遵循绘制前 `SetWorkingImage(nullptr)` 的约定，请自查。
+
+### 📌 升级指引
+
+1. **窗口背景**：将手工 `cleardevice()+putimage` 迁移到 `WM_PAINT` 的**整窗覆盖**流程。
+2. **透明控件**：首绘前 `captureBackground()`，隐藏/覆盖时 `restoreBackground()`。
+3. **布局**：容器设 `layout.kind = HBox/VBox`；子项用 `LayoutParams`（`margin/fixed/weight/align`）。
+4. **按钮截断**：保持单次截断，避免重复 `...`。
+5. **表格**：移除自绘分页，使用内置导航。
+
 ## [v2.0.1] - 2025 - 10 - 03
 
 ### 新增

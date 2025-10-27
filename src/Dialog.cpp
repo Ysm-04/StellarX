@@ -3,7 +3,7 @@
 Dialog::Dialog(Window& h,std::string text,std::string message, StellarX::MessageBoxType type, bool modal)
 	: Canvas(),message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
-	initializeDialog();
+	show = false;
 }
 
 
@@ -14,7 +14,7 @@ Dialog::~Dialog()
 
 void Dialog::draw()
 {
-	if(!isVisible)
+	if(!show)
 	{
 		// 如果对话框不可见且需要清理，执行清理
 		if (pendingCleanup && !isCleaning)
@@ -24,28 +24,22 @@ void Dialog::draw()
 		return;
 	}
     // 如果需要初始化，则执行初始化
-    if (needsInitialization && isVisible)
+    if (needsInitialization && show)
     {
         initDialogSize();
         needsInitialization = false;
     }
 
-    if (dirty && isVisible)
+    if (dirty && show)
     {
         // 保存当前绘图状态
         saveStyle();
 
 
         // 保存背景（仅在第一次绘制时）
-        if (saveBkImage == nullptr) {
-            saveBkX = x - BorderWidth;
-            saveBkY = y - BorderWidth;
-            saveBkWidth = width + 2 * BorderWidth;
-            saveBkHeight = height + 2 * BorderWidth;
-            saveBkImage = new IMAGE(saveBkWidth, saveBkHeight);
-            getimage(saveBkImage, saveBkX, saveBkY, saveBkWidth, saveBkHeight);
-        }
-
+        if (saveBkImage == nullptr)
+			saveBackground((x - BorderWidth), (y - BorderWidth), (width + 2 * BorderWidth), (height + 2 * BorderWidth));
+			
 		Canvas::setBorderColor(this->borderColor);
 		Canvas::setLinewidth(this->BorderWidth);
 		Canvas::setCanvasBkColor(this->backgroundColor);
@@ -82,10 +76,11 @@ void Dialog::draw()
 }
 
 
+
 bool Dialog::handleEvent(const ExMessage& msg)
 {
 	bool consume = false;
-	if (!isVisible)
+	if (!show)
 	{
 		if (pendingCleanup && !isCleaning)
 		{
@@ -158,16 +153,6 @@ StellarX::MessageBoxResult Dialog::GetResult() const
 	return this->result;
 }
 
-bool Dialog::getModal() const
-{
-	return modal;
-}
-
-bool Dialog::IsVisible() const
-{
-	return isVisible;
-}
-
 bool Dialog::model() const
 {
 	return modal;
@@ -178,16 +163,16 @@ void Dialog::Show()
 	if (pendingCleanup)
 		performDelayedCleanup();
 
-	isVisible = true;
+	show = true;
 	dirty = true;
 	needsInitialization = true;
 	close = false;
-	shouldClose = false;  
+	shouldClose = false;
 
 	if (modal)
 	{
 		// 模态对话框需要阻塞当前线程直到对话框关闭
-		while (isVisible && !close)
+		while (show && !close)
 		{
 			// 处理消息
 			ExMessage msg;
@@ -216,25 +201,20 @@ void Dialog::Show()
 
 		// 模态对话框关闭后执行清理
 		if (pendingCleanup && !isCleaning)
-		{
 			performDelayedCleanup();
-
-		}
 	}
 	else
-	{
 		// 非模态对话框只需标记为可见，由主循环处理
 		dirty = true;
-	}
 }
 
 
 
 void Dialog::Close()
 {
-	if (!isVisible) return;
+	if (!show) return;
 
-	isVisible = false;
+	show = false;
 	close = true;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
@@ -247,6 +227,15 @@ void Dialog::Close()
 		resultCallback(this->result);
 	
 	
+}
+
+void Dialog::setInitialization(bool init)
+{
+	if (init)
+	{
+		initDialogSize();
+		saveBackground((x - BorderWidth), (y - BorderWidth), (width + 2 * BorderWidth), (height + 2 * BorderWidth));
+	}
 }
 
 
@@ -286,8 +275,8 @@ void Dialog::initButtons()
 				 this->Close(); });
 
 		auto cancelButton = createDialogButton(
-			(okButton.get()->getButtonX() + okButton.get()->getButtonWidth() + buttonMargin),
-			 okButton.get()->getButtonY(),
+			(okButton.get()->getX() + okButton.get()->getButtonWidth() + buttonMargin),
+			 okButton.get()->getY(),
 			"取消"
 		);
 		cancelButton->setOnClickListener([this]()
@@ -317,8 +306,8 @@ void Dialog::initButtons()
 				 this->Close(); });
 
 		auto noButton = createDialogButton(
-			(yesButton.get()->getButtonX() + yesButton.get()->getButtonWidth() + buttonMargin),
-			yesButton.get()->getButtonY(),
+			(yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin),
+			yesButton.get()->getY(),
 			"否"
 		);
 		noButton->setOnClickListener([this]()
@@ -348,8 +337,8 @@ void Dialog::initButtons()
 				 this->Close(); });
 
 		auto noButton = createDialogButton(
-			yesButton.get()->getButtonX() + yesButton.get()->getButtonWidth() + buttonMargin,
-			yesButton.get()->getButtonY(), 
+			yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin,
+			yesButton.get()->getY(), 
 			"否"
 		);
 		noButton->setOnClickListener([this]()
@@ -359,8 +348,8 @@ void Dialog::initButtons()
 				 this->Close(); });
 
 		auto cancelButton = createDialogButton(
-			noButton.get()->getButtonX() + noButton.get()->getButtonWidth() + buttonMargin,
-			noButton.get()->getButtonY(),
+			noButton.get()->getX() + noButton.get()->getButtonWidth() + buttonMargin,
+			noButton.get()->getY(),
 			"取消"
 		);
 		cancelButton->setOnClickListener([this]()
@@ -393,8 +382,8 @@ void Dialog::initButtons()
 				 this->Close(); });
 		
 		auto cancelButton = createDialogButton(
-			retryButton.get()->getButtonX() + retryButton.get()->getButtonWidth() + buttonMargin,
-			retryButton.get()->getButtonY(), 
+			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
+			retryButton.get()->getY(), 
 			"取消"
 		);
 		cancelButton->setOnClickListener([this]()
@@ -424,8 +413,8 @@ void Dialog::initButtons()
 				 this->Close();
 			});
 		auto retryButton = createDialogButton(
-			abortButton.get()->getButtonX() + abortButton.get()->getButtonWidth() + buttonMargin,
-			abortButton.get()->getButtonY(), 
+			abortButton.get()->getX() + abortButton.get()->getButtonWidth() + buttonMargin,
+			abortButton.get()->getY(), 
 			"重试"
 		);
 		retryButton->setOnClickListener([this]()
@@ -435,8 +424,8 @@ void Dialog::initButtons()
 				 this->Close();
 			});
 		auto ignoreButton = createDialogButton(
-			retryButton.get()->getButtonX() + retryButton.get()->getButtonWidth() + buttonMargin,
-			retryButton.get()->getButtonY(),
+			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
+			retryButton.get()->getY(),
 			"忽略"
 		);
 		ignoreButton.get()->setOnClickListener([this]()
@@ -464,7 +453,7 @@ void Dialog::initCloseButton()
 	auto but = std::make_unique<Button>
 		(
 			(this->x + this->width - closeButtonWidth) - 3, (this->y+3), closeButtonWidth-1, closeButtonHeight,
-			"×",           // 按钮文本
+			"X",           // 按钮文本
 			RGB(255, 0, 0),      // 按钮被点击颜色
 			this->canvasBkClor, // 按钮背景颜色
 			RGB(255, 0, 0),	  // 按钮被悬停颜色
@@ -513,12 +502,14 @@ void Dialog::splitMessageLines()
 	}
 
 	// 添加最后一行（如果有内容）
-	if (!currentLine.empty()) {
+	if (!currentLine.empty()) 
+	{
 		lines.push_back(currentLine);
 	}
 
 	// 如果消息为空，至少添加一个空行
-	if (lines.empty()) {
+	if (lines.empty()) 
+	{
 		lines.push_back("");
 	}
 }
@@ -595,15 +586,6 @@ void Dialog::initDialogSize()
 	initCloseButton(); // 初始化关闭按钮
 }
 
-void Dialog::initializeDialog()
-{
-	needsInitialization = true;
-	pendingCleanup = false;
-	isCleaning = false;
-	close = false;
-	isVisible = false;
-
-}
 
 // 延迟清理策略：由于对话框绘制时保存了背景快照，必须在对话框隐藏后、
 // 所有控件析构前恢复背景，否则会导致背景图像被错误覆盖。
@@ -622,12 +604,10 @@ void Dialog::performDelayedCleanup()
 	title.reset();
 
 	// 释放背景图像资源
-	if (saveBkImage)
+	if (saveBkImage && hasSnap)
 	{
-		// 恢复背景
-		putimage(saveBkX, saveBkY, saveBkImage);
-		delete saveBkImage;
-		saveBkImage = nullptr;
+		restBackground();
+		discardBackground();
 	}
 
 	// 重置状态
@@ -645,6 +625,11 @@ void Dialog::SetResultCallback(std::function<void(StellarX::MessageBoxResult)> c
 std::string Dialog::GetCaption() const
 {
 	return titleText;
+}
+
+std::string Dialog::GetText() const
+{
+	return message;
 }
 
 void Dialog::clearControls()

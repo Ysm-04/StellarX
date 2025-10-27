@@ -17,6 +17,116 @@ Button::Button(int x, int y, int width, int height, const std::string text, COLO
 {
 	initButton(text, mode, shape, ct, cf, ch);
 }
+// ====== GBK/MBCS 安全：字符边界与省略号裁切 ======
+static inline int gbk_char_len(const std::string& s, size_t i)
+{
+	unsigned char b = (unsigned char)s[i];
+	if (b <= 0x7F) return 1; // ASCII
+	if (b >= 0x81 && b <= 0xFE && i + 1 < s.size()) 
+	{
+		unsigned char b2 = (unsigned char)s[i + 1];
+		if (b2 >= 0x40 && b2 <= 0xFE && b2 != 0x7F) return 2; // 合法双字节
+	}
+	return 1; // 容错
+}
+
+static inline void rtrim_spaces_gbk(std::string& s) 
+{
+	while (!s.empty() && s.back() == ' ') s.pop_back();           // ASCII 空格
+	while (s.size() >= 2) 
+	{                                       // 全角空格 A1 A1
+		unsigned char a = (unsigned char)s[s.size() - 2];
+		unsigned char b = (unsigned char)s[s.size() - 1];
+		if (a == 0xA1 && b == 0xA1) s.resize(s.size() - 2);
+		else break;
+	}
+}
+
+static inline bool is_ascii_only(const std::string& s) 
+{
+	for (unsigned char c : s) if (c > 0x7F) return false;
+	return true;
+}
+
+static inline bool is_word_boundary_char(unsigned char c) 
+{
+	return c == ' ' || c == '-' || c == '_' || c == '/' || c == '\\' || c == '.' || c == ':';
+}
+
+// 英文优先策略：优先在“词边界”回退，再退化到逐字符；省略号为 "..."
+static std::string ellipsize_ascii_pref(const std::string& text, int maxW) 
+{
+	if (maxW <= 0) return "";
+	if (textwidth(LPCTSTR(text.c_str())) <= maxW) return text;
+
+	const std::string ell = "...";
+	int ellW = textwidth(LPCTSTR(ell.c_str()));
+	if (ellW > maxW) 
+	{ // 连 ... 都放不下
+		std::string e = ell;
+		while (!e.empty() && textwidth(LPCTSTR(e.c_str())) > maxW) e.pop_back();
+		return e; // 可能是 ".."、"." 或 ""
+	}
+	const int limit = maxW - ellW;
+
+	// 先找到能放下的最长前缀
+	size_t i = 0, lastFit = 0;
+	while (i < text.size()) 
+	{
+		int clen = gbk_char_len(text, i);
+		size_t j = text.size() < i + (size_t)clen ? text.size() : i + (size_t)clen;
+		int w = textwidth(LPCTSTR(text.substr(0, j).c_str()));
+		if (w <= limit) { lastFit = j; i = j; }
+		else break;
+	}
+	if (lastFit == 0) return ell;
+
+	// 在已适配前缀范围内，向左找最近的词边界
+	size_t cutPos = lastFit;
+	for (size_t k = lastFit; k > 0; --k) 
+	{
+		unsigned char c = (unsigned char)text[k - 1];
+		if (c <= 0x7F && is_word_boundary_char(c)) { cutPos = k - 1; break; }
+	}
+
+	std::string head = text.substr(0, cutPos);
+	rtrim_spaces_gbk(head);
+	head += ell;
+	return head;
+}
+
+// 中文优先策略：严格逐“字符”(1/2字节)回退；省略号用全角 "…"
+static std::string ellipsize_cjk_pref(const std::string& text, int maxW, const char* ellipsis = "…") 
+{
+	if (maxW <= 0) return "";
+	if (textwidth(LPCTSTR(text.c_str())) <= maxW) return text;
+
+	std::string ell = ellipsis ? ellipsis : "…";
+	int ellW = textwidth(LPCTSTR(ell.c_str()));
+	if (ellW > maxW) 
+	{ // 连省略号都放不下
+		std::string e = ell;
+		while (!e.empty() && textwidth(LPCTSTR(e.c_str())) > maxW) e.pop_back();
+		return e;
+	}
+	const int limit = maxW - ellW;
+
+	size_t i = 0, lastFit = 0;
+	while (i < text.size()) 
+	{
+		int clen = gbk_char_len(text, i);
+		size_t j = text.size() < i + (size_t)clen ? text.size() : i + (size_t)clen;
+		int w = textwidth(LPCTSTR(text.substr(0, j).c_str()));
+		if (w <= limit) { lastFit = j; i = j; }
+		else break;
+	}
+	if (lastFit == 0) return ell;
+
+	std::string head = text.substr(0, lastFit);
+	rtrim_spaces_gbk(head);
+	head += ell;
+	return head;
+}
 
 void Button::initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch)
 {
@@ -28,6 +138,14 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 	this->buttonHoverColor = ch;
 	this->click = false;
 	this->hover = false;
+
+	// === Tooltip 默认：文本=按钮文本；白底黑字；不透明；用当前按钮字体样式 ===
+	tipTextClick = tipTextOn = tipTextOff = this->text;
+	tipLabel.setText(tipTextClick);
+	tipLabel.setTextColor(RGB(167, 170, 172));
+	tipLabel.setTextBkColor(RGB(255, 255, 255));
+	tipLabel.setTextdisap(false);
+	tipLabel.textStyle = this->textStyle;  // 复用按钮字体样式
 }
 
 
@@ -40,103 +158,122 @@ Button::~Button()
 
 void Button::draw()
 {
-	if (dirty)
+	if (dirty && show)
 	{
 		//保存当前样式和颜色
 		saveStyle();
 
 		if (StellarX::ButtonMode::DISABLED == mode)   //设置禁用按钮色
 		{
-			setfillcolor(RGB(96, 96, 96));
-			textStyle.bStrikeOut = 1;
+			setfillcolor(DISABLEDCOLOUR);
+			textStyle.bStrikeOut = true;
 		}
 		else
 		{
 			// 点击状态优先级最高，然后是悬停状态，最后是默认状态
-			if (click)
-				setfillcolor(buttonTrueColor);
-			else if (hover)
-				setfillcolor(buttonHoverColor);
-			else
-				setfillcolor(buttonFalseColor);
+			COLORREF col = click ? buttonTrueColor : (hover ? buttonHoverColor : buttonFalseColor);
+			setfillcolor(col);
 		}
-
+		//
 		//设置字体背景色透明
 		setbkmode(TRANSPARENT);
 		//边框颜色
 		setlinecolor(buttonBorderColor);
-		if (this->textStyle != oldStyle)
-		{
-			//设置字体颜色
-			settextcolor(textStyle.color);
 
-			//设置字体样式
-			settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-				textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-				textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
-		}
-		//设置按钮填充模式
-		setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
+		//设置字体颜色
+		settextcolor(textStyle.color);
+		//设置字体样式
+		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
+			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+
+		if (needCutText)
+			cutButtonText();
 
 		//获取字符串像素高度和宽度
 		if ((this->oldtext_width != this->text_width || this->oldtext_height != this->text_height)
 			|| (-1 == oldtext_width && oldtext_height == -1))
 		{
-			this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->text.c_str()));
-			this->oldtext_height = this->text_height = textheight(LPCTSTR(this->text.c_str()));
+			if(isUseCutText)
+			{
+				this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->cutText.c_str()));
+				this->oldtext_height = this->text_height = textheight(LPCTSTR(this->cutText.c_str()));
+			}
+			else
+			{
+				this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->text.c_str()));
+				this->oldtext_height = this->text_height = textheight(LPCTSTR(this->text.c_str()));
+			}
 		}
 
-
+		//设置按钮填充模式
+		setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
 		//根据按钮形状绘制
 		switch (shape)
 		{
-		case StellarX::ControlShape::RECTANGLE:
-			fillrectangle(x, y, x + width, y + height);//有边框填充矩形
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::RECTANGLE://有边框填充矩形
+			fillrectangle(x, y, x + width, y + height);
+			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::B_RECTANGLE:
-			solidrectangle(x, y, x + width, y + height);//无边框填充矩形
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::B_RECTANGLE://无边框填充矩形
+			solidrectangle(x, y, x + width, y + height);
+			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::ROUND_RECTANGLE:
-			fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//有边框填充圆角矩形
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::ROUND_RECTANGLE://有边框填充圆角矩形
+			fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
+			isUseCutText? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::B_ROUND_RECTANGLE:
-			solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//无边框填充圆角矩形
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::B_ROUND_RECTANGLE://无边框填充圆角矩形
+			solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
+			isUseCutText? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::CIRCLE:
-			fillcircle(x + width / 2, y + height / 2, min(width, height) / 2);//有边框填充圆形
-			outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::CIRCLE://有边框填充圆形
+			fillcircle(x + width / 2, y + height / 2, min(width, height) / 2);
+			isUseCutText? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
+				:outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::B_CIRCLE:
-			solidcircle(x + width / 2, y + height / 2, min(width, height) / 2);//无边框填充圆形
-			outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::B_CIRCLE://无边框填充圆形
+			solidcircle(x + width / 2, y + height / 2, min(width, height) / 2);
+			isUseCutText ? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
+				:outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::ELLIPSE:
-			fillellipse(x, y, x + width, y + height);//有边框填充椭圆
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::ELLIPSE://有边框填充椭圆
+			fillellipse(x, y, x + width, y + height);
+			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
-		case StellarX::ControlShape::B_ELLIPSE:
-			solidellipse(x, y, x + width, y + height);//无边框填充椭圆
-			outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		case StellarX::ControlShape::B_ELLIPSE://无边框填充椭圆
+			solidellipse(x, y, x + width, y + height);
+			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
 			break;
 		}
 
 		restoreStyle();//恢复默认字体样式和颜色
-
 		dirty = false;     //标记按钮不需要重绘
+		
 	}
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
 bool Button::handleEvent(const ExMessage& msg)
 {
+	if (!show)
+		return false;
+
 	bool oldHover = hover;
 	bool oldClick = click;
 	bool consume = false;//是否消耗事件
-
+	// 记录鼠标位置（用于tip定位）
+	if (msg.message == WM_MOUSEMOVE)
+	{
+		lastMouseX = msg.x;
+		lastMouseY = msg.y;
+	}
 	// 检测悬停状态（根据不同形状）
 	switch (shape)
 	{
@@ -159,6 +296,7 @@ bool Button::handleEvent(const ExMessage& msg)
 	// 处理鼠标点击事件
 	if (msg.message == WM_LBUTTONDOWN && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
+		
 		if (mode == StellarX::ButtonMode::NORMAL)
 		{
 			click = true;
@@ -174,12 +312,14 @@ bool Button::handleEvent(const ExMessage& msg)
     // TOGGLE 模式：在释放时切换状态，并触发相应的开/关回调。
 	else if (msg.message == WM_LBUTTONUP && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
+		hideTooltip();  // 隐藏悬停提示
 		if (mode == StellarX::ButtonMode::NORMAL && click)
 		{
 			if (onClickCallback) onClickCallback();
 			click = false;
 			dirty = true;
 			consume = true;
+			hideTooltip();
 			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 			flushmessage(EX_MOUSE | EX_KEY);
 		}
@@ -190,6 +330,8 @@ bool Button::handleEvent(const ExMessage& msg)
 			else if (!click && onToggleOffCallback) onToggleOffCallback();
 			dirty = true;
 			consume = true;
+			refreshTooltipTextForState();
+			hideTooltip();            
 			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 			flushmessage(EX_MOUSE | EX_KEY);
 		}
@@ -204,22 +346,61 @@ bool Button::handleEvent(const ExMessage& msg)
 			dirty = true;
 		}
 		else if (hover != oldHover)
-		{
 			dirty = true;
+	}
+
+	if (tipEnabled) 
+	{
+		if (hover && !oldHover) 
+		{
+			// 刚刚进入悬停：开计时，暂不显示
+			tipHoverTick = GetTickCount64();
+			tipVisible = false;
+		}
+		if (!hover && oldHover) 
+		{
+			// 刚移出：立即隐藏
+			hideTooltip();
+		}
+		if (hover && !tipVisible) 
+		{
+			// 到点就显示
+			if (GetTickCount64() - tipHoverTick >= (ULONGLONG)tipDelayMs) 
+			{
+				tipVisible = true;
+
+				// 定位（跟随鼠标 or 相对按钮）
+				int tipX = tipFollowCursor ? (lastMouseX + tipOffsetX) : lastMouseX;
+				int tipY = tipFollowCursor ? (lastMouseY + tipOffsetY) : y + height;
+				// 设置文本（用户可能动态改了提示文本
+				if (tipUserOverride)
+				{
+					if (mode == StellarX::ButtonMode::NORMAL)
+						tipLabel.setText(tipTextClick);
+					else if (mode == StellarX::ButtonMode::TOGGLE)
+						tipLabel.setText(click ? tipTextOn : tipTextOff);
+				}
+				else
+					if (mode == StellarX::ButtonMode::TOGGLE)
+						tipLabel.setText(click ? tipTextOn : tipTextOff);
+				// 设置位置
+				tipLabel.setX(tipX);
+				tipLabel.setY(tipY);
+				// 标记需要绘制
+				tipLabel.setDirty(true);
+			}
 		}
 	}
 
 	// 如果状态发生变化，标记需要重绘
 	if (hover != oldHover || click != oldClick)
-	{
 		dirty = true;
-	}
 
 	// 如果需要重绘，立即执行
 	if (dirty)
-	{
 		draw();
-	}
+	if(tipEnabled && tipVisible)
+		tipLabel.draw();
 	return consume;
 }
 
@@ -304,6 +485,9 @@ void Button::setButtonText(const char* text)
 	this->text_width = textwidth(LPCTSTR(this->text.c_str()));
 	this->text_height = textheight(LPCTSTR(this->text.c_str()));
 	this->dirty = true;
+	this->needCutText = true;
+	if (!tipUserOverride)
+		tipTextClick = tipTextOn = tipTextOff = text;
 }
 
 void Button::setButtonText(std::string text)
@@ -312,12 +496,16 @@ void Button::setButtonText(std::string text)
 	this->text_width = textwidth(LPCTSTR(this->text.c_str()));
 	this->text_height = textheight(LPCTSTR(this->text.c_str()));
 	this->dirty = true; // 标记需要重绘
+	this->needCutText = true;
+	if (!tipUserOverride)
+		tipTextClick = tipTextOn = tipTextOff = text;
 }
 
 void Button::setButtonShape(StellarX::ControlShape shape)
 {
     this->shape = shape;
 	this->dirty = true;
+	this->needCutText = true;
 }
 
 //允许通过外部函数修改按钮的点击状态，并执行相应的回调函数
@@ -329,6 +517,7 @@ void Button::setButtonClick(BOOL click)
 	{
 		if (onClickCallback) onClickCallback();
 		dirty = true;
+		hideTooltip();
 		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
@@ -337,6 +526,8 @@ void Button::setButtonClick(BOOL click)
 		if (click && onToggleOnCallback) onToggleOnCallback();
 		else if (!click && onToggleOffCallback) onToggleOffCallback();
 		dirty = true;
+		refreshTooltipTextForState();
+		hideTooltip();                
 		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
@@ -405,15 +596,6 @@ int Button::getButtonHeight() const
 	return this->height;
 }
 
-int Button::getButtonX() const
-{
-	return this->x;
-}
-
-int Button::getButtonY() const
-{
-	return this->y;
-}
 
 
 bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
@@ -441,5 +623,52 @@ bool Button::isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, i
     else
         return false;
 }
+
+void Button::cutButtonText()
+{
+	const int contentW = 1 > this->width - 2 * padX ? 1 : this->width - 2 * padX;
+	// 放得下：不截断，直接用原文
+	if (textwidth(LPCTSTR(this->text.c_str())) <= contentW) {
+		isUseCutText = false;
+		needCutText = false;
+		cutText.clear();
+		return;
+	}
+
+	// 放不下：按语言偏好裁切（ASCII→词边界；CJK→逐字符，不撕裂双字节）
+	if (is_ascii_only(this->text)) 
+	{
+		cutText = ellipsize_ascii_pref(this->text, contentW);   // "..."
+	}
+	else
+	{
+		cutText = ellipsize_cjk_pref(this->text, contentW, "…"); // 全角省略号
+		
+	}
+	isUseCutText = true;
+	needCutText = false;
+	
+}
+
+void Button::hideTooltip()
+{
+	if (tipVisible)
+	{
+		tipVisible = false;
+		tipLabel.hide(); // 还原快照+作废，防止残影
+		tipHoverTick = GetTickCount64(); // 重置计时基线
+	}
+}
+
+void Button::refreshTooltipTextForState()
+{
+	if (!tipUserOverride) return;
+	if (tipUserOverride)   return; // 用户显式设置过 tipText，保持不变
+	if(mode==StellarX::ButtonMode::NORMAL)
+		tipLabel.setText(tipTextClick);
+	else if(mode==StellarX::ButtonMode::TOGGLE)
+		tipLabel.setText(click ? tipTextOn : tipTextOff);
+}
+
 
 

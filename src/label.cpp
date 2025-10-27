@@ -18,7 +18,7 @@ Label::Label(int x, int y, std::string text, COLORREF textcolor, COLORREF bkColo
 
 void Label::draw()
 {
-	if(dirty)
+	if (dirty && show)
 	{
 		saveStyle();
 		if (textBkDisap)
@@ -32,12 +32,20 @@ void Label::draw()
 		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
+		this->saveBackground(x, y,textwidth(text.c_str()),textheight(text.c_str()));
+		this-> restBackground();
 		outtextxy(x, y, LPCTSTR(text.c_str()));
-		restoreStyle();
+		this->restoreStyle();
 		dirty = false;
 	}
 }
-
+//用于“隐藏提示框”时调用（还原并释放快照）
+void Label::hide()
+{
+	restBackground();    // 还原屏幕像素
+	discardBackground(); // 作废快照，防止错贴旧图
+	dirty = false;
+}
 void Label::setTextdisap(bool key)
 {
 	textBkDisap = key;

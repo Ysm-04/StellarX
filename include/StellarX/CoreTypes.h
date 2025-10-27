@@ -111,7 +111,7 @@ namespace StellarX
      * @使用示例:
      *   LineStyle var = LineStyle::Solid;
      */
-    enum class LineStyle 
+    enum class LineStyle
     {
         Solid = PS_SOLID,       // 实线
         Dash = PS_DASH,         // 虚线
@@ -251,7 +251,7 @@ namespace StellarX
     };
 
     // 消息框类型
-    enum class MessageBoxType 
+    enum class MessageBoxType
     {
         OK,                // 只有确定按钮
         OKCancel,          // 确定和取消按钮
@@ -262,7 +262,7 @@ namespace StellarX
     };
 
     // 消息框返回值
-    enum class MessageBoxResult 
+    enum class MessageBoxResult
     {
         OK = 1,         // 确定按钮
         Cancel = 2,     // 取消按钮
@@ -272,4 +272,51 @@ namespace StellarX
         Retry = 4,      // 重试按钮
         Ignore = 5      // 忽略按钮
     };
+#if 0   //布局管理器相关  —待实现—
+    /*
+     *
+     *@枚举名称: LayoutKind
+     * @功能描述 : 定义布局管理类型
+     *
+     *@详细说明 :
+     * 根据布局管理类型，控件可以有不同的布局方式。
+     * 用户可以在具体情况下设置布局管理类型。
+     *
+     * @取值说明 :
+     * Absolute：不管，保持子控件自己的坐标（向后兼容）。
+     * HBox：    水平方向排队；支持固定宽、权重分配、对齐、拉伸。
+     * VBox：    竖直方向排队；同上。
+     * Grid（网格）：按行列摆；支持固定/自适应/权重行列；支持跨行/跨列；单元内对齐/拉伸。
+     *
+     */
+     // 布局类型
+    enum class LayoutKind
+    {
+        Absolute = 1,
+        HBox,
+        VBox,
+        Grid,
+        Flow,
+        Stack
+    };
+
+    // 布局参数
+    struct LayoutParams
+    {
+        // 边距左、右、上、下
+        int marginL = 0, marginR = 0, marginT = 0, marginB = 0;
+        // 固定尺寸（>=0 强制；-1 用控件当前尺寸）
+        int fixedW = -1, fixedH = -1;
+        // 主轴权重（HBox=宽度、VBox=高度、Grid见下）
+        float weight = 0.f;
+        // 对齐（非拉伸时生效）
+        enum Align { Start = 0, Center = 1, End = 2, Stretch = 3 };
+        int alignX = Start; // HBox: 次轴=Y；VBox: 次轴=X；Grid: 单元内
+        int alignY = Start; // Grid ：控制单元内垂直（HBox / VBox通常只用 alignX）
+        // Grid 专用（可先不做）
+        int gridRow = 0, gridCol = 0, rowSpan = 1, colSpan = 1;
+        // Flow 专用（可先不做）
+        int flowBreak = 0; // 1=强制换行
+    };
+#endif
 }

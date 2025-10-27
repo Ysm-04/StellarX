@@ -9,7 +9,7 @@ TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX
 
 void TextBox::draw()
 {
-    if(dirty)
+    if (dirty && show)
     {
         saveStyle();
         setfillcolor(textBoxBkClor);

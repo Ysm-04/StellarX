@@ -2,8 +2,8 @@
  * @类: Canvas
  * @摘要: 画布容器控件，用于分组和管理子控件
  * @描述:
- *     作为其他控件的父容器，提供统一的背景和边框样式。
- *     负责将事件传递给子控件并管理它们的绘制顺序。
+ *      作为其他控件的父容器，提供统一的背景和边框样式。
+ *      负责将事件传递给子控件并管理它们的绘制顺序。
  *
  * @特性:
  *     - 支持四种矩形形状（普通、圆角，各有边框和无边框版本）
@@ -14,7 +14,7 @@
  * @使用场景: 用于分组相关控件、实现复杂布局或作为对话框基础
  * @所属框架: 星垣(StellarX) GUI框架
  * @作者: 我在人间做废物
- ******************************************************************************/
+ *******************************************************************************/
 
 #pragma once
 #include "Control.h"
@@ -24,22 +24,17 @@ class Canvas : public Control
 protected:
     std::vector<std::unique_ptr<Control>> controls;
     
-    StellarX::ControlShape          shape = StellarX::ControlShape::RECTANGLE;   //容器形状
-    
-    StellarX::FillMode                   canvasFillMode = StellarX::FillMode::Solid;   //容器填充模式
-    StellarX::LineStyle                  canvasLineStyle = StellarX::LineStyle::Solid;   //线型
-    int                        canvaslinewidth = 1;             //线宽
+    StellarX::ControlShape               shape = StellarX::ControlShape::RECTANGLE;   //容器形状
+    StellarX::FillMode          canvasFillMode = StellarX::FillMode::Solid;           //容器填充模式
+    StellarX::LineStyle        canvasLineStyle = StellarX::LineStyle::Solid;          //线型
+    int                        canvaslinewidth = 1;                                   //线宽
    
-    COLORREF              canvasBorderClor = RGB(0, 0, 0);//边框颜色
+    COLORREF              canvasBorderClor = RGB(0, 0, 0);    //边框颜色
     COLORREF              canvasBkClor = RGB(255,255,255);    //背景颜色
 
-	void clearAllControls(); // 清除所有子控件
 
-	//检查是否对话框是否可见
-    bool IsVisible() const override { return false; }
-	//获取对话框类型
-	bool model() const override { return false; }
-
+    // 清除所有子控件
+	void clearAllControls();
 public:
     Canvas();
     Canvas(int x, int y, int width, int height);
@@ -49,7 +44,6 @@ public:
     bool handleEvent(const ExMessage& msg) override;
     //添加控件
     void addControl(std::unique_ptr<Control> control);
-
     //设置容器样式
     void setShape(StellarX::ControlShape shape);
     //设置容器填充模式
@@ -62,6 +56,9 @@ public:
     void setCanvasLineStyle(StellarX::LineStyle style);
     //设置线段宽度
     void setLinewidth(int width);
-
+ 
+private:
+    //用来检查对话框是否模态,此控件不做实现
+    bool model() const override { return false; };
 };
 

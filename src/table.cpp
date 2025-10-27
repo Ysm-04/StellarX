@@ -3,151 +3,222 @@
 // 使用双循环绘制行和列，考虑分页偏移
 void Table::drawTable()
 {
-	dX = x;
-	dY = uY;
+	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
+
+	// 表体从“表头之下”开始
+	dX = x + border;
+	dY = y + border + lineHeights.at(0) + 10;          // 表头高度
 	uY = dY + lineHeights.at(0) + 10;
-	
-	for (size_t i = (currentPage * rowsPerPage - rowsPerPage); i < (currentPage*rowsPerPage) && i < data.size(); i++)
+
+	size_t startRow = (currentPage - 1) * rowsPerPage;
+	size_t endRow = startRow + (size_t)rowsPerPage < data.size() ? startRow + (size_t)rowsPerPage : data.size();
+
+	for (size_t i = startRow; i < endRow; ++i)
 	{
-		for (size_t j = 0; j < data[i].size(); j++)
+		for (size_t j = 0; j < data[i].size(); ++j)
 		{
-			uX = dX + colWidths.at(j) + 20;
+			uX = dX + colWidths.at(j) + 20;            // 列宽 + 20
 			fillrectangle(dX, dY, uX, uY);
 			outtextxy(dX + 10, dY + 5, LPCTSTR(data[i][j].c_str()));
-			dX += this->colWidths.at(j) + 20;
+			dX += colWidths.at(j) + 20;
 		}
-		dX = x;
+		dX = x + border;
 		dY = uY;
 		uY = dY + lineHeights.at(0) + 10;
-
 	}
-	uY = y + lineHeights.at(0) + 10;
+
 }
 
 void Table::drawHeader()
 {
 	
+	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
+	// 内容区原点 = x+border, y+border
+	dX = x + border;
+	dY = y + border;
 	uY = dY + lineHeights.at(0) + 10;
-	for(size_t i = 0; i < headers.size(); i++)
+
+	for (size_t i = 0; i < headers.size(); i++)
 	{
-	    uX = dX + colWidths.at(i) + 20;
+		uX = dX + colWidths.at(i) + 20;                // 注意这里是 +20，和表体一致
 		fillrectangle(dX, dY, uX, uY);
 		outtextxy(dX + 10, dY + 5, LPCTSTR(headers[i].c_str()));
-		dX += this->colWidths.at(i) + 20;
+		dX += colWidths.at(i) + 20;                    // 列间距 20
 	}
-
-	
 }
 // 遍历所有数据单元和表头，计算每列的最大宽度和每行的最大高度，
 // 为后续绘制表格单元格提供尺寸依据。此计算在数据变更时自动触发。
 void Table::initTextWaH()
 {
-	this->colWidths.resize(this->headers.size());
-	this->lineHeights.resize(this->headers.size());
-	int width = 0;
-	int height = 0;
-	//计算数据尺寸
-	for (size_t i = 0; i < data.size(); i++)
+	// 和绘制一致的单元内边距
+	const int padX = 10;       // 左右 padding
+	const int padY = 5;        // 上下 padding
+	const int colGap = 20;     // 列间距
+	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
+
+	// 统计每列最大文本宽 & 每列最大行高（包含数据 + 表头）
+	colWidths.assign(headers.size(), 0);
+	lineHeights.assign(headers.size(), 0);
+
+	// 先看数据
+	for (size_t i = 0; i < data.size(); ++i) 
 	{
-		for (size_t j = 0; j < data[i].size(); j++)
+		for (size_t j = 0; j < data[i].size(); ++j) 
 		{
-			width = textwidth(LPCTSTR(data[i][j].c_str()));
-			height = textheight(LPCTSTR(data[i][j].c_str()));
-			if (width > this->colWidths.at(j))
-				this->colWidths.at(j) = width;
-			if (height > this->lineHeights[j])
-				this->lineHeights.at(j) = height;
+			const int w = textwidth(LPCTSTR(data[i][j].c_str()));
+			const int h = textheight(LPCTSTR(data[i][j].c_str()));
+			if (w > colWidths[j])   colWidths[j] = w;
+			if (h > lineHeights[j]) lineHeights[j] = h;
 		}
 	}
-
-	for (size_t i = 0; i < this->headers.size(); i++)
+	// 再用表头更新（谁大取谁）
+	for (size_t j = 0; j < headers.size(); ++j) 
 	{
-		width = textwidth(LPCTSTR(headers[i].c_str()));
-		height = textheight(LPCTSTR(headers[i].c_str()));
-		if (width > this->colWidths.at(i))
-			this->colWidths.at(i) = width;
-		if (height > this->lineHeights[i])
-			this->lineHeights.at(i) = height;
+		const int w = textwidth(LPCTSTR(headers[j].c_str()));
+		const int h = textheight(LPCTSTR(headers[j].c_str()));
+		if (w > colWidths[j])   colWidths[j] = w;
+		if (h > lineHeights[j]) lineHeights[j] = h;
 	}
 
-	// 计算表格总宽度和高度
-	this->width = 0;
-	for (size_t i = 0; i < colWidths.size(); i++)
-		this->width += colWidths.at(i) + 20;
-	LINESTYLE currentStyle;
+	// 用“所有列的最大行高”作为一行的基准高度
+	int maxLineH = 0;
 	
-	this->width += tableBorderWidth;
+	for (int h : lineHeights) 
+		if (h > maxLineH) 
+			maxLineH = h;
 
-	this->height = lineHeights.at(0) * (rowsPerPage + 1) + rowsPerPage * 10+20 ; // 表头+数据行+页码区域
+	// 列的像素宽 = 内容宽 + 左右 padding
+	// 表内容总宽 = Σ(列宽 + 列间距)
+	int contentW = 0;
+	for (size_t j = 0; j < colWidths.size(); ++j)
+		contentW += (colWidths[j] + 2 * padX) + colGap;
 
+	// 表头高 & 行高（与 drawHeader/drawTable 内部一致：+上下 padding）
+	const int headerH = maxLineH + 2 * padY;
+	const int rowH = maxLineH + 2 * padY;
+	const int rowsH = rowH * rowsPerPage;
 
-    // 由于表格绘制会覆盖原有区域，需要先保存背景以便在下次绘制前恢复，
-    // 避免重叠绘制造成的残影问题。
-	// 如果背景图像不存在或尺寸不匹配，创建或重新创建
-	if (saveBkImage == nullptr) {
-		saveBkImage = new IMAGE(width, height);
-	}
-	else if (saveBkImage->getwidth() != width || saveBkImage->getheight() != height) {
-		delete saveBkImage;
-		saveBkImage = new IMAGE(width, height);
-	}
+	// 页脚：
+	const int pageTextH = textheight(LPCTSTR(pageNumtext.c_str()));
+	const int btnTextH = textheight(LPCTSTR("上一页"));
+	const int btnPadV = 8;
+	const int btnH = btnTextH + 2 * btnPadV;
+	const int footerPad = 16;
+	const int footerH = (pageTextH > btnH ? pageTextH : btnH) + footerPad;
+
+	// 最终表宽/高：内容 + 对称边框
+	this->width = contentW + (border << 1);
+	this->height = headerH + rowsH + footerH + (border << 1);
 }
 
 void Table::initButton()
 {
-	int x1, x2;
-	int y1, y2;
-	x1 = pX - 72;
-	x2 = pX + textwidth(LPCTSTR(pageNumtext.c_str())) + 10;
-	y1 = y2 = pY;
-	this->prevButton = new Button(x1, y1, 62, textheight(LPCTSTR(pageNumtext.c_str())), "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
-	this->nextButton = new Button(x2, y2, 62, textheight(LPCTSTR(pageNumtext.c_str())), "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
-	this->prevButton->textStyle = this->textStyle;
-	this->nextButton->textStyle = this->textStyle;
-	this->prevButton->setFillMode(tableFillMode);
-	this->nextButton->setFillMode(tableFillMode);
-	prevButton->setOnClickListener([this]() 
-		{if (this->currentPage > 1)
-	{
-		this->currentPage--;
-		this->dirty = true;
-		this->draw();
-	} });
+	const int gap = 12;                                  // 页码与按钮之间的固定间距
+	const int padH = 12;                                  // 按钮水平内边距
+	const int padV = 0;                                  // 按钮垂直内边距
+
+	int pageW = textwidth(LPCTSTR(pageNumtext.c_str()));
+	int lblH = textheight(LPCTSTR(pageNumtext.c_str()));
+
+	// 统一按钮尺寸（用按钮文字自身宽高 + padding）
+	int prevW = textwidth(LPCTSTR("上一页")) + padH * 2;
+	int nextW = textwidth(LPCTSTR("下一页")) + padH * 2;
+	int btnH = lblH + padV * 2;
 	
-	nextButton->setOnClickListener([this]()
-		{if (this->currentPage < (this->totalPages))
+
+	// 基于“页码标签”的矩形来摆放：
+	// prev 在页码左侧 gap 处；next 在右侧 gap 处；Y 对齐 pY
+	int prevX = pX - gap - prevW;
+	int nextX = pX + pageW + gap;
+	int btnY = pY;                  // 和页码同一基线
+
+	if (!prevButton)
+		prevButton = new Button(prevX, btnY, prevW, btnH, "上一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	else
 	{
-		this->currentPage++;
-		this->dirty = true;
-		this->draw();
-	}});
+		prevButton->setX(prevX);
+		prevButton->setY(btnY);
+	}
+
+	if (!nextButton)
+		nextButton = new Button(nextX, btnY, nextW, btnH, "下一页", RGB(0, 0, 0), RGB(255, 255, 255));
+	else
+	{
+		nextButton->setX(nextX);
+		nextButton->setY(btnY);
+	}
+
+	prevButton->textStyle = this->textStyle;
+	nextButton->textStyle = this->textStyle;
+	prevButton->setFillMode(tableFillMode);
+	nextButton->setFillMode(tableFillMode);
+
+	prevButton->setOnClickListener([this]() 
+		{
+		if (currentPage > 1) 
+		{
+			--currentPage;
+			dirty = true;
+			if (pageNum) pageNum->setDirty(true);
+		}
+		});
+	nextButton->setOnClickListener([this]() 
+		{
+		if (currentPage < totalPages) 
+		{
+			++currentPage;
+			dirty = true;
+			if (pageNum) pageNum->setDirty(true);
+		}
+		});
 }
 
 void Table::initPageNum()
 {
-	if (0 == pY)
-		pY = uY + lineHeights.at(0) * rowsPerPage + rowsPerPage * 10+20;
-	for (size_t i = 0; i < colWidths.size(); i++)
-		this->pX += colWidths.at(i) + 20;
-	this->pX -= textwidth(LPCTSTR(pageNumtext.c_str()));
-	this->pX /= 2;
-	this->pX += x;
-	this->pageNum = new Label(this->pX, pY, pageNumtext);
+	// 统一坐标系
+	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
+	const int baseH = lineHeights.empty() ? 0 : lineHeights.at(0);
+	const int headerH = baseH + 10;
+	const int rowsH = baseH * rowsPerPage + rowsPerPage * 10;
+
+	// 内容宽度 = sum(colWidths + 20)；initTextWaH() 已把 this->width += 2*border
+	// 因此 contentW = this->width - 2*border 更稳妥
+	const int contentW = this->width - (border << 1);
+
+	// 页脚顶部位置（表头 + 可视数据区 之后）
+	pY = y + border + headerH + rowsH + 8;         // +8 顶部留白
+
+	// 按理来说 x + (this->width - textW) / 2;就可以
+	// 但是在绘制时，发现控件偏右，因此减去40
+	int textW = textwidth(LPCTSTR(pageNumtext.c_str()));
+	pX = x - 40 +(this->width - textW) / 2;
+
+	if (!pageNum) 
+		pageNum = new Label(pX, pY, pageNumtext);
+	else          
+	{
+		pageNum->setX(pX);
+		pageNum->setY(pY);
+	}
+
 	pageNum->textStyle = this->textStyle;
 	if (StellarX::FillMode::Null == tableFillMode)
-		pageNum->setTextdisap(true);
+		pageNum->setTextdisap(true);                   // 透明文本
 }
 
 void Table::drawPageNum()
 {
-	if (nullptr == pageNum)
-		initPageNum();
+	
 	pageNumtext = "第";
 	pageNumtext+= std::to_string(currentPage);
 	pageNumtext += "页/共";
 	pageNumtext += std::to_string(totalPages);
 	pageNumtext += "页";
+	if (nullptr == pageNum)
+		initPageNum();
 	pageNum->setText(pageNumtext);
+	if (StellarX::FillMode::Null == tableFillMode)
+		pageNum->setTextdisap(true);
 	pageNum->draw();
 	
 }
@@ -156,6 +227,15 @@ void Table::drawButton()
 {
 	if (nullptr == prevButton || nullptr == nextButton)
 		initButton();
+
+	this->prevButton->textStyle = this->textStyle;
+	this->nextButton->textStyle = this->textStyle;
+	this->prevButton->setFillMode(tableFillMode);
+	this->nextButton->setFillMode(tableFillMode);
+	this->prevButton->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
+	this->nextButton->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
+	this->prevButton->setDirty(true);
+	this->nextButton->setDirty(true);
 	prevButton->draw();
 	nextButton->draw();
 
@@ -184,7 +264,7 @@ Table::~Table()
 
 void Table::draw()
 {
-	if (this->dirty)
+	if (this->dirty && this->show)
 	{
 		// 先保存当前绘图状态
 		saveStyle();
@@ -206,47 +286,26 @@ void Table::draw()
 			initTextWaH();
 			isNeedCellSize = false;
 		}
-
-		// 优化性能：仅在首次绘制或表格尺寸变化时捕获背景图像。
-        // 由于表格绘制会覆盖原有区域，需要先保存背景以便在下次绘制前恢复，
-        // 避免重叠绘制造成的残影问题。
-		static bool firstDraw = true;
-		if (firstDraw || isNeedDrawHeaders) 
+	
+		if (isNeedDrawHeaders)
 		{
-			// 确保在绘制任何表格内容之前捕获背景
-			if (saveBkImage) 
-			{
-				// 临时恢复样式，确保捕获正确的背景
-				restoreStyle();
-				if(tableBorderWidth>1)
-					getimage(saveBkImage, this->x- tableBorderWidth, this->y- tableBorderWidth, this->width+ tableBorderWidth, this->height+ tableBorderWidth);
-				else
-					getimage(saveBkImage, this->x, this->y, this->width, this->height);
-				saveStyle(); // 重新保存样式
-
-				// 重新设置表格样式
-				setfillcolor(tableBkClor);
-				setlinecolor(tableBorderClor);
-				settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-					textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-					textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
-				settextcolor(textStyle.color);
-				setlinestyle((int)tableLineStyle, tableBorderWidth);
-				setfillstyle((int)tableFillMode);
-				setbkmode(TRANSPARENT);
-			}
-			firstDraw = false;
+			// 重新设置表格样式
+			setfillcolor(tableBkClor);
+			setlinecolor(tableBorderClor);
+			settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+				textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
+				textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+			settextcolor(textStyle.color);
+			setlinestyle((int)tableLineStyle, tableBorderWidth);
+			setfillstyle((int)tableFillMode);
+			setbkmode(TRANSPARENT);
 		}
-
+		//确保在绘制任何表格内容之前捕获背景
+	   // 临时恢复样式，确保捕获正确的背景
+		if (!saveBkImage)
+			saveBackground(this->x, this->y, this->width, this->height);
 		// 恢复背景（清除旧内容）
-		if (saveBkImage)
-		{
-			if (tableBorderWidth > 1)
-				putimage(this->x - tableBorderWidth, this->y - tableBorderWidth, saveBkImage);
-			else
-				putimage(this->x,this->y,this->saveBkImage);
-		}
-
+		restBackground();
 		// 绘制表头
 		
 			dX = x;
@@ -273,6 +332,7 @@ void Table::draw()
 
 bool Table::handleEvent(const ExMessage& msg)
 {
+	if(!show)return false;
 	bool consume = false;
 	if(!this->isShowPageButton)
 		return consume;
@@ -282,6 +342,8 @@ bool Table::handleEvent(const ExMessage& msg)
 		if (!consume)
 			consume = nextButton->handleEvent(msg);
 	}
+	if (dirty)
+		draw();
 	return consume;
 }
 
@@ -361,17 +423,17 @@ void Table::setTableFillMode(StellarX::FillMode mode)
 		this->tableFillMode = mode;
 	else
 		this->tableFillMode = StellarX::FillMode::Solid;
-
-	this->prevButton->textStyle = this->textStyle;
-	this->nextButton->textStyle = this->textStyle;
-	this->prevButton->setFillMode(tableFillMode);
-	this->nextButton->setFillMode(tableFillMode);
-	if (StellarX::FillMode::Null == tableFillMode)
-		pageNum->setTextdisap(true);
-	this->prevButton->setDirty(true);
-	this->nextButton->setDirty(true);
-	this->prevButton->setDirty(true);
-	this->nextButton->setDirty(true);
+	if (this->prevButton && this->nextButton && this->pageNum)
+	{
+		this->prevButton->textStyle = this->textStyle;
+		this->nextButton->textStyle = this->textStyle;
+		this->prevButton->setFillMode(tableFillMode);
+		this->nextButton->setFillMode(tableFillMode);
+		if (StellarX::FillMode::Null == tableFillMode)
+			pageNum->setTextdisap(true);
+		this->prevButton->setDirty(true);
+		this->nextButton->setDirty(true);
+	}
 	this->dirty = true;
 }
 

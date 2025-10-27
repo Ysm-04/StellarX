@@ -22,20 +22,20 @@
  * @包含顺序:
  *     1. CoreTypes.h - 基础类型定义
  *     2. Control.h   - 控件基类
- *     3. 其他具体控件头文件
+ *     3. ...其他具体控件头文件
  *     4. Dialog：继承自 Canvas（Dialog 为可包含子控件的对话框容器）
- *     5.MessageBox：对话框工厂，提供便捷的模态/非模态调用方式
+ *     5. MessageBox：对话框工厂，提供便捷的模态/非模态调用方式
  ******************************************************************************/
 
 #pragma once
 
 #include "CoreTypes.h"
 #include "Control.h"
-#include"Button.h"
+#include"Canvas.h"
 #include"Window.h"
+#include"Button.h"
 #include"Label.h"
 #include"TextBox.h"
-#include"Canvas.h"
 #include"Table.h"
 #include"Dialog.h"
 #include"MessageBox.h"

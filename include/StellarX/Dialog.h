@@ -20,7 +20,7 @@
 #pragma once
 #include"StellarX.h"
 
-#define closeButtonWidth 20   //关闭按钮宽度
+#define closeButtonWidth 23   //关闭按钮宽度
 #define closeButtonHeight 20  //关闭按钮高度  同时作为对话框标题栏高度
 #define functionButtonWidth  70 //按钮宽度
 #define functionButtonHeight 30  //按钮高度
@@ -39,10 +39,6 @@ class Dialog : public Canvas
 	int buttonNum = 0;         // 按钮数量
 	int BorderWidth = 2;  //边框宽度
 
-	IMAGE* saveBkImage = nullptr; // 用于保存背景图像
-	int saveBkX = 0, saveBkY = 0; // 保存背景的位置
-	int saveBkWidth = 0, saveBkHeight = 0; // 保存背景的尺寸
-
 	StellarX::MessageBoxType type = StellarX::MessageBoxType::OK;   //对话框类型
 	std::string titleText = "提示";				     //标题文本
 	std::unique_ptr<Label> title = nullptr;  //标题标签
@@ -54,7 +50,6 @@ class Dialog : public Canvas
 	bool needsInitialization = true;      //是否需要初始化 
 	bool close = false;					  //是否关闭
 	bool modal = true;                    //是否模态
-	bool isVisible = false;               //是否可见
 
 	COLORREF backgroundColor = RGB(240, 240, 240);   //背景颜色            
 	COLORREF borderColor = RGB(100, 100, 100);       //边框颜色
@@ -68,10 +63,10 @@ class Dialog : public Canvas
 
 	StellarX::MessageBoxResult result = StellarX::MessageBoxResult::Cancel; // 对话框结果
 
-public:
 	bool shouldClose = false;              //是否应该关闭
 	bool isCleaning = false;               //是否正在清理
 	bool pendingCleanup = false;           //延迟清理
+public:
 	StellarX::ControlText textStyle;   // 字体样式
 	// 清理方法声明
 	void performDelayedCleanup();
@@ -81,6 +76,8 @@ public:
 	void SetResultCallback(std::function<void(StellarX::MessageBoxResult)> cb);
 	//获取对话框消息，用以去重
 	std::string GetCaption() const;
+	//获取对话框消息，用以去重
+	std::string GetText() const; 
 	
 
 public:
@@ -100,13 +97,9 @@ public:
 	void SetModal(bool modal);
 	// 设置对话框结果
 	void SetResult(StellarX::MessageBoxResult result);
-
 	// 获取对话框结果
 	StellarX::MessageBoxResult GetResult() const;
-	// 获取模态属性
-	bool getModal() const;
-	// 检查是否可见
-	bool IsVisible() const override;
+
 	//获取对话框类型
 	bool model() const override;
 
@@ -114,6 +107,9 @@ public:
 	void Show();
 	// 关闭对话框
 	void Close(); 
+	//初始化
+	void setInitialization(bool init);
+
 
 private:
 	// 初始化按钮
@@ -128,8 +124,7 @@ private:
 	void getTextSize();	      
 	//初始化对话框尺寸
 	void initDialogSize(); 
-	// 初始化对话框
-	void initializeDialog();
+	
 
 	
 	// 清除所有控件

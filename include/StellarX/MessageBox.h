@@ -28,13 +28,13 @@ namespace StellarX
 	{
 	public:
 		// 模态：阻塞直到关闭，返回结果
-		static MessageBoxResult ShowModal(Window& wnd,
+		static MessageBoxResult showModal(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",
 			MessageBoxType type = MessageBoxType::OK);
 
 		// 非模态：立即返回，通过回调异步获取结果
-		static void ShowAsync(Window& wnd,
+		static void showAsync(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",
 			MessageBoxType type = MessageBoxType::OK,

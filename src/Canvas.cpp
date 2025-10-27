@@ -1,21 +1,20 @@
 ﻿#include "Canvas.h"
 
+Canvas::Canvas()
+	:Control(0, 0, 100, 100) {}
+
+Canvas::Canvas(int x, int y, int width, int height)
+	:Control(x, y, width, height) {}
+
 void Canvas::clearAllControls()
 {
 	controls.clear();
 }
 
-Canvas::Canvas()
-	:Control(0,0,100,100)
-{
-}
-
-Canvas::Canvas(int x, int y, int width, int height)
-	:Control(x, y, width, height) {}
 
 void Canvas::draw()
 {
-	if (!dirty)return;
+	if (!dirty && !show)return;
 	saveStyle();
 
 	setlinecolor(canvasBorderClor);//设置线色
@@ -41,8 +40,10 @@ void Canvas::draw()
 	}
 	// 绘制所有子控件
 	for (auto& control : controls)
+	{
+		control->setDirty(true);
 		control->draw();
-	
+	}
 	
 	restoreStyle();
 	dirty = false;	 //标记画布不需要重绘
@@ -50,10 +51,12 @@ void Canvas::draw()
 
 bool Canvas::handleEvent(const ExMessage& msg)
 {
-	for (auto& control : controls)
-		if (control->handleEvent(msg))
-			return true;//事件被消费短路传递，立即返回true 否则返回false
-	return false;
+	if(!show)return false;
+
+    for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+        if ((*it)->handleEvent(msg))
+            return true; // 事件被消费短路传递，立即返回true 否则返回false
+    return false;
 }
 
 void Canvas::addControl(std::unique_ptr<Control> control)
@@ -113,4 +116,6 @@ void Canvas::setLinewidth(int width)
 	this->canvaslinewidth = width;
 	dirty = true;
 }
+
+
 

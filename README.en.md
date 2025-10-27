@@ -79,7 +79,7 @@ StellarX/
 
 ## 🚀 Core Features
 
-- **Extreme Lightweight**: Core library compiles to only ~1.2MB, with zero external dependencies. Generated applications are compact.
+- **Extreme Lightweight**: Core library compiles to only ~12MB, with zero external dependencies. Generated applications are compact.
 - **Clear Modular Architecture**: Uses `CoreTypes.h` to uniformly manage all types, eliminating duplicate definitions and greatly improving maintainability.
 - **Native C++ Performance**: Built directly on EasyX and Win32 API, providing near-native execution efficiency with very low memory footprint (typically <10MB).
 - **Complete Control System**: Button, Label, TextBox, Canvas, Table, Dialog, and MessageBox factory.

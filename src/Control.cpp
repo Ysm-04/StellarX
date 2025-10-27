@@ -64,3 +64,51 @@ void Control::restoreStyle()
 	setlinecolor(*currentBorderColor);
 	setfillstyle(BS_SOLID);//恢复填充
 }
+
+void Control::saveBackground(int x, int y, int w, int h)
+{
+	if (w <= 0 || h <= 0) return;
+	saveBkX = x; saveBkY = y; saveWidth = w; saveHeight = h;
+
+	if (saveBkImage)
+	{
+		//尺寸变了才重建，避免反复 new/delete
+		if (saveBkImage->getwidth() != w || saveBkImage->getheight() != h)
+		{
+			delete saveBkImage; saveBkImage = nullptr;
+		}
+	}
+	if (!saveBkImage) saveBkImage = new IMAGE(w, h);
+
+	SetWorkingImage(nullptr);                 // ★抓屏幕
+	getimage(saveBkImage, x, y, w, h);
+	hasSnap = true;
+}
+
+void Control::restBackground()
+{
+	if (!hasSnap || !saveBkImage) return;
+	// 直接回贴屏幕（与抓取一致）
+	SetWorkingImage(nullptr);
+	putimage(saveBkX, saveBkY, saveBkImage);
+}
+
+void Control::discardBackground()
+{
+	if (saveBkImage)
+	{
+		delete saveBkImage;
+		saveBkImage = nullptr;
+	}
+	hasSnap = false; saveWidth = saveHeight = 0;
+}
+
+void Control::updateBackground()
+{
+	if (saveBkImage)
+	{
+		delete saveBkImage;
+		saveBkImage = nullptr;
+	}
+	hasSnap = false; saveWidth = saveHeight = 0;
+}

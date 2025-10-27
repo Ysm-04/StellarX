@@ -24,10 +24,17 @@ class Window
 	            int           width;              //窗口宽度
 				int           height;             //窗口高度
 				int           windowMode = NULL;     //窗口模式
+
+				// --- 尺寸变化去抖用 ---
+				int           pendingW;
+				int           pendingH;
+				bool          needResizeDirty = false;
+
 	           HWND           hWnd = NULL;           //窗口句柄
 	    std::string           headline;              //窗口标题
 	       COLORREF           wBkcolor = BLACK;      //窗口背景
 	          IMAGE*                  background = nullptr;  //窗口背景图片
+			  std::string             bkImageFile;           //窗口背景图片文件名
 std::vector<std::unique_ptr<Control>> controls;               //控件管理
 std::vector<std::unique_ptr<Control>> dialogs;                //对话框管理
 
@@ -43,9 +50,8 @@ public:
 	void draw();
 	void draw(std::string pImgFile);
 	//事件循环
-	void runEventLoop();
+	int runEventLoop();
 	//设置窗口背景图片
-	
 	void setBkImage(std::string pImgFile);
 	//设置窗口背景颜色
 	void setBkcolor(COLORREF c);
@@ -56,7 +62,7 @@ public:
 	//添加对话框
 	void addDialog(std::unique_ptr<Control>  dialogs);
 	//检查是否已有对话框显示用于去重，防止工厂模式调用非模态对话框，多次打开污染对话框背景快照
-	bool hasNonModalDialogWithCaption(const std::string& caption) const;
+	bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
 
 	//获取窗口句柄
 	HWND getHwnd() const;

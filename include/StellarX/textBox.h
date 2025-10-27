@@ -29,11 +29,6 @@ class TextBox : public Control
     COLORREF      textBoxBkClor = RGB(255, 255, 255); //背景颜色
     COLORREF      textBoxBorderClor = RGB(0,0,0);     //边框颜色
 
-
-	//检查是否对话框是否可见
-	bool IsVisible() const override { return false; }
-	//获取对话框类型
-	bool model() const override { return false; }
 public:
     StellarX::ControlText textStyle; //文本样式
 
@@ -56,6 +51,9 @@ public:
     //获取文本
     std::string getText() const;  
 
+private:
+    //用来检查对话框是否模态,此控件不做实现
+    bool model() const override { return false; };
 };
 
 

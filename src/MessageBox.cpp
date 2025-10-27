@@ -2,26 +2,28 @@
 
 namespace StellarX
 {
-	MessageBoxResult MessageBox::ShowModal(Window& wnd,const std::string& text,const std::string& caption,
+	MessageBoxResult MessageBox::showModal(Window& wnd,const std::string& text,const std::string& caption,
 		MessageBoxType type)
 	{
 		Dialog dlg(wnd, caption, text, type, true); // 模态
+		dlg.setInitialization(true);
 		dlg.Show();
 		return dlg.GetResult();
 	}
 
-	void MessageBox::ShowAsync(Window& wnd,const std::string& text,const std::string& caption,MessageBoxType type,
+	void MessageBox::showAsync(Window& wnd,const std::string& text,const std::string& caption,MessageBoxType type,
 		std::function<void(MessageBoxResult)> onResult)
 	{
 		//去重，如果窗口内已有相同的对话框被触发，则不再创建
-		if (wnd.hasNonModalDialogWithCaption(caption))
+		if (wnd.hasNonModalDialogWithCaption(caption, text))
 		{
 			std::cout << "\a" << std::endl; 
 			return;
 		}
-		auto dlg = std::make_unique<Dialog>(wnd, caption, text, type, false); // 非模态
+		auto dlg = std::make_unique<Dialog>(wnd, caption, text,
+			type, false); // 非模态
 		Dialog* dlgPtr = dlg.get();
-
+		dlgPtr->setInitialization(true);
 		// 设置回调
 		if (onResult)
 			dlgPtr->SetResultCallback(std::move(onResult));

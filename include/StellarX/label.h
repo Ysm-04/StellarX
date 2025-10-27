@@ -30,6 +30,8 @@ class Label : public Control
 
     //标签事件处理（标签无事件）不实现具体代码
     bool handleEvent(const ExMessage& msg) override { return false; }
+    //用来检查对话框是否模态,此控件不做实现
+    bool model() const override { return false; };
 public:
     StellarX::ControlText   textStyle;   //标签文本样式
 public:
@@ -37,6 +39,7 @@ public:
     Label(int x, int y, std::string text = "标签",COLORREF textcolor = BLACK, COLORREF bkColor= RGB(255,255,255));
   
     void draw() override;
+    void hide();
     //设置标签背景是否透明
     void setTextdisap(bool key);
     //设置标签文本颜色
@@ -45,13 +48,6 @@ public:
     void setTextBkColor(COLORREF color);
     //设置标签文本
     void setText(std::string text);
-
-
-private:
-	//检查是否对话框是否可见
-	bool IsVisible() const override { return false; }
-	//获取对话框类型
-	bool model() const override { return false; }
  
 };
 

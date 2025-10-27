@@ -7,6 +7,62 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.1.0] - 2025-10-05
+
+**Focus**: Resizable/maximized window (EasyX reinforced by Win32), first-phase layout manager (HBox/VBox), early Tabs control. We also fixed black borders, maximize “ghosts”, flicker, and the issue where controls only appeared after interaction. Control-level **background snapshot/restore**, **single-line truncation**, and **tooltips** are now standardized.
+
+### ✨ Added
+
+- **Window resize/maximize reinforcement (EasyX + Win32)**
+  - `Window::enableResize(bool enable, int minW, int minH)`; toggle at runtime and set min track size.
+  - Subclassed WndProc for `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT` with `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`.
+  - **Full-surface background paint** in `WM_PAINT` (solid/image), removing black borders and maximize ghosts.
+  - **One-shot redraw** on resize with `pendingW/H + needResizeDirty` coalescing.
+- **Layout manager (phase 1)**
+  - On `Canvas`: `LayoutKind::{Absolute, HBox, VBox, Grid(placeholder), Flow(placeholder), Stack(placeholder)}` with `LayoutParams` (`margins`, `fixedW/fixedH(-1=same)`, `weight`, `Align{Start,Center,End,Stretch}`).
+  - Implemented **HBox/VBox** auto layout inside containers; containers stay absolutely positioned; nesting supported.
+- **Tabs control (early)**
+  - Decoupled tab strip and page container; background snapshot for transparent themes.
+- **Button single-line truncation (MBCS; CN/EN aware)**
+  - Pixel-width threshold with `...` avoiding half-glyph artifacts.
+- **Hover tooltip**
+  - Implemented via `Label` with delay & auto-hide; per-control background snapshot/restore; customizable text with sensible fallback.
+
+### 🔧 Changed
+
+- **Window rendering path**
+  - Reduced reliance on “offscreen frame blit”; in `WM_PAINT` use **GDI full background + EasyX batch drawing** (`BeginBatchDraw/EndBatchDraw + FlushBatchDraw`) to suppress flicker.
+  - On resize, only rebuild the scaled background (`zoomBackground`); actual painting happens next frame.
+- **Control base**
+  - Standardized **captureBackground/restoreBackground**; transparent/stacked visuals are stable.
+  - Unified `dirty`: containers paint their own background when dirty; **children still evaluate/draw** as needed each frame.
+- **Table**
+  - In transparent mode, pagination widgets now inherit table text/fill style.
+  - Reworked **pagination math + block centering** (header included in available width).
+  - Fixed background snapshot sizing (header inclusion) that caused failed restores.
+- **Event loop**
+  - Coalesced `WM_SIZE` to the loop tail to avoid redraw storms and pointer-hover lag.
+
+### ✅ Fixed
+
+- **Black borders / maximize ghost / flicker**: blocked system background erase; full-surface paint in `WM_PAINT`; cleared clipping to prevent stale fragments.
+- **Containers not drawn; controls only after interaction**: first-frame & post-input full-tree dirty; children draw even if the container isn’t dirty.
+- **Table pagination overlap & transparent shadowing**: corrected snapshot area; recomputed coordinates; instant restore + redraw after paging.
+
+### ⚠️ Breaking
+
+- If external code accessed `Window` private members (e.g., `dialogs`), use `getControls()` / `getdialogs()`.
+- Pagination math & header inclusion may shift hard-coded offsets in custom renderers.
+- Custom controls that don’t restore `SetWorkingImage(nullptr)` before drawing should be reviewed.
+
+### 📌 Upgrade notes
+
+1. Migrate manual `cleardevice()+putimage` paths to unified **full-surface background** in `WM_PAINT`.
+2. For transparent controls, `captureBackground()` before first draw; `restoreBackground()` when hiding/overdrawing.
+3. For layout, set container `layout.kind = HBox/VBox` and child `LayoutParams` (`margin/fixed/weight/align`).
+4. Keep a **single** truncation pass for buttons to avoid duplicate `...`.
+5. Prefer built-in table pagination.
+
 ## [v2.0.1] - 2025-10-03
 
 ### Added

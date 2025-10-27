@@ -19,6 +19,12 @@
  ******************************************************************************/
 #pragma once
 #include "Control.h"
+#include"label.h"
+
+
+#define DISABLEDCOLOUR RGB(96, 96, 96) //禁用状态颜色
+#define TEXTMARGINS_X 6
+#define TEXTMARGINS_Y 4
 
 class Button : public Control
 {
@@ -26,6 +32,12 @@ class Button : public Control
     std::string text;             // 按钮上的文字
     bool        click;            // 是否被点击
     bool        hover;            // 是否被悬停
+
+    std::string cutText;       // 切割后的文本
+    bool needCutText = true;   // 是否需要切割文本
+    bool isUseCutText = false; // 是否使用切割文本
+    int  padX = TEXTMARGINS_X; // 文本最小左右内边距
+    int  padY = TEXTMARGINS_Y; // 文本最小上下内边距
 
     COLORREF         buttonTrueColor;                    // 按钮被点击后的颜色
     COLORREF         buttonFalseColor;                   // 按钮未被点击的颜色
@@ -50,6 +62,24 @@ class Button : public Control
     int oldtext_height = -1;
     int text_width = 0;
     int text_height = 0;
+
+    // === Tooltip ===
+    bool        tipEnabled = false;           // 是否启用
+    bool        tipVisible = false;          // 当前是否显示
+    bool        tipFollowCursor = false;      // 是否跟随鼠标
+    bool        tipUserOverride = false;     // 是否用户自定义了tip文本
+    int         tipDelayMs = 1000;            // 延时(毫秒)
+    int         tipOffsetX = 12;             // 相对鼠标偏移
+    int         tipOffsetY = 18;
+    ULONGLONG   tipHoverTick = 0;            // 开始悬停的时间戳
+    int         lastMouseX = 0;              // 最新鼠标位置(用于定位)
+    int         lastMouseY = 0;
+
+    std::string tipTextClick;  //NORMAL 模式下用
+    std::string tipTextOn;    // click==true 时用
+    std::string tipTextOff;   // click==false 时用
+    Label       tipLabel;                    // 直接复用Label作为提示
+   
 public:
     StellarX::ControlText textStyle;  // 按钮文字样式
 
@@ -72,7 +102,6 @@ public:
     //绘制按钮
     void draw() override;
     //按钮事件处理
-    
     bool handleEvent(const ExMessage& msg) override;
     
     //设置回调函数
@@ -131,11 +160,31 @@ public:
     int getButtonWidth() const;
     //获取按钮高度
     int getButtonHeight() const;
-    //获取按钮横坐标
-    int getButtonX() const;
-    //获取按钮纵坐标
-    int getButtonY() const;
-	
+public:
+    // === Tooltip API===
+    //设置是否启用提示框
+    void enableTooltip(bool on) { tipEnabled = on; if (!on) tipVisible = false; }
+    //设置提示框延时
+    void setTooltipDelay(int ms) { tipDelayMs = (ms < 0 ? 0 : ms); }
+    //设置提示框是否跟随鼠标
+    void setTooltipFollowCursor(bool on) { tipFollowCursor = on; }
+    //设置提示框位置偏移
+    void setTooltipOffset(int dx, int dy) { tipOffsetX = dx; tipOffsetY = dy; }
+    //设置提示框样式
+    void setTooltipStyle(COLORREF text, COLORREF bk, bool transparent) 
+    {
+        tipLabel.setTextColor(text);
+        tipLabel.setTextBkColor(bk);
+        tipLabel.setTextdisap(transparent);
+    }
+    //设置提示框文本
+    void setTooltipText(const std::string& s){ tipTextClick = s; tipUserOverride = true; }
+    void setTooltipTextsForToggle(const std::string& onText, const std::string& offText)
+    {
+        tipTextOn = onText;
+        tipTextOff = offText;
+        tipUserOverride = true;
+    }
 private:
     //初始化按钮
     void initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);
@@ -143,10 +192,13 @@ private:
     bool isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius);
     //判断鼠标是否在椭圆按钮内
     bool isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, int height);
-
-    //检查是否对话框是否可见
-    bool IsVisible() const override { return false; }
 	//获取对话框类型
     bool model() const override { return false; }
+    void cutButtonText();
+    // 统一隐藏&恢复背景
+    void hideTooltip();
+    // 根据当前 click 状态选择文案
+    void refreshTooltipTextForState(); 
+
 };
 
