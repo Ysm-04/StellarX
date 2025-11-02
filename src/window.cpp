@@ -38,8 +38,8 @@ Window::~Window()
 
 void Window::draw() {
     // 使用 EasyX 创建基本窗口
-    hWnd = initgraph(width, height, windowMode);
-    SetWindowText(hWnd, headline.c_str());
+	if (!hWnd)
+		hWnd = initgraph(width, height, windowMode);
     // **启用窗口拉伸支持**：添加厚边框和最大化按钮样式  
     LONG style = GetWindowLong(hWnd, GWL_STYLE);
     style |= WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;  // 可调整边框，启用最大化/最小化按钮
@@ -65,7 +65,8 @@ void Window::draw(std::string imagePath)
     // 使用指定图片绘制窗口背景（铺满窗口）
     this->background = new IMAGE(width, height);
 	bkImageFile = imagePath;
-    hWnd = initgraph(width, height, windowMode);
+	if (!hWnd)
+		hWnd = initgraph(width, height, windowMode);
     SetWindowText(hWnd, headline.c_str());
     loadimage(background, imagePath.c_str(), width, height, true);
     putimage(0, 0, background);
@@ -200,8 +201,7 @@ int Window::runEventLoop()
 			// 标记所有控件/对话框为脏，确保都补一次背景/外观
 			for (auto& c : controls)
 			{
-				c->setDirty(true);
-				c->updateBackground();
+				c->onWindowResize();
 				c->draw();
 			}
 			for (auto& d : dialogs)
@@ -209,7 +209,7 @@ int Window::runEventLoop()
 				auto dd = dynamic_cast<Dialog*>(d.get());
 				dd->setDirty(true);
 				dd->setInitialization(true);
-				dd->draw();
+				d->draw();
 			}
 			needResizeDirty = false;
 		}

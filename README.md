@@ -7,8 +7,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.1.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.1.0_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-2.2.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -25,24 +25,14 @@
 
 ---
 
-## 🆕 v2.1.0 有何变化
+## 🆕 v2.2.0 有何变化
 
-- **中英文双语 API文档**
-  - 文档详细介绍了每个类，以及API描述、功能和需要注意的地方，详细介绍了每个控件
+- **新增 TabControl 控件，实现多页面选项卡界面：** 通过 `TabControl` 可以轻松创建选项卡式布局，支持页签在上下左右排列、点击切换显示不同内容页面。适用于设置面板、多视图切换等场景。
+- **控件显隐与布局响应能力增强：** 现在所有控件都可以使用统一接口动态隐藏或显示（`setIsVisible`），容器控件隐藏时其内部子控件会自动随之隐藏/显示。与此同时，引入控件对窗口尺寸变化的响应机制（`onWindowResize`），窗口拉伸后界面各元素可协调更新，杜绝拉伸过程中出现残影或错位。
+- **文本样式机制完善：** Label 控件改用统一的文本样式结构 `ControlText`，开发者可方便地设置字体、颜色、大小等属性来定制 Label 的外观（替代旧接口，更加灵活）。Button 的 Tooltip 提示也支持更丰富的定制和针对切换状态的不同提示文本。
+- **其他改进：** 框架底层的对话框管理增加了防重复弹出相同提示的机制，修复了一些细节 Bug 并优化了刷新效率，进一步提升了稳定性。
 
-
-- **窗口可拉伸/最大化补强（基于 EasyX + Win32）**  
-  子类化窗口过程，处理 `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT`，启用 `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`。在 `WM_PAINT` 期进行**整窗背景绘制**（纯色/图片），彻底消除黑边与最大化“残影”；合并拉伸为**一次性重绘**。
-- **布局管理器（第一阶段）**  
-  `Canvas` 支持 `LayoutKind::{Absolute, HBox, VBox, Grid(预留), Flow(预留), Stack(预留)}` 与 `LayoutParams`（边距、固定尺寸、`weight`、`Align{Start,Center,End,Stretch}`）；实装 **HBox/VBox** 自动布局（容器仍绝对定位，可嵌套）。
-- **选项卡（Tabs）雏形**  
-  页签条与页面容器分离；透明主题下使用**背景快照**避免叠影。
-- **按钮文本单行截断（MBCS：中/英分治）**  
-  基于像素宽度阈值的 `...` 截断，杜绝半字符。
-- **悬停提示（Tooltip）**  
-  以 `Label` 实现，支持延时出现、自动隐藏；控件级**背景快照/恢复**。
-
-详见 `CHANGELOG.md / CHANGELOG.en.md`。
+详见 `CHANGELOG.md / CHANGELOG.en.md` 获取完整更新列表。
 
 ---
 
@@ -61,9 +51,10 @@ StellarX/
 │       ├── Window.h
 │       ├── Label.h
 │       ├── TextBox.h
+│       ├── TabControl.h #v2.2.0
 │       ├── Canvas.h
-│       ├── Dialog.h         # v2.0.0
-│       ├── MessageBox.h     # v2.0.0
+│       ├── Dialog.h         
+│       ├── MessageBox.h     
 │       └── Table.h
 ├── src/
 │   ├── Control.cpp
@@ -72,9 +63,10 @@ StellarX/
 │   ├── Label.cpp
 │   ├── TextBox.cpp
 │   ├── Canvas.cpp
+│   ├── TabControl.cpp #v2.2.0
 │   ├── Table.cpp
-│   ├── Dialog.cpp           # v2.0.0
-│   └── MessageBox.cpp       # v2.0.0
+│   ├── Dialog.cpp           
+│   └── MessageBox.cpp       
 ├── examples/
 │   └── demo.cpp
 ├── docs/
@@ -102,12 +94,10 @@ StellarX/
 - **极致轻量**：除 EasyX 外无外部重量级依赖。
 - **模块清晰**：`CoreTypes.h` 统一类型与枚举。
 - **原生性能**：EasyX + Win32，执行高效、内存低占用（常见 <10MB）。
-- **控件齐全**：Button、Label、TextBox、Canvas、Table、Dialog、MessageBox。
-- **高度自定义**：颜色、形状（矩形/圆角/圆/椭圆）、填充、字体等皆有枚举。
-- **简单直观 API**：OOP 设计，代码即文档。
-- **标准工程结构**：include/src 分离，支持 CMake。
-- **增强事件系统**：`handleEvent` 返回是否消费（自 v2.0.0）。
-- **对话框系统**：支持模态/非模态，自动背景保存与恢复。
+- **控件齐全**：Button、Label、TextBox、Canvas、Table、Dialog、MessageBox、**TabControl**。
+- **高度自定义**：颜色、形状（矩形/圆角/圆/椭圆）、填充、字体等皆有枚举配置，易于切换。
+- **简单直观 API**：OOP 设计，接口语义明确、调用友好，代码即文档。
+- **标准工程结构**：include/src 分离，支持 CMake 构建，方便集成到现有项目或开箱即用。
 
 ------
 
@@ -130,7 +120,7 @@ StellarX/
 
 ### CMake 构建（推荐）
 
-```
+```bash
 git clone https://github.com/Ysm-04/StellarX.git
 cd StellarX
 mkdir build && cd build
@@ -182,6 +172,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | `LineStyle`        | 线型       | `SOLID`, `DASH`, `DOT`                                       |
 | `MessageBoxType`   | 消息框类型 | `OK`, `OKCancel`, `YesNo`, ...                               |
 | `MessageBoxResult` | 结果       | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
+| `TabPlacement`     | 页签位置   | `Top`,`Bottom`,`Left`,`Right`                                |
 
 ### 结构体
 
@@ -211,10 +202,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 ### 3) 高级控件
 
-| 控件   | 头文件     | 描述     | 关键点                                                    |
-| ------ | ---------- | -------- | --------------------------------------------------------- |
-| Table  | `Table.h`  | 数据表格 | 分页/表头/列宽自动、翻页控件重叠/透明叠影已修复（v2.1.0） |
-| Dialog | `Dialog.h` | 对话框   | 支持模态/非模态，自动布局与背景保存/恢复                  |
+| 控件       | 头文件         | 描述     | 关键点                                                       |
+| ---------- | -------------- | -------- | ------------------------------------------------------------ |
+| Table      | `Table.h`      | 数据表格 | 分页/表头/列宽自动、翻页控件重叠/透明叠影已修复（v2.1.0）    |
+| Dialog     | `Dialog.h`     | 对话框   | 支持模态/非模态，自动布局与背景保存/恢复                     |
+| TabControl | `TabControl.h` | 选项卡   | 支持一键添加“页签+页”对（pair）也可以单独对某页添加子控件，采用相对坐标 |
 
 ### 4) 静态工厂
 
@@ -226,42 +218,21 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 ## 📐 布局管理（HBox/VBox）
 
-- **容器级**：`Canvas::layout.kind = HBox / VBox / Absolute (默认)`；可选容器 `padding`。
-- **子项级**：`LayoutParams`
-  - `margin{L,R,T,B}`
-  - `fixedW/fixedH`（`-1` 表示沿用控件当前尺寸）
-  - `weight`（主轴分配权重：HBox→宽、VBox→高）
-  - `alignX/alignY` = `Start/Center/End/Stretch`（用于次轴方向对齐/拉伸）
+==预留，待实现==
 
-**示例**（三列水平自适应，整体垂直拉伸）：
 
-```c++
-Canvas row(20, 20, 760, 120);
-row.layout.kind = LayoutKind::HBox;
-
-auto mk = [](int w, int h, float weight){
-    auto c = std::make_unique<Control>(0,0,w,h);
-    c->layout.marginL = 8; c->layout.marginR = 8;
-    c->layout.alignY = LayoutParams::Stretch;
-    c->layout.weight = weight;
-    return c;
-};
-row.addControl(mk(100,40, 1.f));
-row.addControl(mk(100,40, 2.f));
-row.addControl(mk(100,40, 1.f));
-```
 
 ------
 
-## 🗂 选项卡（Tabs，早期版本）
+## 🗂 选项卡（TabControl）
 
 - 页签条（按钮组） + 页面容器（`Canvas`）
 - 透明主题：页面区域**背景快照**切换，避免叠影
-- API 草图：`tabs.addPage(title, canvasPtr); tabs.setActive(index);`
+- API ：**查看API文档**
 
 ------
 
-## ✂️ 文本单行截断 & 🫧 Tooltip
+## ✂️ 文本单行截断 & Button Tooltip
 
 - **按钮截断**：多字节字符集下**中/英分治**，基于像素宽度阈值追加 `...`
 - **Tooltip**：延时出现、自动隐藏；默认文字=按钮文本，可自定义；使用控件级**背景快照/恢复**

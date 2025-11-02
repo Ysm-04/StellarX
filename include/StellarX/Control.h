@@ -34,11 +34,14 @@
 #include <string>
 #include <functional>
 #include "CoreTypes.h"
+
 class Control
 {
 protected:
-    int x, y;           // 左上角坐标
-    int width, height;  // 控件尺寸
+    std::string id;     // 控件ID
+    int localx,x, localy,y;           // 左上角坐标
+    int localWidth,width, localHeight,height;  // 控件尺寸
+    Control* parent = nullptr;    // 父控件
     bool dirty = true; // 是否重绘
     bool show = true; // 是否显示
 
@@ -61,9 +64,9 @@ protected:
     Control(Control&&) = default;
     Control& operator=(Control&&) = default;
 
-    Control() : x(0), y(0), width(100), height(100) {}
+    Control() : localx(0),x(0), localy(0),y(0), localWidth(100),width(100),height(100), localHeight(100) {}
     Control(int x, int y, int width, int height)
-        : x(x), y(y), width(width), height(height) {}
+        : localx(x), x(x), localy(y), y(y), localWidth(width), width(width), height(height), localHeight(height){}
 public:
 
     virtual ~Control()
@@ -79,15 +82,24 @@ public:
         currentBkColor = nullptr;
         currentBorderColor = nullptr;
         currentLineStyle = nullptr;
+        discardBackground();
     }
-
 protected:
+    virtual void requestRepaint();
+    //根控件/无父时触发重绘
+    virtual void onRequestRepaintAsRoot();
+protected:
+    //保存背景快照
     void saveBackground(int x, int y, int w, int h);
-    void restBackground();          // putimage 回屏
-    void discardBackground();          // 释放快照（窗口重绘/尺寸变化后必须作废）
+    // putimage 回屏
+    void restBackground();         
+    // 释放快照（窗口重绘/尺寸变化后必须作废）
+    void discardBackground();
 public:
     //释放快照重新保存，在尺寸变化时更新背景快照避免尺寸变化导致显示错位
     void updateBackground();
+    //窗口变化丢快照
+    virtual void onWindowResize();
     // 获取位置和尺寸
     int getX() const { return x; }
     int getY() const { return y; }
@@ -95,23 +107,35 @@ public:
     int getHeight() const { return height; }
     int getRight() const { return x + width; }
     int getBottom() const { return y + height; }
-    
+   
+    int getLocalX() const { return localx; }
+    int getLocalY() const { return localy; }
+    int getLocalWidth() const { return localWidth; }
+    int getLocalHeight() const { return localHeight; }
+    int getLocalRight() const { return localx + localWidth; }
+    int getLocalBottom() const { return localy + localHeight; }
+
     void setX(int x) { this->x = x; dirty = true; }
     void setY(int y) { this->y = y; dirty = true; }
     void setWidth(int width) { this->width = width; dirty = true; }
     void setHeight(int height) { this->height = height; dirty = true; }
 public:
-    //设置是否重绘
-    void setDirty(bool dirty) { this->dirty = dirty; }
 
     virtual void draw() = 0;
     virtual bool handleEvent(const ExMessage& msg) = 0;//返回true代表事件已消费
-
     //设置是否显示
-     void setShow(bool show) { this->show = show; }
-    //检查控件是否可见
-     bool IsVisible() const { return show; };
+    virtual void setIsVisible(bool show);
+    //设置父容器指针
+    void setParent(Control* parent) { this->parent = parent; }
+    //设置是否重绘
+    virtual void setDirty(bool dirty) { this->dirty = dirty; }
 
+    //检查控件是否可见
+    bool IsVisible() const { return show; };
+    //获取控件id
+    std::string getId() const { return id; }
+    //检查是否为脏
+    bool isDirty() { return dirty; }
     //用来检查对话框是否模态，其他控件不用实现
     virtual bool model()const = 0;
 protected:

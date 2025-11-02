@@ -5,6 +5,7 @@
 TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX::TextBoxmode mode, StellarX::ControlShape shape)
 	:Control(x,y,width,height),text(text), mode(mode), shape(shape)
 {
+    this->id = "TextBox";
 }
 
 void TextBox::draw()
@@ -27,7 +28,10 @@ void TextBox::draw()
         int text_width = textwidth(LPCTSTR(text.c_str()));
         int text_height = textheight(LPCTSTR(text.c_str()));
 
-     
+        if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
+            saveBackground(this->x, this->y, this->width, this->height);
+        // 恢复背景（清除旧内容）
+        restBackground();
         //根据形状绘制
         switch (shape)
         {
@@ -87,7 +91,7 @@ bool TextBox::handleEvent(const ExMessage& msg)
         flushmessage(EX_MOUSE | EX_KEY);
     }
     if (dirty)
-        draw();
+        requestRepaint();
 
     if (click)
         click = false;

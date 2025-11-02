@@ -56,7 +56,12 @@ public:
     void setCanvasLineStyle(StellarX::LineStyle style);
     //设置线段宽度
     void setLinewidth(int width);
- 
+    //设置不可见后传递给子控件重写
+    void setIsVisible(bool visible) override;
+    void setDirty(bool dirty) override;
+    void onWindowResize() override;
+    //获取子控件列表
+    std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
 private:
     //用来检查对话框是否模态,此控件不做实现
     bool model() const override { return false; };

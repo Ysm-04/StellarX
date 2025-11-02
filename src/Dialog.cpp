@@ -3,6 +3,7 @@
 Dialog::Dialog(Window& h,std::string text,std::string message, StellarX::MessageBoxType type, bool modal)
 	: Canvas(),message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
+	this->id = "Dialog";
 	show = false;
 }
 
@@ -36,10 +37,9 @@ void Dialog::draw()
         saveStyle();
 
 
-        // 保存背景（仅在第一次绘制时）
-        if (saveBkImage == nullptr)
-			saveBackground((x - BorderWidth), (y - BorderWidth), (width + 2 * BorderWidth), (height + 2 * BorderWidth));
-			
+		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
+			saveBackground(this->x, this->y, this->width, this->height);
+
 		Canvas::setBorderColor(this->borderColor);
 		Canvas::setLinewidth(this->BorderWidth);
 		Canvas::setCanvasBkColor(this->backgroundColor);
@@ -191,7 +191,7 @@ void Dialog::Show()
 			// 重绘
 			if (dirty)
 			{
-				draw();
+				requestRepaint();
 				FlushBatchDraw();
 			}
 

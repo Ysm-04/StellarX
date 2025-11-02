@@ -1,69 +1,60 @@
-# StellarX GUI Framework
+# StellarX GUI Framework README
 
-[中文文档](README.md)
+[中文README](README.md)
 
 ------
 
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
-[![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
+ [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.1.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.1.0_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.2.0-brightgreen.svg)
+ ![Download](https://img.shields.io/badge/Download-2.2.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
-![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
-![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
-![License](https://img.shields.io/badge/License-MIT-blue.svg)
-![Architecture](https://img.shields.io/badge/Architecture-Modular%20OOP-brightgreen)
-![CMake](https://img.shields.io/badge/Build-CMake-064F8C?logo=cmake)
+ ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
+ ![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
+ ![License](https://img.shields.io/badge/License-MIT-blue.svg)
+ ![Architecture](https://img.shields.io/badge/Architecture-Modular%20OOP-brightgreen)
+ ![CMake](https://img.shields.io/badge/Build-CMake-064F8C?logo=cmake)
 
-> **"Bound by Stars, Light as Dust"** — A native C++ GUI framework for Windows, featuring extreme lightness and high modularity.
+> **“Bounded by the stars, light as dust.”** — An ultra-lightweight, highly modular, native C++ GUI framework for Windows.
 
-`StellarX` was born from resistance against bloat. It avoids huge dependencies, long build times, and steep learning curves, returning to the essence: using concise code, clear architecture, and high efficiency to solve desktop GUI needs.
+`StellarX` rejects bloat: no hundreds-of-MB dependencies, no marathon builds, and no steep learning curve. Back to the essence—clean code, clear architecture, and high efficiency to solve the core needs of desktop app development.
 
-It is a **pure teaching/tool-level framework** that helps developers understand GUI principles and quickly build lightweight Windows tools.
+This is a **teaching-grade and tooling-grade** framework that helps developers understand GUI fundamentals and quickly build lightweight utilities.
 
----
+------
 
-## 🆕 What's New in v2.1.0
+## 🆕 What’s new in v2.2.0
 
-**Bilingual API Documentation (Chinese and English)**
+- **New TabControl for multi-page tabbed UIs:** With `TabControl`, it’s easy to create a tabbed layout. Tabs can be arranged on the top, bottom, left, or right, and clicking switches the displayed page. Suitable for settings panels and multi-view switching.
+- **Enhanced control show/hide and resize responsiveness:** All controls now share a unified interface (`setIsVisible`) to toggle visibility. When a container control is hidden, its child controls automatically hide/show with it. Meanwhile, we introduce `onWindowResize` for controls to respond to window size changes so elements update in sync after resizing, eliminating artifacts or misalignment.
+- **Refined text-style mechanism:** The Label control now uses a unified `ControlText` style structure. Developers can easily customize font, color, size, etc. (replacing older interfaces, and more flexible). Button Tooltips also support richer customization and different texts for toggle states.
+- **Other improvements:** Dialog management gains de-duplication to prevent identical prompts from popping up repeatedly. Several bug fixes and refresh optimizations further improve stability.
 
-- The documentation provides a detailed introduction of each class, including API descriptions, functionalities, and points to note, with a comprehensive explanation of each control.
+See `CHANGELOG.md / CHANGELOG.en.md` for the full list.
 
-- **Resizable/Maximizable Window (EasyX + Win32 reinforcement)**  
-  Subclassed WndProc with `WM_GETMINMAXINFO / WM_SIZE / WM_EXITSIZEMOVE / WM_ERASEBKGND / WM_PAINT` and window styles `WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_CLIPCHILDREN | WS_CLIPSIBLINGS`. Full-surface background paint in `WM_PAINT` eliminates black borders and maximize “ghosts”. Coalesced resize with one-shot redraw.
-- **Layout Manager (Phase 1)**  
-  `Canvas` now supports `LayoutKind::{Absolute, HBox, VBox, Grid(placeholder), Flow(placeholder), Stack(placeholder)}` with `LayoutParams` (`margins`, `fixedW/fixedH`, `weight`, `Align{Start,Center,End,Stretch}`). Implemented **HBox/VBox** auto layout (containers remain absolutely positioned; nesting supported).
-- **Tabs (early)**  
-  Tab strip + page container separated; background snapshot avoids trails on transparent themes.
-- **Button Single-Line Truncation (MBCS, CN/EN aware)**  
-  Pixel-width based `...` truncation prevents half-glyph artifacts.
-- **Hover Tooltip**  
-  Implemented via `Label`, supports delay and auto-hide; per-control background snapshot/restore.
-
-See details in `CHANGELOG.en.md`.
-
----
+------
 
 ## 📦 Project Structure & Design Philosophy
 
 StellarX adopts classic **OOP** and **modular** design with a clear structure:
 
-```markdown
+```
 StellarX/
 ├── include/
 │   └── StellarX/
 │       ├── StellarX.h
-│       ├── CoreTypes.h       # Single source of truth for enums/structs
+│       ├── CoreTypes.h      # single source of truth (enums/structs)
 │       ├── Control.h
 │       ├── Button.h
 │       ├── Window.h
 │       ├── Label.h
 │       ├── TextBox.h
+│       ├── TabControl.h #v2.2.0
 │       ├── Canvas.h
-│       ├── Dialog.h          
-│       ├── MessageBox.h      
+│       ├── Dialog.h         
+│       ├── MessageBox.h     
 │       └── Table.h
 ├── src/
 │   ├── Control.cpp
@@ -72,63 +63,62 @@ StellarX/
 │   ├── Label.cpp
 │   ├── TextBox.cpp
 │   ├── Canvas.cpp
+│   ├── TabControl.cpp #v2.2.0
 │   ├── Table.cpp
-│   ├── Dialog.cpp            
-│   └── MessageBox.cpp        
+│   ├── Dialog.cpp           
+│   └── MessageBox.cpp       
 ├── examples/
 │   └── demo.cpp
 ├── docs/
 │   └── CODE_OF_CONDUCT.md
 ├── CMakeLists.txt
 ├── CONTRIBUTING.md
-├── CHANGELOG.en.md
 ├── CHANGELOG.md
+├── CHANGELOG.en.md
 ├── Doxyfile
 ├── LICENSE
 ├──API 文档.md
 ├──API Documentation.en.md
-└── README.en.md
+└── README.md
 ```
 
-### Design Philosophy
+**Design Philosophy:**
 
-1. **SRP**: each class/file does one thing.
-2. **DIP**: high-level modules depend on abstractions (`Control`), not concrete controls.
-3. **OCP**: new controls extend `Control` without touching existing code.
-4. **Consistency**: all controls expose `draw()` and `handleEvent()`.
+1. **Single Responsibility (SRP):** each class/file does exactly one thing.
+2. **Dependency Inversion (DIP):** high-level modules depend on abstractions (`Control`), not concrete controls.
+3. **Open/Closed (OCP):** extend by inheriting from `Control` without modifying existing code.
+4. **Consistency:** unified `draw()` / `handleEvent()` across all controls.
 
 ## 🚀 Core Features
 
-- **Extreme Lightweight**: tiny footprint with zero external dependencies beyond EasyX.
-- **Clear Modular Architecture**: `CoreTypes.h` centralizes types and enums.
-- **Native C++ Performance**: EasyX + Win32 API for near-native speed, low memory (<10MB typical).
-- **Complete Control Set**: Button, Label, TextBox, Canvas, Table, Dialog, and MessageBox factory.
-- **Highly Customizable**: colors, shapes (rectangle/rounded/circle/ellipse), fill modes, fonts via enums.
-- **Simple, Intuitive API**: OOP-oriented, code as documentation.
-- **Standard Project Layout**: include/src split, CMake build.
-- **Enhanced Event System**: `handleEvent` returns `bool` for consumption (since v2.0.0).
-- **Dialog System**: modal and modeless; auto background save/restore.
+- **Ultra-lightweight:** no heavyweight external dependencies besides EasyX.
+- **Clear modules:** `CoreTypes.h` unifies types and enums.
+- **Native performance:** EasyX + Win32 for efficient execution and low memory (often <10 MB).
+- **Complete control set:** Button, Label, TextBox, Canvas, Table, Dialog, MessageBox, **TabControl**.
+- **Highly customizable:** colors; shapes (rectangle/rounded/circle/ellipse); fills; fonts—switchable via enums.
+- **Simple, intuitive API:** OOP design with clear semantics—code as documentation.
+- **Standard project layout:** split `include/src`, CMake-friendly, easy to integrate or use out of the box.
 
 ------
 
-## ⚡ Quick Start (5 Minutes)
+## ⚡ Quick Start (5 minutes)
 
-> Download prebuilt headers/libs from [Releases](https://github.com/Ysm-04/StellarX/releases/latest).
+> Get the prebuilt package from [Releases](https://github.com/Ysm-04/StellarX/releases/latest).
 
 ### Requirements
 
-- **OS**: Windows 10+
-- **Compiler**: C++17 (e.g., Visual Studio 2019+)
-- **Graphics**: [EasyX](https://easyx.cn/) 2022+ (match your compiler)
-- **Build**: CMake 3.12+ (optional)
+- **OS:** Windows 10+
+- **Compiler:** C++17 (e.g., VS 2019+)
+- **Graphics:** [EasyX](https://easyx.cn/) 2022+ (matching your compiler)
+- **Build:** CMake 3.12+ (optional)
 
 ### Install EasyX
 
-1. Download latest EasyX
-2. Install matching your Visual Studio
-3. No extra configuration needed for StellarX
+1. Download the latest EasyX
+2. Install components matching your Visual Studio version
+3. The framework links automatically—no extra config needed
 
-### CMake Build (Recommended)
+### Build with CMake (recommended)
 
 ```
 git clone https://github.com/Ysm-04/StellarX.git
@@ -141,23 +131,22 @@ cmake --build .
 
 ### Manual Integration
 
-- Copy `include` and `src` into your project
-- Add include paths for `include/StellarX/`
-- Add all `.cpp` files to your build
+- Copy `include` and `src`
+- Add header search path: `include/StellarX/`
+- Add all `.cpp` files to your project
 
-### Your First App (now Resizable)
+### First Resizable Window
 
 ```
 #include "StellarX.h"
 
-int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
-    Window mainWindow(800, 600, 0, RGB(255,255,255), "StellarX App");
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) 
+{
+    // Resizing enabled by default; current size is the minimum size
+    Window mainWindow(800, 600, 0, RGB(255,255,255), "My StellarX App");
     mainWindow.draw();
 
-    // Enable resize + minimum track size
-    mainWindow.enableResize(true, 480, 360);
-
-    // Add your controls here...
+    // Add your controls...
     // mainWindow.addControl(std::move(btn));
 
     mainWindow.runEventLoop();
@@ -165,160 +154,138 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int) {
 }
 ```
 
-> Internally, we paint the **entire client area** in `WM_PAINT` (solid/image) and use EasyX batch drawing to avoid flicker and black borders.
+> Implementation note: perform **full-window background drawing** (solid/image) during `WM_PAINT`, and combine with EasyX batch drawing to suppress flicker and black edges.
 
 ------
 
-## 📚 Core Types (`CoreTypes.h`)
+## 📚 Core Types (excerpt from `CoreTypes.h`)
 
-### Enums (selection)
+### Enums
 
-| Enum               | Description | Values                                                       |
-| ------------------ | ----------- | ------------------------------------------------------------ |
-| `ControlShape`     | geometry    | `RECTANGLE`, `B_RECTANGLE`, `ROUND_RECTANGLE`, `CIRCLE`, `ELLIPSE`, ... |
-| `ButtonMode`       | behavior    | `NORMAL`, `TOGGLE`, `DISABLED`                               |
-| `TextBoxMode`      | modes       | `INPUT_MODE`, `READONLY_MODE`                                |
-| `FillMode`         | fill        | `SOLID`, `NULL`, `HATCHED`, ...                              |
-| `FillStyle`        | pattern     | `HORIZONTAL`, `CROSS`, ...                                   |
-| `LineStyle`        | border      | `SOLID`, `DASH`, `DOT`, ...                                  |
-| `MessageBoxType`   | dialog      | `OK`, `OKCancel`, `YesNo`, ...                               |
-| `MessageBoxResult` | result      | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
+| Enum               | Description      | Common values                                                |
+| ------------------ | ---------------- | ------------------------------------------------------------ |
+| `ControlShape`     | Geometric shape  | `RECTANGLE`, `B_RECTANGLE`, `ROUND_RECTANGLE`, `CIRCLE`, `ELLIPSE` |
+| `ButtonMode`       | Button behavior  | `NORMAL`, `TOGGLE`, `DISABLED`                               |
+| `TextBoxMode`      | TextBox mode     | `INPUT_MODE`, `READONLY_MODE`                                |
+| `FillMode`         | Fill mode        | `SOLID`, `NULL`, `HATCHED`                                   |
+| `FillStyle`        | Pattern style    | `HORIZONTAL`, `CROSS`                                        |
+| `LineStyle`        | Line style       | `SOLID`, `DASH`, `DOT`                                       |
+| `MessageBoxType`   | Message box type | `OK`, `OKCancel`, `YesNo`, ...                               |
+| `MessageBoxResult` | Result           | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
+| `TabPlacement`     | Tab position     | `Top`, `Bottom`, `Left`, `Right`                             |
 
 ### Structs
 
-| Struct         | Description                                  |
-| -------------- | -------------------------------------------- |
-| `ControlText`  | font/size/color/bold/italic/underline/strike |
-| `RouRectangle` | rounded-rectangle corner ellipse size        |
+| Struct         | Description                                          |
+| -------------- | ---------------------------------------------------- |
+| `ControlText`  | Font/size/color/bold/italic/underline/strike-through |
+| `RouRectangle` | Corner ellipse size for rounded rectangles           |
 
 ------
 
-## 🧩 Control Library
+## 🧩 Controls Library
 
-### 1) Basic
+### 1) Basic Controls
 
-| Control | Header      | Description             | Key Points                                                   |
-| ------- | ----------- | ----------------------- | ------------------------------------------------------------ |
-| Button  | `Button.h`  | multi-functional button | shapes/modes, hover/click colors, callbacks, **single-line truncation** + **tooltip** (v2.1.0) |
-| Label   | `Label.h`   | text label              | transparent/opaque backgrounds, custom font styles           |
-| TextBox | `TextBox.h` | input/display           | input & read-only, integrates EasyX `InputBox`               |
+| Control | Header      | Description       | Key Points                                                   |
+| ------- | ----------- | ----------------- | ------------------------------------------------------------ |
+| Button  | `Button.h`  | Versatile button  | Shapes/modes; hover/pressed colors; callbacks; **single-line truncation** + **Tooltip** (v2.1.0) |
+| Label   | `Label.h`   | Text label        | Transparent/opaque background; custom fonts                  |
+| TextBox | `TextBox.h` | Input/display box | Input/readonly; integrates EasyX `InputBox`                  |
 
-### 2) Containers
+### 2) Container Controls
 
 | Control | Header     | Description                                                  |
 | ------- | ---------- | ------------------------------------------------------------ |
-| Canvas  | `Canvas.h` | parent container, custom border/background, **auto layout HBox/VBox** (v2.1.0) |
-| Window  | `Window.h` | top-level container, message loop/dispatch, **resizable** (v2.1.0) |
+| Canvas  | `Canvas.h` | Parent container with custom border/background; **built-in HBox/VBox auto layout** (v2.1.0) |
+| Window  | `Window.h` | Top-level container with message loop and dispatch; **resizable** (v2.1.0) |
 
-### 3) Advanced
+### 3) Advanced Controls
 
-| Control | Header     | Description | Key Points                                                   |
-| ------- | ---------- | ----------- | ------------------------------------------------------------ |
-| Table   | `Table.h`  | data table  | pagination, header/data, auto column widths, page controls fixed overlap/centering (v2.1.0) |
-| Dialog  | `Dialog.h` | dialogs     | modal/modeless, layout & background save/restore             |
+| Control    | Header         | Description | Key Points                                                   |
+| ---------- | -------------- | ----------- | ------------------------------------------------------------ |
+| Table      | `Table.h`      | Data grid   | Paging/header/auto column width; fixed page-control overlap/ghosting (v2.1.0) |
+| Dialog     | `Dialog.h`     | Dialog      | Modal/non-modal; auto layout; background save/restore        |
+| TabControl | `TabControl.h` | Tabs        | One-click add of “tab + page” pair (pair), or add child controls to a page; uses relative coordinates |
 
 ### 4) Static Factory
 
-| Control    | Header         | Description    | Key Points                                  |
-| ---------- | -------------- | -------------- | ------------------------------------------- |
-| MessageBox | `MessageBox.h` | dialog factory | static API; modal/modeless; dedup mechanism |
+| Control    | Header         | Description         | Key Points                                   |
+| ---------- | -------------- | ------------------- | -------------------------------------------- |
+| MessageBox | `MessageBox.h` | Message-box factory | Static API; modal/non-modal; de-dup built in |
 
 ------
 
 ## 📐 Layout Management (HBox/VBox)
 
-- **Container-level**: `Canvas::layout.kind = HBox / VBox / Absolute (default)`; optional container `padding`.
-- **Child-level**: `LayoutParams`
-  - `margin{L,R,T,B}`
-  - `fixedW/fixedH` (`-1` = keep current)
-  - `weight` (distribute along main axis; width in HBox, height in VBox)
-  - `alignX/alignY` = `Start/Center/End/Stretch` (cross-axis)
-
-**Example** (3 items HBox, center vertically, stretch height):
-
-```
-Canvas row(20, 20, 760, 120);
-row.layout.kind = LayoutKind::HBox;
-
-auto mk = [](int w, int h, float weight){
-    auto c = std::make_unique<Control>(0,0,w,h);
-    c->layout.marginL = 8; c->layout.marginR = 8;
-    c->layout.alignY = LayoutParams::Stretch;
-    c->layout.weight = weight;
-    return c;
-};
-row.addControl(mk(100,40, 1.f));
-row.addControl(mk(100,40, 2.f));
-row.addControl(mk(100,40, 1.f));
-```
+==Reserved, to be implemented==
 
 ------
 
-## 🗂 Tabs (Early)
+## 🗂 Tabs (TabControl)
 
-- Tab strip (buttons) + page container (`Canvas`)
-- Transparent themes: page area uses **background snapshot** on switch
-- API sketch: `tabs.addPage(title, canvasPtr); tabs.setActive(index);`
-
-------
-
-## ✂️ Single-Line Truncation & 🫧 Tooltip
-
-- **Button truncation**: MBCS CN/EN aware pixel-width threshold + `...`
-- **Tooltip**: delayed show, auto-hide; default text = button label; customizable; uses per-control **background snapshot/restore**.
+- Tab strip (button group) + page container (`Canvas`)
+- For transparent themes: **background snapshot** switching in the page area to avoid ghosting
+- API: **see the API documentation**
 
 ------
 
-## 🧊 Transparent Background & Background Snapshot
+## ✂️ Single-line Text Truncation & Button Tooltip
 
-- **Convention**: `captureBackground(rect)` before first draw; `restoreBackground()` before hiding/overdraw.
-- **Table**: snapshot area now **includes header**; pagination re-centers controls and restores backgrounds immediately.
+- **Button truncation:** separate handling for CJK/Latin under MBCS; append `...` based on pixel-width threshold
+- **Tooltip:** delayed show and auto-hide; default text = button text; customizable; uses control-level **background snapshot/restore**
+
+------
+
+## 🧊 Transparent Background & Background Snapshots
+
+- **General convention:** `captureBackground(rect)` before the first draw; `restoreBackground()` before hiding/covering
+- **Table:** snapshot region **includes the header**; after page switch, restore immediately + redraw; paging controls centered
 
 ------
 
 ## 🔧 Advanced Topics & Best Practices
 
-- Custom controls: inherit `Control` and implement `draw()` / `handleEvent()`.
+- Custom controls: inherit from `Control`, implement `draw()` / `handleEvent()`
 - Performance:
-  - **Dirty rendering**: set `dirty=true` when state changes; framework repaints as needed.
-  - **Avoid extra `cleardevice()`**: background is already handled in `WM_PAINT` full-surface path.
-  - Use `SetWorkingImage(nullptr)` before drawing to the screen.
-- Event consumption: return `true` if handled to stop propagation.
+  - **Dirty rectangles:** set `dirty=true` on state changes for on-demand redraw
+  - **Avoid extra `cleardevice()`**: background is centrally handled in `WM_PAINT`
+  - Ensure `SetWorkingImage(nullptr)` before drawing so output goes to the screen
+- Event consumption: return `true` after handling to stop propagation
 
 ------
 
-## ⚠️ Limitations & When Not To Use
+## ⚠️ Applicability & Limits
 
-- High-performance games or complex animations
-- High DPI scaling extremes (re-verify coordinates/metrics)
-- Accessibility requirements
-- Cross-platform targets (Windows-only)
-- Heavy enterprise frontends (consider Qt/wxWidgets/ImGui/Electron)
+- Not suitable for high-performance games or complex animation; re-verify metrics under extreme DPI
+- No accessibility support yet
+- Windows-only, not cross-platform
+- For complex commercial front-ends, consider Qt / wxWidgets / ImGui / Electron
 
 ------
 
 ## 📜 License
 
-MIT License (see `LICENSE`).
+MIT (see `LICENSE`).
 
-## 👥 Contributing
+## 👥 Contributing Guidelines
 
-- Follow the existing C++ style (spaces, brace on new line).
-- New features should include an example and README update.
-- Test before PR; describe changes and motivation.
-- Use Issues for bugs/ideas.
+- Follow the existing C++ style
+- New features should include examples and README updates
+- Self-test before submitting and explain the motivation for changes
+- For bugs/ideas, please open an Issue
 
 ## 🙏 Acknowledgements
 
-- Thanks to [EasyX](https://easyx.cn/).
-- Thanks to developers who value **concise, efficient, clear** code.
+- Thanks to [EasyX](https://easyx.cn/)
+- Thanks to developers who value **simplicity/efficiency/clarity**
 
 ------
 
-**Star Ocean Vast, Code as Boat.**
+**Stars and seas, code as the vessel.**
 
 ## 📞 Support & Feedback
 
 - See [examples/](examples/)
-- See [Changelog](CHANGELOG.en.md)
-- Open Issues on GitHub
+- Read the [CHANGELOG](CHANGELOG.md / CHANGELOG.en.md)
+- Submit an Issue on GitHub

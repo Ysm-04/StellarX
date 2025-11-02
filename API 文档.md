@@ -1,685 +1,1756 @@
-# 中文 API 文档
+#  API 文档
 
-[English API Documentation](English API Documentation.md)
+[English API Documentation](API Documentation.en.md)
 
 下面是 **StellarX GUI 框架** 各主要类和函数的 API 文档。每个类的用途、接口、参数和返回值等详细信息如下：
 
-### Control 类 (抽象基类)
+## Control 类 (抽象基类)
 
-**描述：** `Control` 是所有控件的抽象基类，定义了通用的属性和接口，包括位置、尺寸、重绘标记等。它提供了绘图状态保存与恢复机制，确保控件绘制不影响全局状态。`Control` 本身不能直接实例化。
+**描述：** `Control` 是所有控件的抽象基类，定义了通用的属性和接口，包括位置、尺寸、重绘标记等基础功能。它提供绘图状态的保存与恢复机制，确保控件的绘制操作不影响全局绘图状态。此外还声明了一系列供子类实现的纯虚函数（如 `draw()` 和 `handleEvent()`），并禁止拷贝（支持移动语义）以防止意外的复制开销。一般情况下，`Control` 不直接实例化，而作为其他具体控件的父类存在。
 
-- **主要属性：**
-  - `x, y`：控件左上角坐标。
-  - `width, height`：控件宽度和高度。
-  - `dirty`：是否需要重绘的标志。
-  - `show`：控件是否可见。
-  - `rouRectangleSize`：`StellarX::RouRectangle` 结构，保存圆角矩形控件圆角的宽高半径。
-  - **注意：** `Control` 会在内部维护当前绘图状态（字体、颜色、线型等）的备份指针，用于绘制前保存状态、绘制后恢复。
-- **主要接口方法：**
-  - `virtual void draw() = 0;`
-     **描述：** 纯虚函数，绘制控件内容。具体控件类需实现自己的绘制逻辑。
-  - `virtual bool handleEvent(const ExMessage& msg) = 0;`
-     **描述：** 纯虚函数，处理事件消息（如鼠标、键盘事件）。返回值表示事件是否被该控件消费（`true` 则不再向其他控件传播）。
-  - `void saveBackground(int x, int y, int w, int h);`
-     **描述：** 保存控件区域 `(x, y, w, h)` 的背景图像快照，以便需要时恢复背景。常用于控件需要暂时覆盖背景（如弹出框）。
-  - `void restBackground();`
-     **描述：** 恢复最近保存的背景快照，将之前保存的背景图像绘制回控件原位置。典型用于控件隐藏或重绘前清除旧内容。
-  - `void discardBackground();`
-     **描述：** 丢弃当前保存的背景快照并释放相关资源。当窗口重绘或尺寸变化导致背景失效时调用，避免错误使用旧快照。
-  - *属性访问和设置：*
-    - `int getX() const, getY() const, getWidth() const, getHeight() const` 等：获取控件位置和尺寸各属性。
-    - `int getRight() const, getBottom() const`：获取控件右边界和下边界坐标（`x + width`，`y + height`）。
-    - `void setX(int nx), setY(int ny), setWidth(int w), setHeight(int h)`：设置控件位置或尺寸，对应属性改变后自动将控件标记为需要重绘 (`dirty = true`)。
-    - `void setDirty(bool d)`：手动设置控件的重绘标志。
-    - `void setShow(bool visible)`：设置控件可见性。如果设为 `false`，则控件将不绘制自身内容。
-    - `bool isVisible() const`：返回控件当前可见状态（`show` 标志）。**注意：** 控件被标记为隐藏时，其 `draw()` 通常不会被调用。
-  - *其他：*
-    - `virtual bool model() const = 0;`
-       **描述：** 纯虚函数，用于检查控件是否为“模态”。仅对话框控件需要实现（模态对话框返回 `true`），其他非对话框控件可忽略（返回 `false`）。窗口事件循环根据此函数区分模态对话框与普通控件的事件处理优先级。
-    - `void saveStyle(), restoreStyle();` *(受保护方法)*
-       **描述：** 保存当前全局绘图样式（字体、颜色、线型等）并恢复。控件在 `draw()` 中应先调用 `saveStyle()` 备份当前样式，绘制完毕后调用 `restoreStyle()` 以免影响其他绘制操作。
+**特性：**
 
-### Window 类 (应用主窗口)
-
-**描述：** `Window` 类表示应用程序的主窗口，负责窗口的创建、消息循环、控件管理和整体渲染。一个应用通常创建一个 Window 实例作为 GUI 的根容器。
-
-- **构造函数：**
-  - `Window(int width, int height, int mode, COLORREF bkColor = ..., std::string headline = "窗口")`
-     创建一个指定宽、高的主窗口。`mode` 参数指定图形模式（如是否双缓冲，EasyX 使用 NULL 或 `INIT_RENDERMANUAL` 等模式），`bkColor` 是窗口背景色，`headline` 是窗口标题文本。构造时不会立即显示窗口，需调用 `draw()`。
-- **主要方法：**
-  - `void draw();`
-     **描述：** 初始化并显示窗口，创建绘图界面。将使用设定的模式创建绘图窗口（调用 EasyX 的 `initgraph`），并应用窗口标题和背景色。然后绘制已添加的控件。通常在创建 Window 后立即调用一次。
-  - `void draw(std::string pImgFile);`
-     **描述：** 与无参版本类似，但使用指定路径的图像文件作为窗口背景图。该方法会加载图像并按照窗口尺寸绘制为背景，然后再绘制子控件。
-  - `void runEventLoop();`
-     **描述：** 进入窗口消息处理循环。该循环持续获取用户输入事件 (`peekmessage`) 并将其分发给子控件或对话框处理：
-    - 优先将事件传递给所有已打开的非模态对话框（`Dialog`，`model() == false` 且 `isVisible() == true`）。一旦某个对话框的 `handleEvent` 返回 `true`（事件被消费），停止继续传递。
-    - 若事件未被对话框消费，再按添加顺序将事件传递给普通控件列表中的各控件的 `handleEvent`（通常 Container 控件会向其子控件继续传播）。
-    - 处理完事件后，如果有对话框正在显示（或刚关闭)，或者 `dialogClose` 标志为真，则强制重绘一帧界面：包括所有普通控件和对话框，以确保界面更新。
-    - 循环每帧暂停 10 毫秒，防止 CPU 占用过高。
-    - **注意：** 该函数在调用后不会返回，直到窗口接收到关闭消息 (`WM_CLOSE`)，此时函数内部会跳出循环结束。
-  - `void setBkImage(IMAGE* img)` / `void setBkImage(std::string filePath);`
-     **描述：** 更改窗口背景图像。可以直接传入一个已加载的 `IMAGE` 指针，或提供图像文件路径让函数内部加载。调用此函数会触发窗口重绘当前所有控件和对话框以应用新的背景。
-  - `void setBkcolor(COLORREF c);`
-     **描述：** 设置窗口背景颜色，并立即用该颜色清除屏幕背景（不销毁已有背景图，仅覆盖绘制）。
-  - `void setHeadline(std::string title);`
-     **描述：** 设置窗口标题文本。窗口创建后可随时更改标题；如果窗口已显示，则通过 WinAPI `SetWindowText` 立即更新窗口标题栏。
-  - `void addControl(std::unique_ptr<Control> control);`
-     **描述：** 向窗口添加一个普通控件。Window 维护一个控件列表，`draw()` 和 `runEventLoop()` 会据此绘制及派发事件。此方法接收智能指针，调用后 Window 接管控件的生命周期。
-  - `void addDialog(std::unique_ptr<Control> dialog);`
-     **描述：** 向窗口添加一个对话框控件（一般为 `Dialog` 类型）。对话框与普通控件分开管理，其事件和绘制有独立逻辑。
-  - `bool hasNonModalDialogWithCaption(const std::string& caption) const;`
-     **描述：** 检查当前是否已有**非模态**对话框，其标题（caption）与给定字符串匹配。如果存在返回 `true`。通常用于避免重复打开相同对话框。
-     **重载版本：** `bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& text) const;`
-     除了标题，还同时比较对话框内容文本，以更严格地判断重复。`MessageBox::showAsync` 内部使用此方法防止弹出重复的提示框。
-  - *信息获取方法：*
-    - `HWND getHwnd() const;` 获取底层窗口句柄（EasyX 初始化返回的 HWND）。
-    - `int getWidth() const, getHeight() const;` 获取窗口宽度和高度。
-    - `std::string getHeadline() const;` 获取当前窗口标题。
-    - `COLORREF getBkcolor() const;` 获取窗口背景色。
-    - `IMAGE* getBkImage() const;` 获取当前窗口背景图像对象指针（如果有）。
-    - `std::vector<std::unique_ptr<Control>>& getControls();` 引用返回窗口维护的控件列表（可以对其遍历，但一般不手动修改）。
-
-### Canvas 类 (容器控件)
-
-**描述：** `Canvas` 是一种可包含子控件的画布容器，用于将其他控件分组、统一背景和边框样式，以及实现复杂布局。Canvas 自身也是一个控件，继承自 `Control`。
-
-- **特性：**
-  - 支持四种矩形形状背景（普通矩形/圆角矩形，各有无边框和有边框版本），可通过 `setShape` 设置。
-  - 可自定义容器背景颜色 (`canvasBkColor`)、边框颜色 (`canvasBorderColor`)、边框线型 (`canvasLineStyle`)、填充模式 (`canvasFillMode`，纯色/图案/无填充) 等。
-  - Canvas 能自动管理子控件的生命周期（使用 `addControl` 添加的子控件在 Canvas 销毁时自动释放）。
-  - Canvas 会在绘制时遍历并绘制所有添加的子控件，并在处理事件时优先将事件传递给子控件列表中最后添加的控件（Z 顺序）。
-- **重要数据成员：**
-  - `std::vector<std::unique_ptr<Control>> controls;` 子控件列表。
-  - `StellarX::ControlShape shape;` 容器背景形状（默认矩形）。
-  - `StellarX::FillMode canvasFillMode;` 背景填充模式（默认实色填充）。
-  - `StellarX::LineStyle canvasLineStyle;` 边框线型（默认实线）。
-  - `int canvaslinewidth;` 边框线宽像素值。
-  - `COLORREF canvasBorderColor, canvasBkColor;` 容器边框颜色与背景色。
-  - `StellarX::LayoutKind Kind;` （预留）布局管理类型，当前未深入实现，可用于标识布局策略（如绝对布局、水平/垂直布局等）。
-  - **注意：** Canvas 重载了 `isVisible()` 始终返回 false，因为 Canvas 通常不作为独立可见单元（事件循环中不直接处理 Canvas，而由其子控件处理事件）。但这不影响 Canvas 作为容器的绘制和子控件事件派发。
-- **主要方法：**
-  - `Canvas(); Canvas(int x, int y, int w, int h);`
-     **描述：** 构造一个 Canvas 容器，可以指定位置 `(x,y)` 及初始尺寸。
-  - `void addControl(std::unique_ptr<Control> control);`
-     **描述：** 添加子控件到 Canvas。被添加控件将成为 Canvas 内容的一部分，其坐标相对于 Canvas 左上角（Canvas 并不主动调整子控件位置，需在添加前设置好子控件位置）。添加后 Canvas 会将自身标记为需要重绘。
-  - `void setShape(StellarX::ControlShape shape);`
-     **描述：** 设置 Canvas 背景形状。支持 `RECTANGLE`、`B_RECTANGLE`（无边框矩形）、`ROUND_RECTANGLE`（圆角矩形）、`B_ROUND_RECTANGLE`（无边框圆角矩形）。如果传入圆形或椭圆形（CIRCLE/ELLIPSE等），Canvas 不支持，将自动按矩形处理。
-  - `void setCanvasFillMode(StellarX::FillMode mode);`
-     **描述：** 设置背景填充模式，如纯色 (`Solid`)、无填充 (`Null`)、预定义图案填充 (`Hatched`) 或自定义图案/图像填充 (`Pattern/DibPattern`)，需结合 `setfillstyle` 使用。默认为纯色。
-  - `void setBorderColor(COLORREF color);` / `void setCanvasBkColor(COLORREF color);` / `void setCanvasLineStyle(StellarX::LineStyle style);` / `void setLinewidth(int width);`
-     **描述：** 分别设置容器边框颜色、背景色、边框线型和线宽。这些改变都会使 Canvas 需要重绘。
-  - `void draw() override;`
-     **描述：** 绘制 Canvas 背景和其所有子控件。Canvas 绘制步骤：
-    1. 根据设定的背景颜色/填充模式和形状绘制容器背景（例如填充矩形或圆角矩形区域）。
-    2. 遍历子控件列表，调用每个子控件的 `draw()` 方法绘制它们。绘制前对每个子控件先设置其 `dirty = true`，确保子控件按需重绘。
-    3. 恢复绘图样式，标记自身为已绘制（`dirty = false`）。
-        *实现细节：* Canvas 使用 `saveStyle()/restoreStyle()` 保护全局绘图状态，并依赖 EasyX 的填充/绘制函数根据 `shape` 绘制矩形或圆角矩形背景。
-  - `bool handleEvent(const ExMessage& msg) override;`
-     **描述：** 将事件按照子控件的添加顺序逆序传递（后添加的子控件先处理）。对 `controls` 列表从末尾向前调用每个子控件的 `handleEvent`，若某子控件返回 `true`（表示事件已被处理），则停止传递并返回 `true`；若所有子控件都未消费事件，则返回 `false` 表示未处理。
-     *用途：* 使得堆叠在顶层的子控件（通常列表后面的）有更高优先权处理事件，例如多个重叠控件的情形。
-  - `void clearAllControls();` *(protected 方法)*
-     **描述：** 清除并移除所有子控件。会释放智能指针列表中所有控件对象。一般在容器销毁或重置时使用。普通情况下不直接调用，由容器析构自动完成。
-
-### Label 类 (静态文本标签)
-
-**描述：** `Label` 用于显示一段静态文本，可设置文字颜色、背景透明/不透明及样式等。Label 不处理用户输入事件（纯展示）。
-
-- **构造函数：**
-  - `Label(); Label(int x, int y, std::string text = "标签", COLORREF textColor = BLACK, COLORREF bkColor = WHITE);`
-     **描述：** 创建一个 Label 控件。可指定初始位置 `(x,y)`、显示文本内容和文本颜色、背景色等。默认文本为“标签”，默认文字黑色、背景白色。
-- **主要属性：**
-  - `std::string text;` 显示的文字内容。
-  - `COLORREF textColor;` 文本颜色。
-  - `COLORREF textBkColor;` 文本背景色（在背景不透明时生效）。
-  - `bool textBkDisap;` 是否背景透明显示文本。若为 `true`，Label 绘制文字时使用透明背景模式。
-  - `StellarX::ControlText textStyle;` 文字样式结构，包括字体、高度、粗细等属性（继承自 Control 默认值，例如 `字体：微软雅黑`）。
-  - **注意：** Label 大小 (`width, height`) 初始为 0，通常 Label 大小根据文本自动适应，无需手动设置宽高。Label 绘制时会截取背景图像以覆盖文字区域刷新。
-- **主要方法：**
-  - `void setTextdisap(bool transparent);`
-     **描述：** 设置文本背景是否透明显示。传入 `true` 则文字背景透明，显示时不遮挡底下背景；`false` 则文字背景为 `textBkColor` 实色矩形。
-  - `void setTextColor(COLORREF color);` / `void setTextBkColor(COLORREF color);`
-     **描述：** 设置文字颜色或背景色。更改后会标记 Label 需要重绘。
-  - `void setText(std::string text);`
-     **描述：** 更改显示的文本内容，并标记需要重绘。支持中文字符串。
-  - `void draw() override;`
-     **描述：** 绘制文本标签。根据 `textBkDisap` 决定调用 EasyX 的 `setbkmode(TRANSPARENT)` 或 `OPAQUE`，并设置背景色 `setbkcolor(textBkColor)`。然后设置文本颜色和样式，调用 `outtextxy(x, y, text)` 输出文字。为防止文字重绘留痕迹，`Label::draw` 会先保存文字区域背景 (`saveBackground`)，绘制完成后再恢复样式。首次绘制后将 `dirty` 置为 false。
-  - `bool handleEvent(...) override;`
-     **描述：** Label 不处理任何事件，始终返回 false。
-  - `void hide();`
-     **描述：** 将 Label 内容隐藏。其实现是调用 `restBackground()` 恢复先前保存的背景，然后 `discardBackground()` 释放快照，并将 `dirty` 设为 false。这通常在 Label 用作 Tooltip 提示框时，由宿主控件调用，用于移除提示文本的显示而不重绘整个界面。
-- **使用场景：** Label 常用于界面中的静态说明文字、标题、状态栏信息等。通过配合 `textStyle` 可以修改字体、大小、是否加粗等。默认情况下 Label 背景不透明白底，如需与窗口背景融合可调用 `setTextdisap(true)` 使背景透明。
-
-### Button 类 (按钮控件)
-
-**描述：** `Button` 提供普通按钮和切换按钮（两态）的功能，可响应点击和悬停事件。支持设置各种样式（形状、颜色）和点击回调，是交互的主要控件之一。
-
-- **工作模式：** 由 `StellarX::ButtonMode` 枚举定义：
-
-  - `NORMAL` 普通按钮：每次点击都会触发一次动作，按钮本身不保持按下状态。
-  - `TOGGLE` 切换按钮：每次点击切换自身状态（选中/未选中），并触发不同的回调。
-  - `DISABLED` 禁用按钮：不响应用户点击，显示为灰色且文字带删除线。
-  - 可通过 `setButtonMode(ButtonMode mode)` 改变按钮模式。
-
-- **外观形状：** 由 `StellarX::ControlShape` 定义：
-
-  - 支持矩形 (`RECTANGLE`/`B_RECTANGLE`)、圆角矩形 (`ROUND_RECTANGLE`/`B_ROUND_RECTANGLE`)、圆形 (`CIRCLE`/`B_CIRCLE`)、椭圆 (`ELLIPSE`/`B_ELLIPSE`) 八种形状（B_ 前缀表示无边框填充）。通过 `setButtonShape(ControlShape shape)` 设置按钮形状。
-  - 注意：在切换 `ControlShape` 时，某些尺寸下圆形/椭圆以控件的 `width` 和 `height` 计算，圆形半径取较小的半径，椭圆按照矩形外接框绘制。
-
-- **主要可配置属性：**
-
-  - 颜色：`buttonTrueColor`（被点击时颜色），`buttonFalseColor`（常态颜色），`buttonHoverColor`（鼠标悬停颜色），`buttonBorderColor`（边框颜色）。
-  - 填充：`buttonFillMode`（填充模式，实色/图案/图像等），`buttonFillIma`（图案填充样式，如果 `FillMode == Hatched`），`buttonFileIMAGE`（指向自定义填充图像的指针，如果 `FillMode == DibPattern`）。
-  - 文本：按钮显示的文字 `text` 及其样式 `textStyle`（字体、字号、颜色等）。另外提供 `cutText` 字符串用于文本过长时显示裁剪的内容。
-  - Tooltip：`tipEnabled`（是否启用悬停提示），`tipTextClick`（NORMAL模式提示文本），`tipTextOn/Off`（TOGGLE模式下两种状态的提示文本），`tipFollowCursor`（提示框是否跟随鼠标移动），`tipDelayMs`（提示延迟毫秒），`tipOffsetX/Y`（提示框相对位置偏移），`tipLabel`（内部使用的 Label 控件呈现提示文本）。
-  - 圆角大小：通过继承自 `Control` 的 `rouRectangleSize` 成员控制圆角矩形圆角的半径大小。提供 `setRoundRectangleWidth(int)` 和 `setRoundRectangleHeight(int)` 接口修改。
-
-- **主要方法：**
-
-  - `void setOnClickListener(function<void()>&& callback);`
-     **描述：** 设置按钮普通点击时的回调函数。当按钮模式为 NORMAL，在每次鼠标释放点击时调用该回调；当模式为 TOGGLE，则仅在每次点击状态发生变化时调用（取决于 toggle 逻辑）。
-
-  - `void setOnToggleOnListener(...)` / `void setOnToggleOffListener(...);`
-     **描述：** 设置按钮在 TOGGLE 模式下由未选中变为选中、以及由选中变为未选中时分别触发的回调函数。当按钮模式为 NORMAL 或 DISABLED 时，这两个回调不会被调用。
-
-  - `void setButtonText(const char* text)` / `void setButtonText(std::string text);`
-     **描述：** 更改按钮上的显示文本。支持 C 风格字符串或 `std::string`。更改文本后会重新计算文本宽高，并标记按钮需要重绘。
-
-  - `void setButtonBorder(COLORREF border)` / `void setButtonFalseColor(COLORREF color)`
-     **描述：** 设置按钮边框颜色、常态下背景填充颜色。
-
-  - `void setFillMode(FillMode mode)` / `void setFillPattern(FillStyle pattern)` / `void setFillImage(const std::string& path)`
-     **描述：** 设置按钮背景填充方式：
-
-    - `setFillMode` 改变填充模式（纯色、图案、位图等）。
-    - 若填充模式为图案 (`Pattern`)，需调用 `setFillPattern` 设置具体的图案样式 (`StellarX::FillStyle`)。
-    - 若填充模式为位图 (`DibPattern`)，可调用 `setFillImage` 加载指定路径的图像并用作填充（会自动调整图像大小与按钮一致）。
-
-  - `void setButtonClick(bool click);`
-     **描述：** 外部设置按钮的“点击状态”。对于 TOGGLE 模式，`setButtonClick(true)` 会将按钮设为选中状态并触发 onToggleOn 回调，`false` 则触发 onToggleOff 回调。对于 NORMAL 模式，传入 true 将临时触发一次 onClick 回调（随后状态立即复位为未点击）。无论哪种模式，调用都会引起按钮重绘。**注意：** DISABLED 模式调用此函数没有效果。
-
-  - `bool isClicked() const;`
-     **描述：** 返回按钮当前是否处于按下状态（仅对 TOGGLE 模式有意义，表示按钮选中状态）。
-
-  - 其他状态获取方法如 `getButtonText()`, `getButtonMode()`, `getButtonShape()`, `getFillMode()`, `getFillPattern()`, `getFillImage()`, `getButtonBorder()`, `getButtonTextColor()`, `getButtonTextStyle()`, `getButtonWidth()`, `getButtonHeight()` 一一提供，返回对应属性值。
-
-  - `void draw() override;`
-     **描述：** 绘制按钮外观。根据按钮当前状态选择填充颜色：若禁用则用 `DISABLEDCOLOUR` 灰色并给文字加删除线效果，否则 `click` 状态优先，其次 `hover` 状态，最后默认未点击颜色。然后设置透明背景、边框颜色和文本样式，计算文字应绘制的位置并绘制文字。
-     如果按钮文本长度超出按钮宽度，`draw()` 会自动调用 `cutButtonText()` 对文本进行裁剪，并用省略号表示超出部分，以确保文字在按钮内完整显示。绘制结束后恢复样式并将 `dirty` 置为 false。
-
-  - `bool handleEvent(const ExMessage& msg) override;`
-     **描述：** 处理与按钮相关的鼠标事件，包括鼠标按下、弹起、移动等：
-
-    - 检测鼠标是否悬停在按钮区域内（根据按钮形状调用内部 `isMouseInCircle/Ellipse` 辅助函数）。
-    - 处理 `WM_LBUTTONDOWN`（鼠标按下）：若按钮未禁用且鼠标位于按钮上，在 NORMAL 模式下将按钮标记为点击状态（按下），在 TOGGLE 模式下不改变状态（等待弹起时处理）。
-    - 处理 `WM_LBUTTONUP`（鼠标弹起）：若鼠标在按钮上且按钮可点击：
-      - NORMAL 模式：如果之前已记录按下，则认为一次有效点击，调用 `onClickCallback`，然后清除点击状态。
-      - TOGGLE 模式：切换按钮状态 `click = !click`。根据切换后的状态调用 `onToggleOnCallback` 或 `onToggleOffCallback`。
-      - 每次有效点击后，都会通过 `flushmessage(EX_MOUSE|EX_KEY)` 清空输入消息队列，防止此次点击产生的消息（例如弹起）重复被处理。
-    - 处理鼠标移出（在 `WM_MOUSEMOVE` 中检测）：如果 NORMAL 模式下拖出按钮区域则取消按下状态，任何模式下 hover 状态变化都将使按钮重绘。
-    - Tooltip 提示：如果启用了 `tipEnabled`，`handleEvent` 内会管理 `tipLabel` 的显示：
-      - 当鼠标首次移入按钮区域，启动一个定时（根据 `tipDelayMs`）。
-      - 当鼠标离开或按钮点击后，立即隐藏提示（调用 `hideTooltip()`）。
-      - 当鼠标在按钮上停留超过延迟且按钮仍显示，则设置 `tipVisible = true` 并初始化 `tipLabel` 的文本和位置准备显示提示。`tipFollowCursor` 决定提示框锚定鼠标位置还是按钮下方。
-      - `refreshTooltipTextForState()` 用于当按钮为 TOGGLE 模式且未自定义提示文本时，选择显示 `tipTextOn` 或 `tipTextOff`。
-      - 每帧事件处理后，如提示应显示，则调用 `tipLabel.draw()` 绘制提示文本。
-    - 函数最后，如果按钮 `hover` 状态或 `click` 状态有变化，则将自身标记为 `dirty` 并立即调用 `draw()` 重绘自身，实现交互的即时反馈。
-
-    `handleEvent` 返回值为 `true` 当且仅当按钮按下鼠标弹起事件被处理时，表示该点击事件已被消费，其它控件不应再处理。
-
-- **使用说明：**
-   开发者通常通过设置按钮的各种监听器来处理点击事件。例如：
-
-  ```
-  auto btn = std::make_unique<Button>(50, 50, 80, 30, "确定");
-  btn->setOnClickListener([](){ /* 点击时执行 */ });
-  ```
-
-  对于 TOGGLE 按钮：
-
-  ```
-  btn->setButtonMode(ButtonMode::TOGGLE);
-  btn->setOnToggleOnListener([](){ /* 开启时执行 */ });
-  btn->setOnToggleOffListener([](){ /* 取消时执行 */ });
-  ```
-
-  也可以控制按钮的外观，如：
-
-  ```
-  btn->textStyle.color = RGB(255,255,255);             // 白色文字
-  btn->setButtonFalseColor(RGB(100,150,200));          // 默认背景色
-  btn->setButtonBorder(RGB(80,80,80));                 // 边框灰色
-  btn->setButtonShape(StellarX::ControlShape::RECTANGLE);
-  ```
-
-  若要提示说明按钮功能，可：
-
-  ```
-  btn->tipEnabled = true;
-  btn->tipTextClick = "点击执行确定操作";
-  // (TOGGLE模式则设置 tipTextOn/off)
-  ```
-
-### TextBox 类 (文本框控件)
-
-**描述：** `TextBox` 用于显示和输入单行文本。可配置为可编辑或只读模式。TextBox 提供基本的文本输入框功能，当用户点击输入模式的文本框时，会弹出一个输入对话框接受用户输入（利用 EasyX 的 `InputBox` 实现），并将结果显示在文本框中。
-
-- **模式：** 由 `StellarX::TextBoxmode` 指定：
-  - `INPUT_MODE` 可输入模式：用户点击文本框可输入新内容。
-  - `READONLY_MODE` 只读模式：用户点击不会更改文本，典型地可用于展示不可修改的信息。
-- **外观：**
-  - 支持矩形和圆角矩形四种形状（无边框或有边框），通过 `setTextBoxShape(ControlShape)` 设置。圆形/椭圆对文本框来说不常用，一律按矩形处理。
-  - 文本框默认有黑色边框和白色背景，可用 `setTextBoxBorder` 和 `setTextBoxBk` 改变。
-  - 文字样式通过 `textStyle` 调整，包含字体、大小、颜色等属性。
-- **主要属性：**
-  - `std::string text;` 当前文本框显示的文本内容。
-  - `TextBoxmode mode;` 当前模式（决定是否允许输入）。
-  - `ControlShape shape;` 当前文本框边框形状（矩形或圆角矩形，默认 RECTANGLE）。
-  - `bool click;` 内部使用标志，表示是否刚被点击（用于触发输入弹窗，处理完后即重置）。
-  - `size_t maxCharLen;` 最大允许输入字符数。默认 255。
-  - `COLORREF textBoxBorderColor, textBoxBkColor;` 边框颜色和背景填充颜色。
-  - `StellarX::ControlText textStyle;` 文本样式（高度、宽度、字体、颜色等）。
-- **主要方法：**
-  - `void setMode(StellarX::TextBoxmode mode);`
-     **描述：** 切换文本框模式。可选 INPUT_MODE 或 READONLY_MODE。更改模式不会清除已有文本，但只读模式下用户输入将被忽略。
-  - `void setMaxCharLen(size_t len);`
-     **描述：** 设置文本框最大字符长度。仅当 `len > 0` 时有效。超出长度的输入会被截断。
-  - `void setTextBoxShape(StellarX::ControlShape shape);`
-     **描述：** 设置文本框形状。支持矩形和圆角矩形，与 Button 类似。如果传入非法形状（圆/椭圆），会自动改为矩形。设置后文本框将 `dirty`，下次绘制按新形状渲染。
-  - `void setTextBoxBorder(COLORREF color);` / `void setTextBoxBk(COLORREF color);`
-     **描述：** 设置边框颜色和背景颜色。
-  - `void setText(std::string text);`
-     **描述：** 更新文本框内容文本。如果新文本长度超过 `maxCharLen`，将自动截断。设置后标记 `dirty` 并立即调用 `draw()` 重绘，使更改即时可见。
-  - `std::string getText() const;`
-     **描述：** 获取当前文本框内容字符串。
-  - `void draw() override;`
-     **描述：** 绘制文本框背景和文字。根据 `textStyle` 设置字体，如字体高度/宽度大于控件尺寸则裁剪适应；使用透明背景模式绘制文字，以便背景色通过 `fill...` 函数填充。
-    - 绘制顺序：先 `fillrectangle/roundrect` 绘制背景（按 `textBoxBkColor`），然后 `outtextxy` 绘制文本，文本在 X 方向留出 10 像素左右内边距，Y 方向垂直居中。
-    - 如果文本长度超出控件宽度，不自动裁剪（与 Button 不同），而是可能显示不下或被遮盖。通常应通过设置 `maxCharLen` 控制输入长度，或设计足够宽度的文本框。
-    - 绘制完成后 `dirty` 置 false。
-  - `bool handleEvent(const ExMessage& msg) override;`
-     **描述：** 处理鼠标事件：
-    - 判断鼠标是否在文本框区域 (`hover`)。
-    - 当 `WM_LBUTTONUP` 且鼠标在区域内发生：若模式为 INPUT_MODE，则调用 EasyX 的 `InputBox` 弹出输入对话框，允许用户输入文本（初始值为当前文本框内容），用户提交后 `InputBox` 返回新文本，将此文本赋值并标记 `dirty` 以便重绘显示。若模式为 READONLY_MODE，则弹出一个只读提示框（不会改变文本），并不修改 `dirty` 状态。
-    - 其它鼠标事件不改变文本框外观，仅根据需要返回 false（未消费事件）。
-    - 当完成一次输入或点击，文本框会调用自身 `draw()` 更新显示。READONLY_MODE 下点击会简单弹出提示（使用 InputBox 显示原文本并提示输入无效）。
-    - 函数返回 true 表示在 INPUT_MODE 下点击事件被消费（因为弹出了输入框），READONLY_MODE 下也返回 true（提示已显示），从而阻止事件继续传播。
-- **用法注意：**
-  - 由于 EasyX 的 `InputBox` 是模态阻塞函数，`runEventLoop` 本身是非阻塞循环，**在 UI 线程直接调用 InputBox 会暂停整个消息循环** 直到输入完成。StellarX 目前采用这种简单方式处理文本输入（不是异步 UI 输入）。因此在 `TextBox::handleEvent` 中使用 `InputBox` 来得到用户输入。这简化了实现，但 UI 线程会暂时挂起。开发者应避免在非常频繁交互时滥用 InputBox。
-  - 可以通过 `maxCharLen` 控制可输入最大字符数，例如对于数值输入框可以设定长度防止超出范围。
-  - 使用 `textStyle` 可调整显示字体（如等宽字体用于代码输入等），`textStyle.color` 也可单独设置文字颜色。
-
-### Dialog 类 (对话框控件)
-
-**描述：** `Dialog` 提供模态/非模态对话框功能，可在应用中弹出提示、确认或输入等对话界面。Dialog 本质上是一个特殊的 Canvas 容器，内部包含文本消息和按钮等子控件，并与 Window 紧密配合实现模态阻塞效果。
-
-- **创建与模式：**
-
-  - 构造函数 `Dialog(Window& parent, std::string title, std::string message = "对话框", MessageBoxType type = OK, bool modal = true)`
-     **描述：** 创建一个关联到 `parent` 窗口的对话框。`title` 将作为对话框标题文本显示在对话框顶部，`message` 是正文消息内容。`type` 参数指定对话框包含的按钮组合类型（见 MessageBoxType 枚举），例如 OK 只有一个确定按钮，YesNo 包含“是”和“否”两个按钮等。`modal` 决定对话框是模态还是非模态。构造后对话框初始为隐藏状态，需要调用 `show()` 显示。
-  - `MessageBoxType` 枚举定义了常见的对话框按钮组合：
-    - `OK`：一个“确定”按钮。
-    - `OKCancel`：“确定”和“取消”按钮。
-    - `YesNo`：“是”和“否”按钮。
-    - `YesNoCancel`：“是”、“否”和“取消”按钮。
-    - `RetryCancel`：“重试”和“取消”。
-    - `AbortRetryIgnore`：“中止”、“重试”、“忽略”按钮。
-  - 模态 (`modal=true`) 对话框：调用 `show()` 时会阻塞当前线程运行，直到对话框关闭后才返回。这期间应用的其他部分暂停响应输入。适用于必须先处理用户响应的关键情景。模态对话框关闭时，`show()` 返回后可通过 `getResult()` 获取用户点击结果。
-  - 非模态 (`modal=false`) 对话框：调用 `show()` 则立即返回，应用程序继续运行，用户可以在背景窗口和对话框之间自由交互。需要通过回调函数或轮询 `getResult()` 来获取对话框的结果。
-
-- **组成元素：**
-
-  - 标题文本（使用内部的 Label 控件 `title` 实现，显示在对话框顶部）。
-  - 消息正文（支持多行文本，`Dialog` 自动按行分割存储在 `lines` 向量中，并在绘制时逐行居中输出）。
-  - 功能按钮（根据 `MessageBoxType`，包含1到3个 Button 控件，位置自动计算居于对话框底部）。
-  - 关闭按钮（右上角的 “×” 按钮，一个小的 Button 控件，点击相当于取消/关闭）。
-  - 背景样式：Dialog 采用圆角矩形背景（如 Canvas shape = ROUND_RECTANGLE）并有半透明效果（具体通过 saveBackground 恢复背景实现视觉模态效果，但在 EasyX 简化模型下实际只是截屏背景，无模糊透明实现）。
-
-- **主要属性：**
-
-  - `bool modal;` 是否模态对话框。
-  - `titleText`：标题栏文本，`message`：消息内容文本。
-  - `MessageBoxType type;` 对话框类型（按钮组合）。
-  - `std::vector<std::string> lines;` 分割后的多行消息文本。
-  - `std::unique_ptr<Label> title;` 用于显示标题的 Label 控件。
-  - `Button* closeButton;` 关闭按钮指针（“×”）。
-  - `Window& hWnd;` 引用父窗口，用于操作对话框关闭后刷新背景等。
-  - `MessageBoxResult result;` 用户选择结果，枚举值对应哪个按钮被按下。常用值：OK=1, Cancel=2, Yes=6, No=7 等（见 CoreTypes 定义）。
-  - `std::function<void(MessageBoxResult)> resultCallback;` 非模态对话框的结果回调函数指针。如果设置，将在对话框关闭且 `modal == false` 时被调用，参数为用户最终点击结果。
-
-- **主要方法：**
-
-  - `void show();`
-     **描述：** 显示对话框。如果是模态对话框，此函数将阻塞，内部运行一个事件处理循环，使该对话框独占输入焦点，直到对话框关闭为止；如果是非模态，则此函数立即返回（但对话框窗口已可见，输入由主 Window 继续分发）。`show()` 不返回任何值，但可以在模态情况下函数返回后调用 `getResult()` 获取结果。
-
-  - `void closeDialog();`
-     **描述：** 关闭对话框。会将对话框隐藏并清理资源。如果有设置非模态回调且对话框为非模态，则在此过程中调用 `resultCallback(result)` 通知结果。通常不直接调用，由内部逻辑根据按钮按下触发。
-
-  - `MessageBoxResult getResult() const;`
-     **描述：** 获取对话框的返回结果（用户按下了哪个按钮）。对模态对话框，`show()` 返回后调用此函数获取结果；对非模态，可在回调或稍后某时获取。
-
-  - `void setTitle(const std::string& title);` / `void setMessage(const std::string& msg);`
-     **描述：** 更改对话框标题或内容文本。更改内容会重新分割 `lines` 并调整文本区域大小，需要重新布局。
-
-  - `void setType(MessageBoxType type);`
-     **描述：** 更改对话框类型（按钮组合）。将重新创建按钮布局。
-
-  - `void setModal(bool modal);`
-     **描述：** 切换对话框模态属性（必须在 show() 前调用）。一般不会在运行中切换。
-
-  - `void setResult(MessageBoxResult res);`
-     **描述：** 设置对话框结果代码。通常由内部在按钮按下时调用，开发者无需手动调用。
-
-  - `void setInitialization(bool init);`
-     **描述：** 若传入 true，则提前计算和设置对话框尺寸，并保存背景快照。**用途：** 在通过 `MessageBox` 静态函数创建对话框时，会先调用此函数以准备好对话框以便正确显示。
-
-  - `void setResultCallback(function<void(MessageBoxResult)> cb);`
-     **描述：** 为非模态对话框设置结果回调函数。用户关闭对话框时将异步调用此函数，将结果传出。
-
-  - *内部实现在 `Dialog` 类私有方法中：*
-
-    - `initButtons()`：根据 `type` 创建对应数量的 Button 控件并设置其回调，将它们添加到 Dialog 容器。
-    - `initCloseButton()`：创建右上角关闭按钮（文本为 “×”），点击后触发取消逻辑。
-    - `initTitle()`：创建标题 Label 控件。
-    - `splitMessageLines()`：将 `message` 根据换行符分割填充到 `lines` 数组。
-    - `getTextSize()`：计算 `lines` 中最长行宽度和单行高度，以确定文本区域所需尺寸。
-    - `initDialogSize()`：综合计算对话框宽高（考虑文本区域和按钮区域的宽度、高度），然后居中放置对话框于窗口。最后调用上述 init** 方法创建各子控件。
-    - `performDelayedCleanup()`：用于延迟销毁对话框时释放资源。Dialog 设计上为了避免背景快照不匹配，需要在对话框关闭且完全隐去后再恢复背景并释放子控件资源；此函数执行该清理流程，由 Window 的事件循环或 `handleEvent` 在适当时机调用。
-
-  - `void draw() override;`
-     **描述：** 绘制对话框界面。Dialog 继承自 Canvas，通过调用 `Canvas::draw()` 绘制背景和子控件框架，然后另外绘制消息文本内容。绘制步骤：
-
-    1. 如果首次显示，对话框先保存覆盖区域的屏幕背景（便于关闭时恢复）。
-    2. 设置 Canvas 的背景颜色、边框等样式为对话框特定值（通常圆角矩形）。
-    3. 将所有子控件标记为 `dirty` 并调用 `Canvas::draw()` 绘制对话框背景和子控件（包括按钮、标题Label等）。
-    4. 使用对话框的 `textStyle` 设置文字样式，然后将每行 `lines` 文本居中绘制在对话框内部合适的位置（计算基于对话框宽度）。
-    5. 恢复样式，设置 `dirty = false`。
-
-    对话框作为一个整体，由 Window 管理，其绘制顺序通常在 Window::runEventLoop 强制刷新时绘制。模态对话框在自己的 loop 内绘制。
-
-  - `bool handleEvent(const ExMessage& msg) override;`
-     **描述：** 处理对话框相关事件：
-
-    - 如果对话框未显示 (`show == false`)，则检查 `pendingCleanup` 标志，如果有延迟清理任务且当前未在清理，则调用 `performDelayedCleanup()` 执行清理，然后不消费事件直接返回 false。
-    - 如果对话框正在清理或标记延迟清理，则不处理任何事件直接返回 false。
-    - 若为模态对话框 (`modal == true`)，并检测到用户点击了对话框区域外部（窗口背景区域）的鼠标弹起事件，则发出提示声音 (`\a`)并返回 true（**吞噬事件**），防止用户点击窗体其他部分。
-    - 将事件传递给 Dialog 继承的 Canvas（即其子控件）处理：`consume = Canvas::handleEvent(msg)`，这样对话框内部的按钮可以响应事件。如果子控件处理了事件则 consume 为 true。
-    - 最后，如果对话框有延迟清理任务，则调用 `performDelayedCleanup()` 处理。返回值为 whether 消费了事件。
-    - **模态对话框特别说明：** Window 主循环在有模态对话框显示时，会将背景点击等事件吃掉（上面逻辑已实现），同时对话框 `show()` 方法内部启动自己的循环处理事件，使模态对话框独占用户输入。非模态对话框则依赖 Window 主循环分发事件，由 handleEvent 参与处理。
-
-- **使用示例：**
-   `Dialog` 通常不直接使用，而是通过 `StellarX::MessageBox` 工具调用快速创建并显示：
-
-  - 模态对话框：
-
-    ```
-    StellarX::MessageBoxResult res = StellarX::MessageBox::showModal(window, 
-                             "文件已保存。是否关闭程序？", "提示", 
-                             StellarX::MessageBoxType::YesNoCancel);
-    if (res == StellarX::MessageBoxResult::Yes) { /* 用户选择是 */ }
-    ```
-
-    `showModal` 内部创建 `Dialog` 并以模态方式显示，直到用户点击“是/否/取消”其中一个按钮，函数返回对应的枚举值。
-
-  - 非模态对话框：
-
-    ```
-    StellarX::MessageBox::showAsync(window, 
-                      "处理完成！", "通知", 
-                      StellarX::MessageBoxType::OK, 
-                      [](StellarX::MessageBoxResult){ /* 用户点了OK后的处理 */ });
-    ```
-
-    这样弹出的对话框不会阻塞程序，它包含一个“确定”按钮。用户点击后，对话框关闭并自动调用提供的 lambda 回调。Window 的事件循环会继续正常运行。
-
-  开发者也可自行实例化 Dialog：
-
-  ```
-  Dialog dlg(mainWindow, "标题", "内容……", StellarX::MessageBoxType::OKCancel, false);
-  dlg.setResultCallback([](MessageBoxResult res) { /* 处理结果 */ });
-  dlg.show();
-  ```
-
-  以上将创建一个非模态对话框。一般推荐使用 `MessageBox` 封装函数更方便。
-
-## MessageBox 工具类
-
-**描述：** `StellarX::MessageBox` 提供静态方法方便地创建标准对话框，无需直接操作 Dialog 类。类似 Windows API 的 MessageBox，但这里可以指定按钮组合类型，并支持非模态调用。
-
-- **静态函数：**
-
-  - `static MessageBoxResult showModal(Window& wnd, const std::string& text, const std::string& caption = "提示", MessageBoxType type = MessageBoxType::OK);`
-     **描述：** 弹出一个模态对话框，在窗口 `wnd` 上显示，标题为 `caption`，正文为 `text`，按钮组合由 `type` 指定。此函数会阻塞当前执行直到用户在对话框上点击按钮关闭对话框。返回值为 `MessageBoxResult`，表示用户点击了哪个选项（例如 `MessageBoxResult::OK` 或 `Cancel` 等）。开发者可根据返回值执行不同逻辑。
-  - `static void showAsync(Window& wnd, const std::string& text, const std::string& caption = "提示", MessageBoxType type = MessageBoxType::OK, std::function<void(MessageBoxResult)> onResult = nullptr);`
-     **描述：** 在窗口 `wnd` 弹出一个非模态对话框。参数类似 `showModal`，但 `onResult` 是可选的回调函数。如果提供了回调函数，当用户关闭对话框时将异步调用该函数并传入用户选择结果。该函数本身立即返回，不阻塞程序流程。如果在 `wnd` 中已经存在一个内容和标题都相同的非模态对话框未关闭，则此函数会发出警报音并不创建新的对话框，以防止重复（内部使用 `Window::hasNonModalDialogWithCaption(caption,text)` 检查)。
-     **注意：** 如果不提供 `onResult` 回调，那么需要其他方式得知对话框结果（例如通过 Dialog 的公有接口或者全局状态），但通常建议提供回调以处理结果。
-
-- **实现细节：** `showModal` 和 `showAsync` 内部都会创建一个 `Dialog` 对象，并根据 `type` 设置相应按钮逻辑：
-
-  - `showModal` 创建 Dialog 后，会调用 `dlg.setInitialization(true)` 准备好对话框尺寸，然后调用 `dlg.show()` 以模态方式显示，并阻塞等待结果，最后返回 `dlg.getResult()`。
-  - `showAsync` 则创建 Dialog 后，同样初始化，若指定回调则通过 `dlgPtr->setResultCallback(onResult)` 注册，然后把对话框通过 `wnd.addDialog()` 加入主窗口的对话框列表，最后调用 `dlgPtr->show()` 非模态显示。非模态显示不会阻塞，因此 `showAsync` 很快返回；对话框的关闭与结果传递在回调中完成。
-
-- **典型用途：** MessageBox 提供与系统 MessageBox 类似的简明接口：
-
-  - 显示一条提示信息并等待确认：
-     `MessageBox::showModal(mainWindow, "操作成功完成！", "提示", MessageBoxType::OK);`
-
-  - 提示加确认选择：
-     `auto res = MessageBox::showModal(mainWindow, "确定要删除记录吗？", "请确认", MessageBoxType::YesNo); if (res == MessageBoxResult::Yes) { ... }`
-
-  - 非模态通知：
-     `MessageBox::showAsync(mainWindow, "下载已在后台进行。", "通知", MessageBoxType::OK); // 用户点OK时对话框将自行关闭`
-
-  - 非模态询问并通过回调获取结果：
-
-    ```
-    MessageBox::showAsync(mainWindow, "发现新版本，是否现在更新？", "更新提示", MessageBoxType::YesNo,
-        [](MessageBoxResult res) {
-            if (res == MessageBoxResult::Yes) startUpdate();
-        });
-    ```
-
-  通过这些静态方法，可以很方便地融合对话框提示流程，无需手动管理 Dialog 对象的生命周期和事件处理逻辑。
-
-## Table 类 (表格控件)
-
-**描述：****Table** 类是一个高级表格控件，支持分页显示和大数据量展示[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/include/StellarX/table.h#L2-L10)。它提供完整的数据表格功能，包括表头、数据行和分页导航等，实现类似电子表格的呈现。Table 控件可自动计算列宽和行高，支持自定义边框样式、填充模式以及文本字体样式，从而适应不同的UI设计需求。通过内置的分页机制，Table 能有效展示大量数据而不影响界面性能，并使用背景缓存来优化渲染，避免重绘闪烁。
-
-**主要特性：**
-
-- **自动分页：** 根据数据行数和每页行数自动计算总页数和当前页显示内容[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/include/StellarX/table.h#L8-L16)。提供 **上一页/下一页** 按钮和页码指示，方便用户浏览分页数据。
-- **自定义配置：** 开发者可配置每页行数、是否显示翻页按钮，设置表格边框颜色、背景色，选择填充模式（实色填充或透明）和边框线型等，满足不同视觉风格要求。
-- **高效渲染：** Table 通过缓存背景图像来提高渲染效率。在表格内容变化或首次绘制时缓存底图，绘制时仅更新差异部分，减少重复绘制带来的闪烁[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L210-L219)[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L241-L249)。
-- **典型场景：** 适用于数据列表、报表、记录浏览等需要表格式展示的场景[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/include/StellarX/table.h#L14-L17)。例如显示数据库查询结果、日志记录、统计报表等，让用户以行列形式查看信息。
+- 定义控件的基本属性（坐标、尺寸、可见性、脏标记等）并提供对应的存取方法。
+- 提供绘图状态管理接口（`saveStyle()`/`restoreStyle()` 等）用于在控件绘制前后保存和恢复全局画笔状态。
+- 声明纯虚接口，如 `draw()`（绘制控件）和 `handleEvent()`（处理事件），所有具体控件都需实现。
+- 提供移动构造和移动赋值支持，防止控件被不小心拷贝。
 
 ### 公共成员函数
 
-#### Table(int x, int y)
+#### Control::updateBackground()
 
-**函数原型：** `Table(int x, int y)`
- **参数：**
+- **用途：** 释放之前保存的背景快照并重新捕获当前背景，用于在控件尺寸变化或内容变化后更新其背景缓存。调用此函数可确保控件背景的正确性，避免因为尺寸变化导致的背景错位。
 
-- `x`：表格左上角的 X 坐标位置。
-- `y`：表格左上角的 Y 坐标位置。
-   **返回值：** 无（构造函数无返回值）。
-   **功能描述：** Table 类的构造函数。在指定的坐标位置创建一个新的表格控件实例[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L164-L171)。初始状态下表格没有设置表头和数据，宽度和高度初始为0，会在设置数据后根据内容自动计算调整。`x` 和 `y` 参数用于将表格定位在窗口中的起始位置。
-   **使用场景：** 当需要在界面上显示表格数据时，首先调用此构造函数实例化一个 Table 对象。例如，在创建主窗口后，可以创建 `Table table(50, 50);` 来放置一个表格控件，然后再设置表头和数据。
+- **参数：** 无。
 
-#### ~Table()
+- **返回值：** 无。
 
-**函数原型：** `~Table()`
- **参数：** 无。
- **返回值：** 无。
- **功能描述：** Table 类的析构函数。在对象销毁时自动调用，负责释放表格内部分配的资源。如表格内部创建的翻页按钮、页码标签以及背景缓存图像都将在析构函数中删除以防止内存泄漏[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L169-L178)。
- **使用场景：** 一般不直接调用，由系统自动管理。当 Table 对象的生命周期结束（例如其所在窗口关闭或程序结束）时，析构函数确保清理内存。不需开发者手动调用，但了解其行为有助于避免重复释放资源。
+- **行为细节：** 默认实现中，`updateBackground()` 会先丢弃旧的背景位图（相当于调用内部的 `discardBackground()`），然后在控件当前位置和新尺寸范围内重新保存一份背景快照。这通常在控件大小改变或重绘需求发生时自动调用，一般不需要用户手动调用。
 
-#### draw()
+- **示例：** 假设有自定义控件在大小调整时需要刷新背景，可以在调整尺寸后调用：
 
-**函数原型：** `void draw() override`
- **参数：** 无。
- **返回值：** 无。
- **功能描述：** 重写自 `Control` 基类的绘制函数，用于将表格绘制到屏幕[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L185-L194)[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L252-L260)。调用 `draw()` 时，Table 根据当前状态绘制表头、当前页的数据行、页码标签和翻页按钮（如果启用）。绘制过程中会应用先前设置的文本样式、边框颜色、背景色等属性。为避免频繁重绘，Table 内部维护一个`dirty`标志，只有当表格内容或外观需更新时（例如调用了设置函数后）`draw()` 才会实际重绘内容[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L187-L196)[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L258-L266)。
- **使用场景：** 通常在设置完表头和数据、或修改了样式后调用，令表格按新内容渲染。一般框架的窗口在刷新时会自动调用各控件的 `draw()` 方法，开发者也可在需要立即刷新表格时手动调用它。例如，当表格数据更新且需要即时反映在界面上时，可以设置相应属性并调用 `draw()` 触发重绘。
+  ```c++
+  myControl.setWidth(newW);
+  myControl.setHeight(newH);
+  myControl.updateBackground(); // 更新背景快照以匹配新尺寸
+  ```
 
-#### handleEvent(const ExMessage& msg)
+#### Control::onWindowResize()
 
-**函数原型：** `bool handleEvent(const ExMessage& msg) override`
- **参数：**
+- **用途：** 当父窗口尺寸发生变化时，通知控件进行相应处理的事件函数。用于在窗口大小改变时调整控件状态，例如作废过期的背景缓存。
 
-- `msg`：事件消息对象（EasyX库的 `ExMessage` 结构），包含了键盘或鼠标事件的信息。
-   **返回值：** 布尔值，表示事件是否被表格控件处理。返回 `true` 表示事件已被消耗，不再需要向其他控件传播；返回 `false` 则表示表格未处理该事件。
-   **功能描述：** 重写自 `Control` 基类的事件处理函数，用于处理与表格相关的用户交互事件。对于 Table 而言，`handleEvent` 主要用于处理翻页按钮的点击事件。当 `isShowPageButton` 为真（显示翻页按钮）时，该方法会将传入的事件传递给内部的 “上一页” 和 “下一页” 按钮进行处理[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L274-L283)。如果用户点击了上一页或下一页按钮，按钮的内部逻辑会更新当前页码并调用 `draw()` 重绘表格，`handleEvent` 随后返回 `true` 表示事件已处理。若翻页按钮未启用（例如只有一页数据或通过 `showPageButton(false)` 隐藏了按钮），此函数直接返回 `false`[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L276-L283)，不对事件进行处理。
-   **使用场景：** 框架的主事件循环会调用控件的 `handleEvent` 方法来分发用户输入。当使用 Table 控件时，无需手动调用此函数，但了解其行为有助于处理自定义事件。例如，可在Window的事件循环中将鼠标点击事件传给表格控件，使其内部的翻页按钮响应点击，从而实现分页浏览的数据切换。
+- **参数：** 无。
 
-#### setHeaders(std::initializer_liststd::string headers)
+- **返回值：** 无。
 
-**函数原型：** `void setHeaders(std::initializer_list<std::string> headers)`
- **参数：**
+- **行为细节：** 默认实现中，`onWindowResize()` 会调用 `discardBackground()` 丢弃控件保存的背景位图，以防止窗口尺寸变化后背景错位。容器控件会重写该方法（例如 `Canvas` 会在自身处理后继续调用子控件的 `onWindowResize()`）。一般用户不需要主动调用此方法——框架会在窗口或容器尺寸变化时自动触发调用。
 
-- `headers`：表头文本字符串的初始化列表，每个字符串对应表格一列的列名。
-   **返回值：** 无。
-   **功能描述：** 设置表格的列标题。调用此函数会清除当前已有的表头并使用提供的字符串列表作为新表头[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L288-L296)。在设置表头后，Table 会将内部状态标记为需要重新计算单元格尺寸和重新绘制表头[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L291-L295)。列标题用于在表格顶部显示，表示每列数据的含义。表头数量确定了表格的列数，后续添加的数据应与列数匹配。
-   **使用场景：** 通常在创建 Table 实例后、添加数据之前调用，用来定义表格的列结构。例如：`table.setHeaders({"姓名", "年龄", "职业"});` 将表格设置为包含“姓名”、“年龄”、“职业”三列。设置表头后即可调用 `setData` 添加对应列的数据行。
+- **示例：** 自定义控件如需在窗口大小改变时执行特定逻辑，可以重写此函数：
 
-#### setData(std::vectorstd::string data) / setData(std::initializer_list<std::vectorstd::string> data)
+  ```c++
+  void MyControl::onWindowResize()
+  {
+      Control::onWindowResize(); // 调用基类以丢弃背景等
+      // 自定义逻辑，例如根据新窗口尺寸调整位置
+      repositionBasedOnNewWindowSize();
+  }
+  ```
 
-**函数原型1：** `void setData(std::vector<std::string> data)`
- **参数：**
+#### Control::getX() / getY() / getWidth() / getHeight()
 
-- `data`：包含单行表格数据的字符串向量，每个元素对应一列的内容。
-   **返回值：** 无。
-   **功能描述：** 将一个数据行添加到表格中。若传入的这行数据列数少于当前表头列数，则函数会自动在行数据末尾补空字符串，使其列数与表头一致[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L300-L308)。然后将该行数据追加到内部数据集合 `data` 中，并更新表格的总页数 (`totalPages`) 属性[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L302-L308)。更新页数时根据当前总行数和每页行数计算页数，确保至少为1页[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L303-L308)。函数调用后会标记表格需要重新计算单元格尺寸，并在下次绘制时包含新添加的数据。
-   **使用场景：** 可用于逐行构建表格数据，例如从数据源读取记录并一条条加入表格。适合数据逐步到达或者需要动态添加行的情形。每次调用都会在末页附加一行，并相应更新分页显示。
+- **用途：** 获取控件的全局坐标位置（左上角 `x, y`）或当前尺寸（宽度、高度）。
 
-**函数原型2：** `void setData(std::initializer_list<std::vector<std::string>> data)`
- **参数：**
+- **参数：** 无。
 
-- `data`：一个由多行数据组成的初始化列表，每个内部的 `std::vector<std::string>` 代表一行的数据。
-   **返回值：** 无。
-   **功能描述：** 批量添加多行数据到表格中。对于提供的每一行数据，函数会检查其列数是否与表头列数匹配；若不足则在该行末尾补充空字符串以对齐列数[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L313-L321)。然后将处理后的整行数据依次追加到表格内部的数据集中。添加完所有行后，函数重新计算总数据行数下的总页数，并至少确保一页[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L322-L328)。与单行版本类似，此方法也会触发单元格尺寸重新计算和脏标记，使表格内容在下次绘制时更新。
-   **使用场景：** 适用于一次性导入整批数据的情形，例如应用初始化时加载整个数据表。调用此函数可以方便地用初始化列表直接提供多行初始数据，而无需多次重复调用单行的 `setData`。在需要清空已有数据并填入新数据时，可以在调用此方法前手动清除旧数据（例如重新创建Table或使用返回的data容器修改）。
+- **返回值：** 分别返回控件的全局 X 坐标、全局 Y 坐标、当前宽度、高度，类型均为 `int`。
 
-#### setRowsPerPage(int rows)
+- **行为细节：** 这些方法提供控件在窗口坐标系下的位置和大小，通常用于布局计算或调试。注意，全局坐标是相对于整个应用窗口的原点(0,0)。
 
-**函数原型：** `void setRowsPerPage(int rows)`
- **参数：**
+- **示例：**
 
-- `rows`：每页显示的数据行数（正整数）。
-   **返回值：** 无。
-   **功能描述：** 设置表格分页时每页包含的数据行数。调用此函数会修改内部的 `rowsPerPage` 属性，并根据当前总数据行数重新计算总页数 `totalPages`[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L332-L338)。如果重新计算后总页数低于1，则强制设为1页（避免出现0页的非法状态）。改变每页行数将影响表格的高度和分页布局，因此会标记需要重新计算单元格大小以及重新绘制。在下次 `draw()` 时，表格将按照新的分页大小重新呈现内容。
-   **使用场景：** 当需要调整表格分页密度时使用。例如默认每页显示5行数据，可以通过 `table.setRowsPerPage(10);` 改为每页10行，以减少总页数。常用于根据用户偏好或窗口大小调整每页显示量。应注意，如果当前页码在调整后超出新的总页数范围，表格在下次翻页时会自动纠正到最后一页。
+  ```c++
+  int x = ctrl.getX();
+  int h = ctrl.getHeight();
+  std::cout << "Control at X = " << x << ", height = " << h << std::endl;
+  ```
 
-#### showPageButton(bool isShow)
+#### Control::getRight() / getBottom()
 
-**函数原型：** `void showPageButton(bool isShow)`
- **参数：**
+- **用途：** 获取控件的右边缘的 X 坐标 (`getRight()`) 和下边缘的 Y 坐标 (`getBottom()`)，以全局坐标计算。
 
-- `isShow`：布尔值，指定是否显示翻页按钮。`true` 表示显示 “上一页” 和 “下一页” 按钮，`false` 则隐藏它们。
-   **返回值：** 无。
-   **功能描述：** 控制表格分页导航按钮的可见性。调用此函数可以在界面上隐藏或显示表格底部的翻页按钮。如果设置为隐藏 (`false`)，则用户将无法通过界面按钮切换页码（此时表格将始终停留在当前页）；当再次显示按钮 (`true`) 时，用户可以使用按钮查看其他页的数据。该函数仅影响按钮的绘制和事件处理状态，不改变当前页码等分页数据。
-   **使用场景：** 适用于当数据量较少仅一页即可显示完毕，或开发者希望以其他方式控制分页时。例如，当表格内容只有一页数据时，可以隐藏翻页按钮以简化界面。需要再次启用分页功能时再调用 `showPageButton(true)` 显示按钮。
+- **参数：** 无。
 
-#### setTableBorder(COLORREF color)
+- **返回值：** 控件右边缘 X 坐标、底边缘 Y 坐标，类型为 `int`。
 
-**函数原型：** `void setTableBorder(COLORREF color)`
- **参数：**
+- **行为细节：** 这两个方法相当于 `getX() + getWidth()` 和 `getY() + getHeight()`，用于方便地获取控件在窗口坐标系中覆盖的边界位置。
 
-- `color`：表格边框颜色，类型为 `COLORREF`（Windows RGB 颜色值，例如 `RGB(0,0,0)` 表示黑色）。
-   **返回值：** 无。
-   **功能描述：** 设置表格单元格边框线的颜色。调用该方法会将 Table 内部存储的边框颜色更新为指定的 `color`，并将表格标记为需要重绘。在随后的 `draw()` 调用中，表格的线条（包括单元格边框和外围边框）将使用新的颜色绘制[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L192-L199)。默认的边框颜色为黑色，如需与界面主题匹配可使用此函数调整。
-   **使用场景：** 当需要改变表格线条颜色以配合UI配色方案时使用。例如，将表格边框设为浅灰色以获得柔和的视觉效果：`table.setTableBorder(RGB(200,200,200));`。在深色模式下，可将边框设为亮色以提高对比度。调用后下一次重绘将体现颜色变化。
+- **示例：**
 
-#### setTableBk(COLORREF color)
+  ```c++
+  if (cursorX < ctrl.getRight() && cursorY < ctrl.getBottom()) 
+  {
+      // 光标在ctrl控件矩形范围内
+  }
+  ```
 
-**函数原型：** `void setTableBk(COLORREF color)`
- **参数：**
+#### Control::getLocalX() / getLocalY() / getLocalWidth() / getLocalHeight()
 
-- `color`：表格背景填充颜色，类型为 `COLORREF`。
-   **返回值：** 无。
-   **功能描述：** 设置表格单元格的背景颜色。调用该函数会更新 Table 内部的背景色属性，并触发重绘标记。在绘制表格时，每个单元格将使用指定的背景颜色进行填充（当填充模式为实色时）[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L192-L199)。默认背景颜色为白色，如需改变单元格底色（例如间隔行着色等）可以使用不同的颜色多次调用或自定义绘制。
-   **使用场景：** 用于调整表格的底色风格。例如，将表格背景设为浅黄色以突出显示内容区域：`table.setTableBk(RGB(255, 255, 224));`。结合填充模式使用，可以实现透明背景等效果。注意背景颜色变化在填充模式为Solid时可见，若填充模式为Null则背景不绘制实色。
+- **用途：** 获取控件相对于父容器坐标系的位置 (`LocalX, LocalY`) 以及在父容器内的尺寸 (`LocalWidth, LocalHeight`)。
 
-#### setTableFillMode(StellarX::FillMode mode)
+- **参数：** 无。
 
-**函数原型：** `void setTableFillMode(StellarX::FillMode mode)`
- **参数：**
+- **返回值：** 控件相对父容器的 X 坐标、Y 坐标、宽度、高度，类型均为 `int`。
 
-- `mode`：填充模式，枚举类型 `StellarX::FillMode`。可选值包括 Solid（实色填充）、Null（不填充）、Hatched/Pattern 等。
-   **返回值：** 无。
-   **功能描述：** 设置表格的填充模式，即单元格背景的绘制方式。常用的模式有 Solid（纯色填充背景）或 Null（透明背景不填充）。当前版本中，仅对 Solid 和 Null 模式提供完全支持：如果传入其他模式值，内部会默认退回使用 Solid 模式[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L360-L369)。调用此方法会应用新的填充模式，并将此模式同步到表格的翻页按钮和页码标签控件上，使它们风格一致[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L365-L373)。例如，当设置为 Null 模式时，表格单元格背景将不被填充颜色，呈现透明效果，同时页码标签也设置为透明背景显示。改变填充模式会将表格及相关控件标记为需重绘。
-   **使用场景：** 根据界面设计需要调整表格背景绘制策略。例如，为实现镂空透明效果，可使用 `table.setTableFillMode(StellarX::FillMode::Null);` 使表格仅绘制文字和边框而无底色。默认使用 Solid 模式填充背景，实现传统表格外观。当需要图案填充等高级效果时，当前版本可能不支持，仍会以纯色替代。
+- **行为细节：** 当控件被添加到容器（例如 `Canvas`）时，其本地坐标以容器的左上角为原点。如果控件没有父容器（直接属于窗口），则本地坐标与全局坐标相同。这些方法对于在容器内部布局控件特别有用。
 
-#### setTableLineStyle(StellarX::LineStyle style)
+- **示例：** 假设有一个容器 `canvas`，其中包含子控件 `childCtrl`：
 
-**函数原型：** `void setTableLineStyle(StellarX::LineStyle style)`
- **参数：**
+  ```c++
+  int localX = childCtrl.getLocalX();
+  int globalX = childCtrl.getX();
+  std::cout << "Child global X: " << globalX 
+            << ", local X in canvas: " << localX << std::endl;
+  ```
 
-- `style`：边框线型，枚举类型 `StellarX::LineStyle`，如 Solid（实线）、Dash（虚线）、Dot（点线）等。
-   **返回值：** 无。
-   **功能描述：** 设置表格网格线（单元格边框线条）的样式。传入不同的线型枚举值可以改变表格绘制时边框的样式，例如使用虚线或点线来绘制单元格边框。调用该方法将更新内部存储的线型并标记表格需要重绘，下次绘制时新的线型将生效。需注意实际效果取决于绘图库对线型的支持。
-   **使用场景：** 当希望改变表格外观以区分层次或提升美观时，可修改线型。例如，`table.setTableLineStyle(StellarX::LineStyle::Dash);` 将表格边框改为虚线风格，以在视觉上弱化表格线对界面的干扰。此功能在打印报表或特殊主题界面中会很有用。
+#### Control::getLocalRight() / getLocalBottom()
 
-#### setTableBorderWidth(int width)
+- **用途：** 获取控件相对于父容器坐标系的右边缘和底边缘坐标。
 
-**函数原型：** `void setTableBorderWidth(int width)`
- **参数：**
+- **参数：** 无。
 
-- `width`：边框线宽度（像素值，正整数）。
-   **返回值：** 无。
-   **功能描述：** 设置表格边框线条的粗细（线宽）。默认情况下表格边框宽度为1像素，调用此函数可使所有单元格的边框线加粗或变细。更新线宽后表格将在下次重绘时使用新的线宽绘制边框[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L198-L201)。如果设置的宽度大于1，为避免粗线覆盖过多背景，Table 在绘制时会调整背景区域的恢复以适应粗线描边[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L220-L228)[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L240-L248)。
-   **使用场景：** 在需要强调表格结构或适应高分辨率显示时，可增加线宽。例如，`table.setTableBorderWidth(2);` 将表格线条加粗为2像素，使表格框架更加醒目。若要获得细网格效果，可以将线宽设置为1以下（不过线宽最小为1像素）。改变线宽后请确保颜色、线型等设置搭配以获得预期视觉效果。
+- **返回值：** 控件在父容器内的右侧坐标、下侧坐标，类型为 `int`。
+
+- **行为细节：** 分别等价于 `getLocalX() + getLocalWidth()` 和 `getLocalY() + getLocalHeight()`。当需要确定控件在容器内部的边界位置时，这些方法提供了便利。
+
+- **示例：** 可用于判断子控件是否超出了容器范围：
+
+  ```c++
+  if (childCtrl.getLocalRight() > canvas.getWidth())
+  {
+      // 子控件在容器内的右边缘超出了容器宽度
+  }
+  ```
+
+#### Control::setX(int x) / setY(int y) / setWidth(int w) / setHeight(int h)
+
+- **用途：** 设置控件的全局坐标位置（左上角 X 或 Y）或调整控件的尺寸（宽度或高度）。
+
+- **参数：** `x` 或 `y` 为新的全局坐标；`w` 为新的宽度值；`h` 为新的高度值（类型均为 `int`）。
+
+- **返回值：** 无。
+
+- **行为细节：** 调用这些方法将直接修改控件的位置或大小，并自动将控件标记为“需要重绘”（内部将 `dirty` 标志置为 `true`），使得下一轮刷新时控件会按照新位置或新尺寸绘制。需要注意，如果控件在容器中，设置全局坐标会改变其在窗口中的位置，但相对父容器的位置也会随之更新。
+
+- **示例：** 将控件 `ctrl` 移动到窗口坐标(100,100)，并调整宽度为200：
+
+  ```c++
+  ctrl.setX(100);
+  ctrl.setY(100);
+  ctrl.setWidth(200);
+  // 高度保持不变，如果需要也可调用 ctrl.setHeight(newHeight);
+  ```
+
+#### Control::draw() (纯虚函数)
+
+- **用途：** 绘制控件的抽象接口，由具体控件类实现实际的绘图逻辑。
+
+- **参数：** 无（绘制所需信息由控件内部状态确定）。
+
+- **返回值：** 无。
+
+- **行为细节：** `draw()` 会在框架重绘时由系统调用，具体控件应在实现中完成自身的绘图工作。通常一个 `draw()` 实现需要先调用 `Control::saveStyle()` 保存当前绘图状态，然后设置绘图颜色/字体等并绘制，再调用 `Control::restoreStyle()` 恢复状态。**用户不应直接调用**此方法；若要强制重绘，可以将控件标记为脏 (`setDirty(true)`) 并等待系统调用。
+
+- **示例：** 以下为自定义控件实现 `draw()` 的示例伪代码：
+
+  ```c++
+  void MyControl::draw()
+  {
+      saveStyle(); 
+      setfillcolor(backgroundColor);
+      bar(x, y, x+width, y+height); // 绘制背景矩形
+      // ... 其他绘制 ...
+      restoreStyle();
+  }
+  ```
+
+#### Control::handleEvent(const ExMessage& msg) (纯虚函数)
+
+- **用途：** 事件处理抽象接口，由具体控件实现，用于处理鼠标、键盘等交互事件。
+
+- **参数：** `msg` 为 EasyX 框架的事件消息 (`ExMessage`)，包含了事件类型、鼠标坐标、按键等信息。
+
+- **返回值：** 布尔值，`true` 表示该事件已被控件处理（“消费”），不需要继续传递；`false` 表示控件未处理该事件，事件可交由其它对象或默认逻辑处理。
+
+- **行为细节：** `handleEvent()` 方法同样由系统在事件循环中自动调用，用于让控件响应用户输入。不同控件根据需要处理不同类型的事件（如按钮处理鼠标点击，文本框处理键盘输入）。如果控件识别并处理了某个事件（例如鼠标点击在按钮范围内），应该返回 `true`，表示事件到此为止，不再向上传播。对于未处理的事件则返回 `false`。
+
+- **示例：** 简化的按钮控件事件处理逻辑：
+
+  ```c++
+  bool Button::handleEvent(const ExMessage& msg)
+  {
+      if(msg.message == WM_LBUTTONDOWN && isPointInButton(msg.x, msg.y)) {
+          // 处理按钮点击
+          onClickCallback(); // 调用已注册的回调
+          return true;
+      }
+      return false;
+  }
+  ```
+
+#### Control::setIsVisible(bool show)
+
+- **用途：** 设置控件的可见状态，动态显示或隐藏控件。传入 `false` 将隐藏控件，传入 `true` 则显示控件。
+
+- **参数：** `show` 为布尔值，指定是否让控件可见。`true` 表示可见，`false` 表示隐藏。
+
+- **返回值：** 无。
+
+- **行为细节：** 该方法允许在运行时切换控件的显示状态。调用后控件的 `IsVisible()` 状态将改变，并自动触发重绘逻辑：隐藏时控件内容不再绘制；重新显示时控件会被标记需要重绘。对于容器控件（如 `Canvas`），本方法已被重写以**递归影响其子控件**：隐藏一个容器时，其所有子控件也会被隐藏；再次显示容器时，子控件也随之显示。这简化了整组界面的显隐控制。
+
+- **示例：**
+
+  ```c++
+  button.setIsVisible(false); // 隐藏一个按钮
+  // ... 某些操作后 ...
+  button.setIsVisible(true);  // 再次显示按钮
+  ```
+
+#### Control::setParent(Control* parent)
+
+- **用途：** 设置控件的父容器指针。通常由容器在添加控件时调用，手动调用情形较少。
+
+- **参数：** `parent` 指向新的父容器控件 (`Canvas` 等) 的指针。传入 `nullptr` 则表示清除父容器关联。
+
+- **返回值：** 无。
+
+- **行为细节：** 该方法将内部的 `parent` 指针设置为指定容器，并相应调整控件的坐标解释方式（有父容器时本地坐标相对于父容器）。在将控件添加到某个容器时，框架会自动调用此函数，无需用户干预。**注意：** 将控件从一个容器转移到另一个时，除了调用 `setParent()` 外，还需要确保在旧容器中移除、在新容器中添加控件（使用容器的 `addControl()` 等），否则界面状态不一致。
+
+- **示例：**
+
+  ```c++
+  canvas1.addControl(std::move(ctrl));    // 内部自动 setParent(&canvas1)
+  // 如需从 canvas1 转移到 canvas2:
+  canvas1.removeControl(ctrlPtr);
+  canvas2.addControl(std::move(ctrlPtr)); // 内部 setParent(&canvas2)
+  ```
+
+#### Control::setDirty(bool dirty)
+
+- **用途：** 手动设置控件的“需要重绘”标记。当控件的内容或属性改变且希望立即刷新显示时，可调用此函数。
+
+- **参数：** `dirty` 布尔值，`true` 表示标记控件需要重绘，`false` 表示清除重绘标记。
+
+- **返回值：** 无。
+
+- **行为细节：** 将 `dirty` 设置为 `true` 后，会在下一次屏幕刷新时调用控件的 `draw()` 重新绘制。通常框架内部在控件属性变化时已经设置了该标记，例如调用 `setX()/setWidth()` 等修改位置尺寸的方法后，控件已被标记脏。开发者也可以在自定义场景下调用它，例如控件内部状态变化但没有对应的 setter 方法时。一般不需要将 `dirty` 手动置为 `false`，因为重绘后框架会自动清除该标记。
+
+- **示例：**
+
+  ```c++
+  ctrl.setDirty(true); // 请求ctrl控件重绘
+  ```
+
+#### Control::IsVisible() const
+
+- **用途：** 检查控件当前是否处于可见状态。
+
+- **参数：** 无。
+
+- **返回值：** `bool`，当前控件是否可见。`true` 表示可见，`false` 表示被隐藏。
+
+- **行为细节：** 该方法返回控件内部 `show` 标志位的状态。初始情况下控件默认为可见 (`true`)，如果通过 `setIsVisible(false)` 或控件所属父容器被隐藏，则此方法返回 `false`。当控件不可见时，其 `draw()` 将不会被调用。
+
+- **示例：**
+
+  ```c++
+  if (!ctrl.IsVisible())
+  {
+      ctrl.setIsVisible(true); // 确保控件可见
+  }
+  ```
+
+## Window 类 (应用主窗口)
+
+**描述：** `Window` 类代表应用程序的主窗口，它管理窗口的创建、消息循环以及全局的控件容器。`Window` 既负责初始化图形窗口（基于 EasyX），也是所有顶层控件的载体（充当它们的父级容器）。它处理系统事件的分发、定时重绘等，使用户只需关注向窗口添加控件和对事件作出响应。一个应用典型地只创建一个 `Window` 实例。
+
+**特性：**
+
+- 提供多种窗口初始化模式（如是否双缓冲、是否显示控制台等）以适应不同应用需求。
+- 支持设置窗口背景颜色或背景图片，以及窗口标题。
+- 内置**对话框管理**系统：跟踪已弹出的模态/非模态对话框，避免重复弹出相同对话框。
+- 集成完整的消息处理循环，自动分发事件给各控件的 `handleEvent()` 方法，并调度重绘各控件的 `draw()`。
+- 管理所有添加到窗口的控件和对话框的生命周期，在窗口销毁时自动清理。
+
+### 公共成员函数
+
+#### Window(int width, int height, int mode, COLORREF bkColor = BLACK, std::string headline = "窗口") (构造函数)
+
+- **用途：** 创建一个指定大小的应用程序窗口，并进行必要的图形初始化。可以指定窗口模式、背景颜色和窗口标题。
+
+- **参数：**
+
+  - `width`：窗口宽度（像素）。
+  - `height`：窗口高度（像素）。
+  - `mode`：窗口模式标志（int 类型）。不同的值可配置窗口属性，例如是否使用**双缓冲**绘图、是否显示控制台窗口等。典型地，0 表示默认（窗口模式，隐藏控制台），也可以使用 EasyX 提供的常量组合此参数，如 `EW_SHOWCONSOLE` 显示控制台，`EW_NOCLOSE` 禁止关闭按钮等。
+  - `bkColor` *(可选)*：窗口背景色，默认为黑色 (`BLACK`)。
+  - `headline` *(可选)*：窗口标题文本，默认为“窗口”。
+
+- **返回值：** 无（构造函数）。
+
+- **行为细节：** 构造 `Window` 对象时，会调用 EasyX 的图形初始化函数 `initgraph(width, height, mode)` 创建窗体，并自动应用提供的背景色以及设置窗口标题。如果模式开启了双缓冲，则框架会采用手动刷新机制。创建窗口后，**必须调用** `runEventLoop()` 进入消息循环，窗口才开始响应事件和绘制。
+
+- **示例：**
+
+  ```c++
+  // 创建800x600的窗口，双缓冲且显示控制台，背景为白色，标题为“示例”
+  int mode = EW_SHOWCONSOLE | EW_NOBORDER; // 仅示例模式组合
+  Window mainWin(800, 600, mode, WHITE, "示例");
+  mainWin.draw();
+  mainWin.runEventLoop();
+  ```
+
+#### Window::~Window() (析构函数)
+
+- **用途：** 销毁窗口对象并清理资源。
+
+- **参数：** 无。
+
+- **返回值：** 无。
+
+- **行为细节：** 当 `Window` 对象被销毁时，框架会自动关闭图形窗口、释放 EasyX 图形资源，并清理窗口中托管的控件和对话框对象。通常不需要显式调用，直接让 `Window` 对象离开作用域或程序结束时由系统回收。
+
+- **示例：**
+
+  ```c++
+  { 
+      Window win(400, 300, 0);
+      // ... 使用 win ...
+  } // 作用域结束，自动析构，窗口关闭
+  ```
+
+#### Window::runEventLoop()
+
+- **用途：** 进入窗口消息处理循环，启动 GUI 主事件循环。调用此函数后，窗口开始响应用户交互并持续运行，直到窗口关闭。
+
+- **参数：** 无。
+
+- **返回值：** `int`，窗口消息循环的退出代码（通常可直接返回给 `main()`）。
+
+- **行为细节：** 该函数内部实现一个典型的事件循环：不断调用 EasyX 的 `peekmessage()` 获取事件消息，并将其分发给窗口内各控件的 `handleEvent()` 方法处理。同时，它负责按需重绘：每帧遍历所有控件调用其 `draw()` 方法。在循环中窗口也会检查模态对话框的存在并阻止底层控件交互等。**必须**在创建窗口并添加控件后调用此方法，否则窗口将一片空白且无法交互。
+
+- **示例：**
+
+  ```c++
+  Window win(640, 480, EW_SHOWCONSOLE, LIGHTGRAY, "Demo");
+  // ... 添加控件等初始化 ...
+  wni.draw();
+  return win.runEventLoop(); // 进入事件循环，阻塞直到窗口关闭
+  ```
+
+#### Window::addControl(std::unique_ptr<Control> control)
+
+- **用途：** 将一个新控件添加到窗口中进行管理和显示。可以添加诸如按钮、文本框、容器等任何继承自 `Control` 的控件。
+
+- **参数：** `control` 为一个指向待添加控件的 `unique_ptr` 智能指针。函数内部会接管该指针的所有权。
+
+- **返回值：** 无。
+
+- **行为细节：** 添加控件时，窗口会将控件纳入内部维护的控件列表中，不会i调用控件的 `setParent()` 。此后框架每次重绘和事件处理都会考虑该控件。控件在窗口坐标系中的初始位置和尺寸取决于控件自身的属性。如果需要移除控件，目前可以通过 `clearAllControls()`（在 `Canvas` 中）或销毁窗口实现。
+
+- **示例：**
+
+  ```c++
+  auto btn = std::make_unique<Button>(50, 50, 80, 30, "OK");
+  mainWin.addControl(std::move(btn)); // 将按钮添加到主窗口显示
+  ```
+
+#### Window::addDialog(std::unique_ptr<Control> dialog)
+
+- **用途：** 弹出一个对话框控件并添加到窗口。当添加对话框时使用。
+
+- **参数：** `dialog` 是指向 `Dialog` 或其他对话框控件对象的 `unique_ptr`。
+
+- **返回值：** 无。
+
+- **行为细节：** 该函数类似于 `addControl()`，但专门用于对话框控件。窗口会将对话框添加到内部对话框列表，并在事件循环中给予特殊处理（例如当存在模态对话框时，阻止其他控件交互）。框架还提供防重复机制：如果即将添加的对话框在当前已经存在（通过对话框的标题和消息匹配），可以避免重复添加。通常不直接使用此函数来添加模态对话框——而是通过 `MessageBox::showModal()` 简化调用。
+
+- **示例：**
+
+  ```c++
+  auto dlg = std::make_unique<Dialog>(mainWin, "警告", "出现错误", MessageBoxType::OKCancel);
+  mainWin.addDialog(std::move(dlg)); // 非模态对话框，异步显示
+  ```
+
+#### Window::hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const
+
+- **用途：** 检查当前窗口中是否已经存在指定标题和内容的非模态对话框。
+
+- **参数：** `caption` 为对话框标题文本；`message` 为对话框显示的消息内容。
+
+- **返回值：** `bool`，存在相同标题和内容的非模态对话框则返回 `true`，否则返回 `false`。
+
+- **行为细节：** 此方法用于防止重复弹出相同的提示框。当调用 `MessageBox::showAsync()` 显示非模态对话框时，内部会利用该函数判断是否已有相同内容的对话框未关闭，从而避免界面上出现多个重复对话框。一般用户不需要直接调用它，但了解其存在有助于理解框架的防重复机制。
+
+- **示例：** （框架内部用法）
+
+  ```c++
+  if (!hasNonModalDialogWithCaption("警告", "出现错误"))
+  {
+      // 安全弹出新对话框
+      addDialog(std::make_unique<Dialog>(...));
+  }
+  ```
+
+#### Window::draw()
+
+- **用途：** 手动触发窗口内容重绘。
+
+- **参数：** 无。
+
+- **返回值：** 无。
+
+- **行为细节：** 默认情况下，框架每帧都会自动调用内部的绘制逻辑，所以一般无需手动调用此函数。但在某些特殊情况下（如希望强制立即重绘某些内容），可以调用 `mainWin.draw()`。该函数会遍历所有已添加到窗口的控件并调用其 `draw()` 方法进行绘制。如果使用了双缓冲模式，则 draw() 将在后台完成绘制并更新屏幕。
+
+- **示例：**
+
+  ```c++
+  // 改变背景后立即刷新窗口显示
+  mainWin.setBkcolor(WHITE);
+  mainWin.draw();
+  ```
+
+#### Window::draw(const std::string& pImgFile)
+
+- **用途：** 将指定的图像文件绘制为窗口背景并刷新显示。
+
+- **参数：** `pImgFile`，图像文件路径（string）。
+
+- **返回值：** 无。
+
+- **行为细节：** 此函数提供简便途径设置窗口背景图。调用时，函数会加载指定路径的图像并铺满窗口背景，然后调用窗口的其他控件的 `draw()` 进行正常绘制。相当于设置背景图片后立即刷新。若指定的文件无法加载或非有效图像，将保持原背景不变。
+
+- **示例：**
+
+  ```c++
+  mainWin.draw("background.jpg"); // 以background.jpg作为背景并重绘窗口
+  ```
+
+#### Window::setBkImage(const std::string& pImgFile)
+
+- **用途：** 设置窗口背景图片，但不会立即绘制。
+
+- **参数：** `pImgFile`，图像文件路径。
+
+- **返回值：** 无。
+
+- **行为细节：** 该方法更改窗口背景图设置，但不会自动触发重绘（需等待下一次事件循环刷新或调用 `draw()`）。如果需要立即生效，可配合 `draw()` 使用。设置空字符串或无效路径将取消背景图片，仅保留背景色。
+
+- **示例：**
+
+  ```c++
+  mainWin.setBkImage("bg.png");
+  // 下一帧自动绘制新背景，或手动 mainWin.draw();
+  ```
+
+#### Window::setBkcolor(COLORREF c)
+
+- **用途：** 设置窗口背景颜色。
+
+- **参数：** `c`，颜色值（COLORREF，例如 `WHITE`、`RGB(255,255,255)` 等）。
+
+- **返回值：** 无。
+
+- **行为细节：** 修改窗口背景色，新的背景色会在下一次刷新时生效。如果之前设置了背景图片，新颜色会被背景图覆盖（除非移除背景图）。一般在创建窗口时可以通过构造函数参数直接指定背景色，此函数用于运行期间动态更改背景色。
+
+- **示例：**
+
+  ```c++
+  mainWin.setBkcolor(LIGHTGRAY);
+  ```
+
+#### Window::setHeadline(const std::string& headline)
+
+- **用途：** 设置窗口标题栏文本。
+
+- **参数：** `headline`，字符串，新标题文本。
+
+- **返回值：** 无。
+
+- **行为细节：** 调用此函数将更改窗口的标题栏内容（通过 Win32 API 调用 `SetWindowText` 实现）。该更改是即时的，无需刷新循环。
+
+- **示例：**
+
+  ```c++
+  mainWin.setHeadline("处理完成");
+  ```
 
 ### 获取属性方法（Getters）
 
-以下函数用于获取 Table 当前的状态或配置信息：
+#### Window::getWidth() / getHeight()
 
-- **int getCurrentPage() const**：获取当前显示的页码索引。第一页为1，第二页为2，以此类推[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L390-L398)。可用于在界面上显示当前页码或在程序逻辑中判断分页位置。
-- **int getTotalPages() const**：获取根据当前数据行数和每页行数计算出的总页数[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L394-L402)。通常在设置完数据或调整分页参数后调用，以了解数据被分页成多少页。
-- **int getRowsPerPage() const**：获取当前每页显示的数据行数设置[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L400-L408)。可用于在界面上提示用户分页大小，或在逻辑中根据该值调整分页处理。
-- **bool getShowPageButton() const**：获取当前翻页按钮的显示状态（true 为显示，false 为隐藏）[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L404-L412)。可根据此值判断界面上是否提供了翻页导航。
-- **COLORREF getTableBorder() const**：获取当前表格边框颜色[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L410-L418)（返回一个COLORREF值）。可以用于在需要时与其他控件颜色保持一致或者保存当前配置。
-- **COLORREF getTableBk() const**：获取当前表格背景填充颜色[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L414-L422)。
-- **StellarX::FillMode getTableFillMode() const**：获取当前表格的填充模式设置[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L420-L428)。返回值为 `StellarX::FillMode` 枚举，可判断是实色填充、透明等模式。
-- **StellarX::LineStyle getTableLineStyle() const**：获取当前表格边框线型设置[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L424-L432)。返回 `StellarX::LineStyle` 枚举值，如实线、虚线等。
-- **std::vectorstd::string getHeaders() const**：获取当前表格的表头列表副本[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L430-L438)。返回一个字符串向量，其中包含每一列的标题。可以使用此函数查看或保存表格的列标题设置。
-- **std::vector<std::vectorstd::string> getData() const**：获取当前表格的所有数据[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L434-L442)。返回一个二维字符串向量，其中每个内部向量代表表格中的一行数据（各元素对应该行每列的值）。这允许访问或遍历表格内容，例如用于导出数据。
-- **int getTableBorderWidth() const**：获取当前设置的表格边框线宽度（像素）[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/src/table.cpp#L440-L446)。
+- **用途：** 获取窗口的当前宽度或高度。
 
-以上获取函数均为 `const` 成员函数，不会修改 Table 的状态，只返回相应属性的值。开发者可根据需要随时调用这些函数来查询表格状态，例如在界面其他区域显示统计信息或在调试时验证设置是否正确。
+- **参数：** 无。
 
-### 公共成员变量
+- **返回值：** 窗口宽度或高度（int）。
 
-- **StellarX::ControlText textStyle**：文本样式结构体，表示表格中文字内容的字体和样式设置[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/include/StellarX/CoreTypes.h#L132-L140)。通过修改该结构体的成员，可以自定义表格文本的外观，例如字体字号、高度、宽度、字体名称 (`lpszFace`)，文字颜色 (`color`)，以及是否加粗 (`nWeight`)、斜体 (`bItalic`)、下划线 (`bUnderline`) 等[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/include/StellarX/CoreTypes.h#L134-L142)。Table 默认使用框架的默认字体（例如微软雅黑）和颜色绘制文字。开发者可以直接访问并调整 `textStyle` 的属性，然后调用 `draw()` 重新绘制，使新的文本样式生效。例如，`table.textStyle.nHeight = 20; table.textStyle.color = RGB(0,0,128);` 将文字调大并改为深蓝色。值得注意的是，Table 内部的翻页按钮和页码标签也会同步使用 Table 的 `textStyle` 设置，以保持表格组件整体风格的一致。
+- **行为细节：** 该尺寸为窗口绘图区域的大小（与创建时指定的尺寸一致，除非窗口在运行中被拉伸）。如果窗口支持拉伸并被用户调整大小，这两个值会动态更新。
+
+- **示例：**
+
+  ```c++
+  int w = mainWin.getWidth();
+  int h = mainWin.getHeight();
+  ```
+
+#### Window::getHeadline()
+
+- **用途：** 获取窗口当前的标题文本。
+
+- **参数：** 无。
+
+- **返回值：** 标题字符串 (`std::string`)。
+
+- **行为细节：** 如果未设置则返回默认标题（创建时指定或默认的“窗口”）。
+
+- **示例：**
+
+  ```c++
+  std::string title = mainWin.getHeadline();
+  ```
+
+#### Window::getBkcolor()
+
+- **用途：** 获取窗口当前背景颜色值。
+
+- **参数：** 无。
+
+- **返回值：** 背景色 (`COLORREF`)。
+
+- **行为细节：** 如窗口正使用背景图片，该颜色通常仍然返回最近设置的颜色值，但当前绘制时被背景图覆盖。
+
+- **示例：**
+
+  ```c++
+  COLORREF c = mainWin.getBkcolor();
+  ```
+
+#### Window::getBkImage()
+
+- **用途：** 获取窗口当前使用的背景图像对象。
+
+- **参数：** 无。
+
+- **返回值：** 指向背景 `IMAGE` 对象的指针，若无背景图片则可能返回 `nullptr`。
+
+- **行为细节：** 返回的 `IMAGE*` 受窗口内部管理，**请勿修改或释放**。仅用于只读场景（如根据背景图大小做布局等）。
+
+- **示例：**
+
+  ```c++
+  IMAGE* bg = mainWin.getBkImage();
+  if(bg) 
+  {
+      // 例如：获取背景图宽高
+      int bgW = bg->getwidth();
+      int bgH = bg->getheight();
+  }
+  ```
+
+#### Window::getHwnd()
+
+- **用途：** 获取窗口的操作系统句柄 (`HWND`)。
+
+- **参数：** 无。
+
+- **返回值：** Windows 窗口句柄 (`HWND`)。
+
+- **行为细节：** 这个句柄可用于调用底层 Win32 API 以实现框架未提供的窗口级功能。通常不建议直接操作窗口句柄，除非高级需求（如修改窗口样式等）。
+
+- **示例：**
+
+  ```c++
+  HWND hWnd = mainWin.getHwnd();
+  // 调用 Win32 API，例如改变窗口图标:
+  SendMessage(hWnd, WM_SETICON, ICON_BIG, (LPARAM)hIcon);
+  ```
+
+#### Window::getControls()
+
+- **用途：** 获取对窗口内所有顶级控件容器的引用列表。
+
+- **参数：** 无。
+
+- **返回值：** `std::vector<std::unique_ptr<Control>>&`，窗口管理的控件列表引用。
+
+- **行为细节：** 返回窗口内部维护的控件容器，可以遍历其中的元素指针来检查或调试当前有哪些控件已经添加。请勿尝试修改此列表（例如插入/删除），以免破坏框架内部状态。
+
+- **示例：**
+
+  ```c++
+  for(const auto& ctrl : mainWin.getControls())
+  {
+      std::cout << typeid(*ctrl).name() << std::endl;
+  }
+  ```
+
+## Canvas 类 (容器控件)
+
+**描述：** `Canvas` 是一个容器类控件，用于分组和管理子控件。它自身也是一个可见控件，可以绘制背景和边框。典型用途是作为**布局面板**：将多个子控件添加到 Canvas 中，由 Canvas 统一处理子控件的事件分发和绘制顺序。Canvas 支持多种布局模式（绝对定位或简单的水平/垂直布局），从而简化界面布局工作。
+
+**特性：**
+
+- 支持四种矩形形状（矩形、圆角矩形，以及各自的无边框版本）作为容器外观，可设置边框有无和圆角程度等。
+- 提供自定义的填充方式（纯色填充或背景图片）和边框样式（颜色、线型、线宽）。
+- 自动管理子控件：接管子控件的生命周期，在 Canvas 析构时自动销毁其中的控件；同时在事件发生时将事件传递给合适的子控件处理。
+- 支持嵌套容器结构：Canvas 本身也可作为另一个 Canvas 的子控件，实现复杂布局。
+- 简易布局能力：当前支持**绝对布局**（通过直接设置子控件坐标）。**水平盒子HBox/垂直盒子VBox布局**）、Grid、Flow、Stack 等布局类型目前预留。
+
+### 公共成员函数
+
+#### Canvas() / Canvas(int x, int y, int width, int height) (构造函数)
+
+- **用途：** 创建一个容器控件。可以使用默认构造函数创建一个不可见的 Canvas，然后通过属性进行设置；也可以直接指定位置和尺寸进行构造。
+
+- **参数：**
+
+  - `x, y`：Canvas 左上角在父容器中的坐标（int）。
+  - `width, height`：Canvas 初始宽度和高度（int）。
+
+- **返回值：** 无（构造函数）。
+
+- **行为细节：** 默认构造的 Canvas 初始化为0大小，需要手动设置尺寸；指定坐标/尺寸的构造函数则创建一个相应大小的可见容器。Canvas 默认布局模式为 `LayoutKind::Absolute`（绝对定位），可通过其 `layoutKind` 属性改变（当前仅支持 HBox/VBox）。构造完成后，可使用 `addControl()` 添加子控件。
+
+- **示例：**
+
+  ```c++
+  Canvas panel(50, 50, 300, 200); // 在父容器(或窗口)坐标(50,50)处建立300x200的面板
+  panel.setCanvasBkColor(LIGHTGRAY);
+  ```
+
+#### Canvas::addControl(std::unique_ptr<Control> control)
+
+- **用途：** 将一个控件添加到当前 Canvas 容器中。
+
+- **参数：** `control`，要添加的控件的 `unique_ptr`。
+
+- **返回值：** 无。
+
+- **行为细节：** 调用此函数会将子控件纳入 Canvas 的管理：Canvas 会将子控件指针存入内部列表，并自动调用 `control->setParent(this)` 设定父子关系。添加后，子控件的位置以 Canvas 的左上角为参考原点（即其 `getLocalX()/getLocalY()` 会以Canvas为基准）。Canvas 不会自动布局绝对定位的子控件——需要手动设置其坐标；但如果Canvas使用 HBox/VBox布局模式，则添加控件后会按布局规则重新排列子控件位置。
+
+- **示例：**
+
+  ```c++
+  auto txt = std::make_unique<Label>(0, 0, "Hello");
+  canvas.addControl(std::move(txt)); // Label 将添加到 canvas 容器内
+  ```
+
+#### Canvas::clearAllControls()
+
+- **用途：** 移除并销毁 Canvas 容器内的所有子控件。
+
+- **参数：** 无。
+
+- **返回值：** 无。
+
+- **行为细节：** 该方法会遍历并删除内部保存的每个子控件指针（智能指针会自动析构对象），然后清空列表。在需要动态刷新界面或更换整个面板内容时很有用。**注意：** 移除控件后，相应控件不再显示，且其内存会被释放。
+
+- **示例：**
+
+  ```c++
+  canvas.clearAllControls(); // 清空所有已添加的子控件
+  ```
+
+#### Canvas::setShape(StellarX::ControlShape shape)
+
+- **用途：** 设置 Canvas 容器的外形（形状和边框类型）。
+
+- **参数：** `shape`，`ControlShape` 枚举值，指定容器的形状和边框样式。
+
+- **返回值：** 无。
+
+- **行为细节：** `ControlShape` 定义了多种形状，如有边框矩形、无边框矩形、有边框圆角矩形、无边框圆角矩形、圆形/椭圆等。调用此方法会改变 Canvas 在绘制时的外轮廓形状（例如如果设为圆角矩形，则绘制圆角边框等）。默认形状为 `ControlShape::RECTANGLE`（有边框矩形）。设置后应将 Canvas 标记 `dirty` 以便下次重绘呈现新形状。
+
+- **示例：**
+
+  ```c++
+  canvas.setShape(StellarX::ControlShape::B_ROUND_RECTANGLE); // 设置为无边框圆角矩形
+  ```
+
+#### Canvas::setCanvasFillMode(StellarX::FillMode mode)
+
+- **用途：** 设置 Canvas 背景的填充模式。
+
+- **参数：** `mode`，`FillMode` 枚举值。该枚举定义了背景填充方式，如纯色填充 (`Solid`)、填充当前背景图 (`Image`)、使用网格/线条图案等。
+
+- **返回值：** 无。
+
+- **行为细节：** 缺省为纯色填充。如果设置为 `Image`，则 Canvas 会使用其当前设置的背景图像绘制自身背景（可通过 Canvas 继承的接口设置背景图）。修改填充模式后需要重绘以生效。
+
+- **示例：**
+
+  ```c++
+  canvas.setCanvasFillMode(StellarX::FillMode::Solid); // 背景纯色填充
+  ```
+
+#### Canvas::setBorderColor(COLORREF color)
+
+- **用途：** 设置 Canvas 边框颜色。
+
+- **参数：** `color`，颜色值 (`COLORREF`)。
+
+- **返回值：** 无。
+
+- **行为细节：** 仅当 Canvas 当前形状含有边框时（如 `RECTANGLE` 或 `ROUND_RECTANGLE` 等），此颜色才会在绘制时用于边框。默认边框颜色通常为黑色。
+
+- **示例：**
+
+  ```c++
+  canvas.setBorderColor(RGB(0, 128, 255)); // 边框设置为蓝色
+  ```
+
+#### Canvas::setCanvasBkColor(COLORREF color)
+
+- **用途：** 设置 Canvas 背景色。
+
+- **参数：** `color`，颜色值 (`COLORREF`)，将用作容器区域的背景填充颜色。
+
+- **返回值：** 无。
+
+- **行为细节：** 若当前填充模式为纯色，则此颜色将用于填充整个 Canvas 区域背景；如果填充模式为图像且无背景图可用，也会退化使用此颜色填充。更改背景色后，需要重绘 Canvas 才能看到效果（框架会自动标记重绘）。
+
+- **示例：**
+
+  ```c++
+  canvas.setCanvasBkColor(DARKGRAY);
+  ```
+
+#### Canvas::setCanvasLineStyle(StellarX::LineStyle style)
+
+- **用途：** 设置 Canvas 边框线条的样式。
+
+- **参数：** `style`，`LineStyle` 枚举值（实线、虚线、点线等）。
+
+- **返回值：** 无。
+
+- **行为细节：** 当 Canvas 绘制边框时，将使用指定的线型来绘制。该属性可影响边框的视觉效果，比如 `LineStyle::Solid` 是实线（默认），`LineStyle::Dash` 是虚线等。
+
+- **示例：**
+
+  ```c++
+  canvas.setCanvasLineStyle(StellarX::LineStyle::Dash);
+  ```
+
+#### Canvas::setLinewidth(int width)
+
+- **用途：** 设置 Canvas 边框线条的宽度（粗细）。
+
+- **参数：** `width`，线宽，单位像素。
+
+- **返回值：** 无。
+
+- **行为细节：** 边框宽度默认为1像素。设置较大的值可以绘制厚边框。若 Canvas 当前为无边框形状，则此设置暂不生效，直到形状切换为有边框类型。
+
+- **示例：**
+
+  ```c++
+  canvas.setLinewidth(3); // 边框加粗为3像素
+  ```
+
+#### Canvas::setIsVisible(bool visible) (override)
+
+- **用途：** 重载自 `Control::setIsVisible`，用于显示或隐藏整个容器以及其内的所有子控件。
+
+- **参数：** `visible` 布尔值，`true` 显示容器，`false` 隐藏容器。
+
+- **返回值：** 无。
+
+- **行为细节：** 除了改变自身的可见状态外，`Canvas::setIsVisible` 会对容器内的每个子控件调用相同的 `setIsVisible(visible)`，确保子控件的可见性与容器保持一致。也就是说，隐藏一个 Canvas 容器将递归地隐藏其所有内容，重新显示则会显示全部内容。
+
+- **示例：**
+
+  ```c++
+  canvas.setIsVisible(false); // 隐藏整个容器和子控件
+  ```
+
+#### Canvas::setDirty(bool dirty) (override)
+
+- **用途：** 重载自 `Control::setDirty`，将容器及其子控件标记为需要重绘。
+
+- **参数：** `dirty` 布尔值，`true` 标记需要重绘。
+
+- **返回值：** 无。
+
+- **行为细节：** 当对 Canvas 容器调用 `setDirty(true)` 时，Canvas 自身和它包含的所有子控件都会在下一帧进行重绘。这在容器整体移动或背景改变时非常有用。通常框架会自动处理大部分情况，开发者很少需要手动调用。
+
+- **示例：**
+
+  ```c++
+  canvas.setDirty(true); // 整个容器及子元素将在下一次刷新时重绘
+  ```
+
+#### Canvas::onWindowResize() (override)
+
+- **用途：** 重载 `Control::onWindowResize`，在父窗口大小改变时进行处理，并将通知传递给所有子控件。
+- **参数：** 无。
+- **返回值：** 无。
+- **行为细节：** `Canvas` 覆盖该方法以在窗口尺寸变化时：首先调用自身基类逻辑处理（例如丢弃背景快照），然后遍历调用所有子控件的 `onWindowResize()`，使子控件也能感知到窗口的变化。这可确保在窗口尺寸变化后，容器内部布局能够更新（例如 HBox/VBox 布局会在下次绘制时自动重新计算排列）。
+- **示例：** *该方法由框架自动调用，无需用户直接使用。*
+
+#### Canvas::model() const (override)
+
+- **用途：** 判断 Canvas 是否为模态对话框容器。此方法是 `Dialog` 类特有的接口，在 Canvas 中不适用，恒定返回 false。
+- **参数：** 无。
+- **返回值：** `false`。
+- **行为细节：** 普通 Canvas 不是对话框，所以这个方法始终返回 false。可以忽略。
 
 ### 示例
 
-下面是一个使用 Table 控件的示例代码[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/README.md#L268-L276)[GitHub](https://github.com/Ysm-04/StellarX/blob/95149238e221b19a15bfa750bcf937620e23fd47/README.md#L278-L286)，演示如何创建表格、设置表头和数据、配置分页，并将其添加到窗口中显示：
+```c++
+// 创建一个 Canvas 容器并添加子控件示例
+Canvas panel(10, 10, 400, 300);
+panel.setCanvasBkColor(LIGHTGRAY);
+panel.setShape(StellarX::ControlShape::ROUND_RECTANGLE);
+panel.setLinewidth(2);
+panel.setBorderColor(BLACK);
 
-```
-// 创建一个表格控件，位置在 (50, 50)
-auto myTable = std::make_unique<Table>(50, 50);
+// 向 Canvas 添加几个按钮，假设已创建 mainWin Window
+auto btn1 = std::make_unique<Button>(20, 20, 80, 30, "Btn1");
+auto btn2 = std::make_unique<Button>(20, 60, 80, 30, "Btn2");
+panel.addControl(std::move(btn1));
+panel.addControl(std::move(btn2));
 
-// 设置表头（列名称）
-myTable->setHeaders({ "ID", "姓名", "年龄", "职业" });
-
-// 添加数据行
-myTable->setData({ "1", "张三", "25", "工程师" });
-myTable->setData({ "2", "李四", "30", "设计师" });
-myTable->setData({ "3", "王五", "28", "产品经理" });
-
-// 设置每页显示2行数据
-myTable->setRowsPerPage(2);
-
-// 设置表格文本和样式
-myTable->textStyle.nHeight = 16;                      // 文本字体高度
-myTable->setTableBorder(RGB(50, 50, 50));             // 表格边框颜色（深灰）
-myTable->setTableBk(RGB(240, 240, 240));              // 表格背景色（浅灰）
-
-// 将表格控件添加到主窗口（假设 mainWindow 已创建）
-mainWindow.addControl(std::move(myTable));
+// 将 Canvas 添加到主窗口
+mainWin.addControl(std::make_unique<Canvas>(panel));
 ```
 
-上述代码首先创建了一个 Table 实例，并依次设置表头和三行示例数据。接着将每页行数设为2行，这意味着数据将分页为两页（3条数据在每页2行的设置下将分两页显示）。然后调整了文本样式和颜色，将字体高度设为16像素，边框颜色设为灰色，背景色设为浅灰，以定制表格外观。最后，将配置好的表格控件添加到主窗口中，使其随着窗口一起绘制和响应用户操作。在实际应用中，添加控件后通常需要调用主窗口的 `draw()` 来绘制界面，及调用 `runEventLoop()` 进入消息循环以响应用户交互。通过上述流程，开发者即可在应用程序窗口中成功集成并显示一个功能完善的分页表格控件。
+## Label 类 (静态文本标签)
 
-以上即为 StellarX 框架各主要组件的接口说明和使用方法。通过这些类和函数，开发者可以组合出完整的 GUI 应用。请注意，StellarX 基于 EasyX 实现，适用于 Windows 平台的教学和轻量工具开发场景。使用时需要确保 EasyX 图形库已初始化，并在应用结束前调用 `closegraph()` 释放图形资源。
+**描述：** `Label` 是用于显示静态文本的控件，不可交互。它可以在界面上显示一段文字，支持设置文字颜色、背景颜色以及背景透明与否等样式属性。Label 适合作为界面上的说明文字、标题文本或提示信息等。其特点是重量轻、无额外事件处理开销。
 
+**特性：**
+
+- 支持背景透明或不透明两种显示模式，可根据需要在文字后显示控件下层背景。
+- 提供完整的文本样式控制：包括字体、字号、颜色、粗体/斜体等效果（通过公开的 `textStyle` 成员结构进行设置）。
+- Label 会根据其文本内容自动调整显示（例如计算文本所占区域大小，用于布局）。
+- Label 本身不处理用户输入事件，因此不会干扰其他控件的交互。绘制简单高效。
+
+### 公共成员函数
+
+#### Label() / Label(int x, int y, std::string text = "标签", COLORREF textColor = BLACK, COLORREF bkColor = RGB(255,255,255)) (构造函数)
+
+- **用途：** 创建一个文本标签控件。可以使用默认构造然后设置属性，或直接指定位置、文本和颜色进行构造。
+
+- **参数：**
+
+  - `x, y`：Label 左上角位置坐标。
+  - `text`：初始显示的文本内容（默认为“标签”）。
+  - `textColor`：文本颜色（可选，默认黑色）。
+  - `bkColor`：背景颜色（可选，默认白色）。
+
+- **返回值：** 无。
+
+- **行为细节：** 构造函数根据提供的信息初始化 Label。若使用默认构造，则须调用 `setText()` 等设置内容。Label 初始背景不透明，如果需要透明背景需调用 `setTextdisap(true)` 开启。位置坐标相对于父容器或窗口。
+
+- **示例：**
+
+  ```c++
+  Label title(100, 20, "Hello, World", BLACK, WHITE);
+  title.setTextdisap(true); // 背景透明
+  ```
+
+#### Label::setText(const std::string& text)
+
+- **用途：** 设置 Label 显示的文本内容。
+
+- **参数：** `text`，新的文本字符串。
+
+- **返回值：** 无。
+
+- **行为细节：** 更新 Label 的内部文本，并将控件标记为需要重绘以显示新文本。如果文本长度发生变化，Label 本身尺寸不会自动改变——Label 始终按最初设定的大小显示文本，超出范围的文本将被裁剪或换行（Label 本身不自动换行，需显式增加 `'\n'`）。
+
+- **示例：**
+
+  ```c++
+  label.setText("欢迎使用 StellarX!");
+  ```
+
+#### Label::setTextBkColor(COLORREF color)
+
+- **用途：** 设置 Label 文本背景矩形区域的填充颜色。
+
+- **参数：** `color`，颜色值。
+
+- **返回值：** 无。
+
+- **行为细节：** 当 Label 背景不透明时，会使用该颜色填充文字背景区域。默认为白色。若 Label 背景被设置为透明（见 `setTextdisap`），则此颜色不会被绘制。更改背景色后需要刷新控件以生效（框架会自动重绘下一帧）。
+
+- **示例：**
+
+  ```c++
+  label.setTextBkColor(LIGHTBLUE);
+  ```
+
+#### Label::setTextdisap(bool transparent)
+
+- **用途：** 切换 Label 背景的透明/不透明模式。
+
+- **参数：** `transparent`，布尔值。`true` 表示背景透明，`false` 表示不透明（使用背景色填充）。
+
+- **返回值：** 无。
+
+- **行为细节：** 背景透明模式下，Label 绘制文字时不会覆盖底下的内容，文字周围区域完全透明；非透明模式下，则用当前背景色填充 Label 区域再绘制文字。默认情况下 Label 背景为不透明。设置透明后可再次设置回不透明以恢复背景色填充。
+
+- **示例：**
+
+  ```c++
+  label.setTextdisap(true); // 启用背景透明
+  ```
+
+#### Label::hide()
+
+- **用途：** 隐藏该 Label 控件。
+
+- **参数：** 无。
+
+- **返回值：** 无。
+
+- **行为细节：** 调用后，Label 将不再可见，相当于对该控件调用 `setIsVisible(false)`。框架将在下一次刷新时不绘制该 Label。可以通过 `setIsVisible(true)` 或将 Label 再次添加到父容器等方式使其重新可见。
+
+- **示例：**
+
+  ```c++
+  label.hide();
+  ```
+
+### 公共成员变量
+
+- **textStyle** (`StellarX::ControlText`)：Label 文本样式结构体，公有成员。包含字体名称、高度、宽度、颜色、斜体/下划线等属性。可以直接修改其中的字段自定义文本外观，例如 `label.textStyle.color = RED;` 改变文字颜色。修改后应将 Label 标记为需要重绘。
+
+### 示例
+
+```c++
+Label nameLabel(20, 20, "Name:", BLACK, WHITE);
+nameLabel.setTextdisap(false);                // 背景不透明
+nameLabel.setTextBkColor(RGB(240,240,240));   // 浅灰背景
+nameLabel.textStyle.lpszFace = "Consolas";    // 改变字体
+nameLabel.textStyle.nHeight = 20;             // 字号20
+nameLabel.textStyle.color = RGB(80,80,80);    // 深灰文字
+// 此时Name标签将以Consolas字体深灰色显示在浅灰底上
+```
+
+## Button 类 (按钮控件)
+
+**描述：** `Button` 是一个功能丰富的按钮控件，支持多种状态（普通、悬停、按下、禁用）和模式（普通按钮或切换开关）。它可以响应用户的鼠标点击等交互并触发回调。Button 的外观高度可定制，提供不同几何形状（矩形、圆角、圆形、椭圆）及多种视觉样式（颜色填充、图像背景等），适用于执行命令、切换某种状态等场景。
+
+**特性：**
+
+- **三种工作模式：** 支持**普通按钮**（每次点击触发一次动作）、**切换按钮**（两态开关，点击改变自身状态）以及**禁用**（不可交互）。
+- **八种外观形状：** 提供矩形、无边框矩形、圆角矩形、无边框圆角矩形、圆形、无边框圆形、椭圆、无边框椭圆八种形状。可通过参数选择是否绘制边框。
+- **多状态颜色：** 允许为默认状态、悬停状态、按下状态分别设定不同的前景/背景颜色，提供视觉反馈。
+- **多种填充模式：** 背景既可使用纯色，也可使用预设的填充图案或指定图像，实现丰富的按钮视觉效果。
+- **完整鼠标事件处理：** 能检测鼠标悬停、移出、按下、释放等事件并改变外观或触发回调。
+
+### 公共成员函数
+
+#### Button(int x, int y, int width, int height, const std::string& text = "", StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE) (构造函数 1)
+
+- **用途：** 创建一个按钮控件，指定位置、尺寸、显示文本，可选按钮模式和形状。
+
+- **参数：**
+
+  - `x, y`：按钮左上角坐标。
+  - `width, height`：按钮宽度和高度。
+  - `text`：按钮上显示的文字（默认为空字符串，即无文字）。
+  - `mode`：按钮工作模式，`ButtonMode` 枚举，默认普通按钮 (`NORMAL`)，可设为 `TOGGLE`（切换按钮）。
+  - `shape`：按钮外形，`ControlShape` 枚举，默认有边框矩形。
+
+- **返回值：** 无。
+
+- **行为细节：** 此构造函数创建一个具有默认颜色方案的按钮。普通模式下按钮每次点击触发一次点击事件；切换模式下按钮具有“按下/释放”两种状态，每次点击切换状态。按钮形状参数决定按钮是圆形、矩形还是其他形状，并结合边框有无。
+
+- **示例：**
+
+  ```c++
+  Button okBtn(50, 100, 80, 30, "OK", ButtonMode::NORMAL, ControlShape::RECTANGLE);
+  ```
+
+#### Button(int x, int y, int width, int height, const std::string& text, COLORREF colorDefault, COLORREF colorPressed, StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE) (构造函数 2)
+
+- **用途：** 创建一个按钮，并自定义其默认和按下状态的底色。
+
+- **参数：**
+
+  - 前四项 `x, y, width, height, text` 同上。
+  - `colorDefault`：按钮未被按下时的背景填充颜色。
+  - `colorPressed`：按钮被按下时的背景填充颜色。
+  - `mode`：按钮模式（默认普通）。
+  - `shape`：按钮形状（默认有边框矩形）。
+
+- **返回值：** 无。
+
+- **行为细节：** 按钮在不同状态下会采用不同颜色，此构造允许直接设置普通和按下两种状态的颜色。悬停状态默认会使用介于两者之间的一个中间色（或通过内部算法计算），可通过进一步函数调用调整。文本颜色默认黑色，可另行设置。
+
+- **示例：**
+
+  ```c++
+  Button toggleBtn(10, 10, 60, 25, "On/Off", GREEN, RED, ButtonMode::TOGGLE);
+  // 未按下显示绿色，按下显示红色
+  ```
+
+#### Button(int x, int y, int width, int height, const std::string& text, COLORREF colorDefault, COLORREF colorPressed, COLORREF colorHover, StellarX::ButtonMode mode = StellarX::ButtonMode::NORMAL, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE) (构造函数 3)
+
+- **用途：** 创建一个按钮，手动指定普通、按下、悬停三种状态下的背景颜色。
+
+- **参数：**
+
+  - 前五项同上（含 `text`）。
+  - `colorDefault`：默认背景色。
+  - `colorPressed`：按下时背景色。
+  - `colorHover`：鼠标悬停时背景色。
+  - `mode`：模式（默认普通）。
+  - `shape`：形状（默认矩形）。
+
+- **返回值：** 无。
+
+- **行为细节：** 提供了对三态颜色的完全控制。若未单独指定悬停色（使用前一个构造），按钮内部会自动生成一个悬停颜色；使用此构造则以提供的 `colorHover` 为准。其它属性同上。
+
+- **示例：**
+
+  ```c++
+  Button customBtn(100,100,100,40,"Custom", RGB(0,200,0), RGB(0,150,0), RGB(0,220,0));
+  ```
+
+#### Button::setOnClickListener(const std::function<void()>&& callback)
+
+- **用途：** 为按钮设置点击事件的回调函数。当按钮在普通模式下被点击（或在切换模式下从未按下状态点击）时，将调用此回调。
+
+- **参数：** `callback`，一个无参数、无返回值的函数对象（`std::function<void()>`），可以是lambda或函数指针等。
+
+- **返回值：** 无。
+
+- **行为细节：** 一旦设置回调，当用户用鼠标左键点击按钮且该按钮事件被识别时，框架将在处理事件时自动执行此回调函数。请确保回调中执行的操作不会阻塞过久（以免影响UI响应）。可多次调用此方法更改回调，以最后一次设置为准。
+
+- **示例：**
+
+  ```c++
+  okBtn.setOnClickListener([](){
+      std::cout << "OK button clicked!" << std::endl;
+  });
+  ```
+
+#### Button::setOnToggleOnListener(const std::function<void()>&& callback)
+
+- **用途：** 为**切换模式**按钮设置“开启”状态的回调。当按钮由非按下状态转变为按下状态（切换打开）时调用。
+
+- **参数：** `callback`，`std::function<void()>` 类型的回调。
+
+- **返回值：** 无。
+
+- **行为细节：** 仅当按钮模式为 `TOGGLE` 时有效。当用户点击按钮使其进入“按下”（ON）状态时执行。典型用途如切换某功能开启：可以在回调中实现“打开”动作逻辑。
+
+- **示例：**
+
+  ```c++
+  toggleBtn.setOnToggleOnListener([](){
+      turnFeatureOn();
+  });
+  ```
+
+#### Button::setOnToggleOffListener(const std::function<void()>&& callback)
+
+- **用途：** 为**切换模式**按钮设置“关闭”状态的回调。当按钮由按下状态变为弹起状态（切换关闭）时调用。
+
+- **参数：** `callback`，`std::function<void()>` 类型的回调。
+
+- **返回值：** 无。
+
+- **行为细节：** 仅用于 `TOGGLE` 模式按钮。当用户再次点击按钮使其从ON状态切换回OFF状态时执行。例如关闭某项功能的逻辑应放在此回调中。
+
+- **示例：**
+
+  ```c++
+  toggleBtn.setOnToggleOffListener([](){
+      turnFeatureOff();
+  });
+  ```
+
+#### Button::setTooltipOffset(int dx, int dy)
+
+- **用途：** 设置按钮悬停提示框（Tooltip）相对于鼠标位置的偏移量。
+
+- **参数：** `dx, dy`，分别为提示框在X轴和Y轴方向的偏移像素。
+
+- **返回值：** 无。
+
+- **行为细节：** 当按钮启用了悬停提示（Tooltip）时，默认的提示框会在鼠标指针右下偏移一段距离显示。通过此函数可自定义偏移，`dx, dy` 为正表示向右下偏移。
+
+- **示例：**
+
+  ```c++
+  btn.setTooltipOffset(10, 15); // 提示框相对鼠标再向右10、下15像素
+  ```
+
+#### Button::setTooltipStyle(COLORREF textColor, COLORREF bkColor, bool transparent)
+
+- **用途：** 设置按钮悬停提示框的文本颜色、背景颜色和背景透明属性。
+
+- **参数：**
+
+  - `textColor`：提示文本颜色。
+  - `bkColor`：提示框背景填充颜色。
+  - `transparent`：是否背景透明，`true` 则提示框背景透明只显示文字。
+
+- **返回值：** 无。
+
+- **行为细节：** 可以定制提示框的外观，比如设置文字白色、背景黑色等。如果设为背景透明，则 `bkColor` 不起作用。调用此函数会立即影响后续出现的提示框样式。默认提示框样式通常为浅黄色背景、黑字、不透明。
+
+- **示例：**
+
+  ```c++
+  btn.setTooltipStyle(WHITE, BLUE, false); // 提示框白字蓝底
+  ```
+
+#### Button::setTooltipText(const std::string& text)
+
+- **用途：** 设置按钮的提示文本内容。
+
+- **参数：** `text`，字符串，新提示内容。
+
+- **返回值：** 无。
+
+- **行为细节：** 当鼠标悬停在按钮上一定时间，会出现一个小提示框显示此文本。默认情况下，若未设置提示文本，则会使用按钮自身的 `text` 作为提示。调用此函数可指定不同的提示内容。设为空字符串则表示不显示提示。
+
+- **示例：**
+
+  ```c++
+  btn.setTooltipText("点击此按钮提交表单");
+  ```
+
+#### Button::setTooltipTextsForToggle(const std::string& onText, const std::string& offText)
+
+- **用途：** 为切换模式按钮分别设置“开启状态”和“关闭状态”下悬停提示的文本。
+
+- **参数：**
+
+  - `onText`：按钮被按下（ON）时的提示文字。
+  - `offText`：按钮弹起（OFF）时的提示文字。
+
+- **返回值：** 无。
+
+- **行为细节：** 切换按钮可能在两种状态下需要不同提示信息，例如ON状态提示“点击关闭XXX”，OFF状态提示“点击开启XXX”。调用此函数分别提供两种状态的提示内容。调用后会覆盖先前通过 `setTooltipText` 设置的统一提示。
+
+- **示例：**
+
+  ```c++
+  toggleBtn.setTooltipTextsForToggle("当前已打开，点击关闭", "当前已关闭，点击开启");
+  ```
+
+### 示例
+
+```c++
+// 创建并设置一个按钮
+Button sendBtn(50, 50, 100, 40, "Send", BLUE, LIGHTBLUE, ButtonMode::NORMAL);
+sendBtn.setOnClickListener([](){
+    sendMessage();
+});
+sendBtn.setTooltipText("发送消息"); 
+sendBtn.setTooltipStyle(WHITE, BLACK, false);
+```
+
+## TextBox 类 (文本框控件)
+
+**描述：** `TextBox` 是一个单行文本输入框控件，支持用户输入和编辑文本，也可配置为只读模式用于显示不可编辑的文本内容。内部集成 EasyX 的输入框功能来处理文本输入，同时提供一定程度的外观定制。典型用途包括获取用户名、搜索框等。
+
+**特性：**
+
+- **输入/只读模式：** 提供两种模式，输入模式允许用户点击后弹出系统输入框录入文字，只读模式则显示文本但禁止用户修改。
+- **最大长度限制：** 可以设置输入文本的最大字符数，避免溢出。
+- **系统输入框集成：** 使用 Windows 输入法保证输入兼容性，通过 EasyX 的 `InputBox` 来获取用户输入。
+- **多种形状：** 支持矩形、圆角矩形等变体作为文本框边框形状，满足UI风格需求。
+
+### 公共成员函数
+
+#### TextBox(int x, int y, int width, int height, const std::string& text = "", StellarX::TextBoxMode mode = StellarX::TextBoxMode::INPUT) (构造函数)
+
+- **用途：** 创建一个文本框控件，指定位置、尺寸、初始文字和模式（输入或只读）。
+
+- **参数：**
+
+  - `x, y`：文本框左上角坐标。
+  - `width, height`：文本框宽度和高度。
+  - `text`：初始文本内容，默认空。
+  - `mode`：文本框模式，`TextBoxMode` 枚举，默认为可输入模式 (`INPUT`)，可选 `READONLY`。
+
+- **返回值：** 无。
+
+- **行为细节：** 构造时可提供一个初始显示文本（比如提示“请输入...”，或已有内容），以及模式。如果是 READONLY，则文本框不会响应点击输入，仅用于显示。默认背景为白色、有边框矩形。用户点击输入模式的文本框时，框架会自动调用 EasyX 的 `InputBox` 弹出输入对话框获取文本。
+
+- **示例：**
+
+  ```c++
+  TextBox nameField(100, 80, 150, 25, "", TextBoxMode::INPUT);
+  ```
+
+#### TextBox::setText(const std::string& text)
+
+- **用途：** 设置文本框当前显示的文本内容。
+
+- **参数：** `text`，字符串，新文本。
+
+- **返回值：** 无。
+
+- **行为细节：** 直接更改文本框内容，不经过用户输入。常用于初始化文本框内容或在程序运行过程中更新显示。若文本框当前是只读模式，则仅仅改变显示文字；如果是可输入模式，用户稍后仍可编辑/覆盖该文本。
+
+- **示例：**
+
+  ```c++
+  nameField.setText("Guest");
+  ```
+
+#### TextBox::getText() const
+
+- **用途：** 获取文本框当前包含的文本内容。
+
+- **参数：** 无。
+
+- **返回值：** `std::string`，文本框内容。
+
+- **行为细节：** 当用户通过输入框修改了文本，这里可以获取最新结果。即使在只读模式下，该方法也可以用于取得当前显示文本。
+
+- **示例：**
+
+  ```c++
+  std::string input = nameField.getText();
+  ```
+
+#### TextBox::setMaxCharLen(size_t len)
+
+- **用途：** 设置文本框可输入的最大字符数限制。
+
+- **参数：** `len`，最大字符长度。
+
+- **返回值：** 无。
+
+- **行为细节：** 通过此方法可以限制用户输入过长的文本。当调用 EasyX 输入框时，会将该值作为参数，确保用户不能输入超过指定长度的字符串（超过部分会被截断）。默认为某个内部预设值（例如 64）。
+
+- **示例：**
+
+  ```c++
+  nameField.setMaxCharLen(20); // 限制最多输入20字符
+  ```
+
+#### TextBox::setMode(StellarX::TextBoxMode mode)
+
+- **用途：** 切换文本框的工作模式：输入 (INPUT) 或只读 (READONLY)。
+
+- **参数：** `mode`，`TextBoxMode` 枚举值。
+
+- **返回值：** 无。
+
+- **行为细节：** 运行时调用此函数可以将文本框由可编辑切换为只读，或反之。切换为只读模式将禁止用户点击激活输入；切换为输入模式则恢复可交互。改变模式不会影响当前文本内容。
+
+- **示例：**
+
+  ```c++
+  nameField.setMode(TextBoxMode::READONLY); // 禁止编辑
+  ```
+
+### 示例
+
+```c++
+TextBox inputField(50, 50, 200, 25, "请输入名字");
+inputField.setMaxCharLen(30);
+inputField.setOnClickListener([](){
+    // TextBox 本身不支持直接 setOnClickListener，但可通过 handleEvent 处理
+});
+std::string text = inputField.getText(); // 读取用户输入结果
+```
+
+## Dialog 类 (对话框控件)
+
+**描述：** `Dialog` 是一个对话框控件，可以包含一段提示文本和若干按钮选项，支持模态和非模态两种显示方式。Dialog 通常通过 `MessageBox` 类的静态方法来创建并显示。它封装了对话框窗口的布局、按钮响应以及返回结果等逻辑。对话框可用于显示消息、警告、错误提示等，并收集用户的确认/取消等操作。
+
+**特性：**
+
+- 提供六种标准对话框类型（OK、YesNo、YesNoCancel 等），方便快速生成常用的确认提示框。
+- 支持**模态**（阻塞调用者直到对话框关闭）和**非模态**（对话框显示的同时程序继续运行，并通过回调获取结果）两种模式。
+- 自动根据文本长度和按钮数量计算窗口大小和布局，不需手工调整。
+- 内置背景快照保存与恢复机制，使对话框弹出时界面不闪烁，在关闭时恢复原界面。
+- 在使用工厂方法 (`MessageBox`) 创建时，框架会自动防止重复弹出相同内容的对话框。
+
+### 公共成员函数
+
+#### Dialog(Window& parent, const std::string& caption, const std::string& message = "对话框", StellarX::MessageBoxType type = StellarX::MessageBoxType::OK) (构造函数)
+
+- **用途：** 创建一个对话框控件，指定所属父窗口、标题、消息内容和对话框类型（按钮组合）。
+- **参数：**
+  - `parent`：所属的主窗口引用。对话框将以此窗口为依附。
+  - `caption`：对话框标题文本。
+  - `message`：对话框主体消息文本。默认显示“对话框”。
+  - `type`：对话框类型，`MessageBoxType` 枚举值，决定包含哪些按钮选项（如 `OK`、`YesNo` 等）。默认是 OK 型只有一个确定按钮。
+- **返回值：** 无。
+- **行为细节：** 构造函数根据 `type` 创建相应数量和文本的按钮，并布局在对话框底部；将 `message` 文本放置在对话框中部区域显示。对话框本身是一个特殊的窗口内控件，位置通常在窗口中央。一般不直接调用构造函数生成对话框，而通过 `MessageBox::showModal` 或 `showAsync` 来创建并显示。
+- **示例：** *通常由 MessageBox 调用，无需直接使用。*
+
+#### Dialog::draw() (override)
+
+- **用途：** 绘制对话框，包括背景、文本和按钮。
+- **参数：** 无。
+- **返回值：** 无。
+- **行为细节：** `Dialog::draw()` 会绘制对话框自身的半透明背景遮罩（模态情况下）或边框，以及内部的消息文本和按钮控件。模态对话框绘制时会首先绘制窗口的背景快照，然后叠加对话框内容，以突出对话框。用户无需直接调用，由框架自动处理。
+
+#### Dialog::handleEvent(const ExMessage& msg) (override)
+
+- **用途：** 处理对话框内部的按钮点击等事件。
+- **参数：** `msg`，事件消息。
+- **返回值：** `bool`，指示事件是否被对话框消费。
+- **行为细节：** Dialog 实现的 `handleEvent` 会将点击事件分派给其包含的按钮，并根据按钮（如“确定”或“取消”）点击来设置对话框结果。如果对话框在模态显示，则点击后会结束模态循环返回结果；如果是非模态，则会通过事先注册的回调函数传递结果。
+
+#### Dialog::model() const (override)
+
+- **用途：** 指示对话框是否为模态。
+- **参数：** 无。
+- **返回值：** `bool`，模态对话框返回 true，非模态返回 false。
+- **行为细节：** 框架根据 Dialog 的创建方式设置这个标志。模态对话框在 `showModal` 中创建，非模态在 `showAsync` 创建。这个标志用于在事件循环中判断是否需要拦截底层窗口的其他控件事件（当存在模态对话框时，底层控件事件被暂停）。
+
+#### Dialog::getResult()
+
+- **用途：** 获取对话框的返回结果。
+- **参数：** 无。
+- **返回值：** `MessageBoxResult` 枚举值，表示用户在对话框上最后点击的按钮结果。如 OK、Cancel、Yes、No 等。
+- **行为细节：** 仅对模态对话框有意义。在模态 `MessageBox::showModal` 返回前，会将结果保存在 Dialog 对象中并返回给调用者。在非模态模式下结果通过回调获得，这个函数不被直接使用。
+
+### 示例
+
+```c++
+// （一般不直接使用Dialog类，而是通过MessageBox）
+// 这里演示非模态对话框的手动创建和添加：
+Dialog* dlg = new Dialog(mainWin, "标题", "内容", MessageBoxType::YesNo);
+mainWin.addDialog(std::unique_ptr<Dialog>(dlg));
+// Dialog 将显示，用户点击按钮后自动销毁。结果可通过 dlg->getResult() 查询或回调获取。
+```
+
+## MessageBox 工具类
+
+**描述：** `MessageBox` 提供简化的对话框创建接口，以**静态方法**的形式让用户快速弹出消息框，而不必直接操纵 `Dialog` 类。它支持模态对话框（阻塞式）和非模态对话框（异步通过回调）。典型调用非常简洁，例如一行代码即可弹出一个“确认”对话框等待用户点确定。
+
+**特性：**
+
+- 静态方法调用，无需实例化对象即可使用，方便全局调用。
+- 自动处理模态与非模态的区别逻辑；模态对话框会阻塞等待结果，非模态则立即返回并通过回调在用户选择后得到结果。
+- 与 `Window` 紧密集成：MessageBox 内部会使用主窗口的对话框管理机制，确保一个窗口内不会重复弹出相同内容的对话框。
+- 提供防重复弹出的机制：对于内容相同的非模态提示，第二次调用时可以选择不再弹出新的。
+
+### 公共静态函数
+
+#### MessageBox::showModal(Window& wnd, const std::string& text, const std::string& caption = "提示", MessageBoxType type = MessageBoxType::OK)
+
+- **用途：** 弹出一个**模态**对话框，阻塞当前线程直到用户关闭对话框，并返回用户选择的结果。
+
+- **参数：**
+
+  - `wnd`：所属的 `Window` 引用，指定在哪个主窗口中弹出对话框。
+  - `text`：对话框显示的主体消息文本。
+  - `caption`：对话框标题（可选，默认为“提示”）。
+  - `type`：对话框类型（可选，`MessageBoxType` 枚举，默认为 `OK` 类型）。
+
+- **返回值：** `MessageBoxResult` 枚举，表示用户点击的按钮结果。如 `MessageBoxResult::OK`、`MessageBoxResult::Cancel` 等。
+
+- **行为细节：** 该函数在内部创建一个 `Dialog` 对象，配置好内容和按钮后，以模态形式显示。调用线程将被阻塞，进入一个内部消息循环，只响应对话框相关事件，直到用户点击按钮或关闭对话框。然后函数返回相应结果。模态对话框期间，父窗口的其他控件将暂时失去响应（被遮罩）。这是一个同步调用，简单易用。
+
+- **示例：**
+
+  ```c++
+  MessageBoxResult res = MessageBox::showModal(mainWin, "确定要退出吗？", "退出确认", MessageBoxType::YesNo);
+  if(res == MessageBoxResult::Yes) {
+      // 用户选择是，执行退出逻辑
+  }
+  ```
+
+#### MessageBox::showAsync(Window& wnd, const std::string& text, const std::string& caption = "提示", MessageBoxType type = MessageBoxType::OK, std::function<void(MessageBoxResult)> onResult = nullptr)
+
+- **用途：** 以**非模态**方式弹出一个对话框，函数会立即返回，同时通过回调函数异步获取用户选择结果。
+
+- **参数：**
+
+  - `wnd`：所属的 `Window` 引用。
+  - `text`：消息文本。
+  - `caption`：标题文本（默认为“提示”）。
+  - `type`：对话框类型（默认为 OK）。
+  - `onResult`：结果回调，可选。类型为 `std::function<void(MessageBoxResult)>`。当用户点击按钮关闭对话框时，框架将调用此回调并传入结果。如果传入 `nullptr` 则不使用回调。
+
+- **返回值：** 无。
+
+- **行为细节：** 函数立即返回，调用线程不会阻塞。对话框以非模态形式显示，父窗口上的其它控件仍可交互（除非对话框独占区域）。当用户做出选择（点击按钮）或关闭对话框时，如果提供了回调，则调用之并传递结果枚举。同时，对话框对象自行销毁。内部使用 `Window::addDialog()` 添加对话框到窗口管理。框架具有**去重**机制：如果当前已有一个内容完全相同的非模态对话框未关闭，再次调用 `showAsync` 时将避免弹出新的（即函数会直接返回且不再创建新对话框）。
+
+- **示例：**
+
+  ```c++
+  MessageBox::showAsync(mainWin, "文件保存成功！", "通知", MessageBoxType::OK, 
+      [](MessageBoxResult res){
+          // 非模态对话框关闭时的回调逻辑
+          if(res == MessageBoxResult::OK) {
+              // 用户点了OK
+          }
+      });
+  ```
+
+## TabControl 类 (选项卡容器控件)
+
+**描述：** `TabControl` 是一个选项卡容器控件，管理"页签按钮 + 对应页面(Canvas)"的配对组合。它提供页签栏在四个方向的布局（上/下/左/右）、选中切换功能以及页内容区域的精确定位。该控件支持窗口大小变化时的自适应、可见性联动与脏区重绘，是在同一区域内承载多张页面的理想解决方案。
+
+**特性：**
+
+- **四向页签布局：** 支持页签栏在顶部、底部、左侧、右侧四种排列方式。
+- **页签-页面配对管理：** 每个选项卡由按钮页签和对应的Canvas页面组成，支持一键添加。
+- **智能切换机制：** 与Button的TOGGLE模式深度集成，点击页签自动显示/隐藏对应页面。
+- **自适应布局：** 自动计算页签和页面区域，响应窗口大小变化。
+- **子控件管理：** 支持为特定页签添加子控件，自动处理坐标转换。
+- **状态管理：** 提供当前激活页签的索引获取和设置功能。
+
+### 公共成员函数
+
+#### TabControl() (构造函数 1)
+
+- **用途：** 创建一个默认的TabControl控件，使用默认位置和尺寸。
+
+- **参数：** 无
+
+- **返回值：** 无
+
+- **行为细节：** 此构造函数创建一个位置和尺寸为默认值的TabControl。控件ID设置为"TabControl"，页签默认排列在顶部，页签栏高度使用默认值。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  TabControl tabCtrl;
+  ```
+
+  
+
+#### TabControl(int x, int y, int width, int height) (构造函数 2)
+
+- **用途：** 创建一个指定位置和尺寸的TabControl控件。
+
+- **参数：**
+
+  - `x, y`：控件左上角坐标
+  - `width, height`：控件的宽度和高度
+
+- **返回值：** 无
+
+- **行为细节：** 使用指定位置和尺寸创建TabControl，控件ID设置为"TabControl"，页签默认排列在顶部，页签栏高度使用默认值。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  TabControl tabCtrl(10, 10, 400, 300);
+  ```
+
+  
+
+#### ~TabControl() (析构函数)
+
+- **用途：** 销毁TabControl实例并释放相关资源。
+- **参数：** 无
+- **返回值：** 无
+- **行为细节：** 自动清理所有页签按钮和页面Canvas对象，确保无内存泄漏。
+
+#### void draw() override
+
+- **用途：** 绘制TabControl及其所有子控件。
+
+- **参数：** 无
+
+- **返回值：** 无
+
+- **行为细节：** 重写Canvas的draw方法。首先检查脏标志和可见性，如果需要重绘，则先保存/恢复背景，然后调用基类绘制方法，最后绘制所有页签按钮和当前可见的页面。绘制完成后重置脏标志。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.draw();
+  ```
+
+  
+
+#### bool handleEvent(const ExMessage& msg) override
+
+- **用途：** 处理输入事件并分发给子控件。
+
+- **参数：**
+
+  - `msg`：输入事件消息
+
+- **返回值：** `bool` - 如果事件被消费返回true，否则返回false
+
+- **行为细节：** 将事件依次传递给所有页签按钮和当前可见的页面进行处理。如果有任何子控件消费了事件，则立即返回true。如果控件状态变脏，会请求重绘。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  ExMessage msg;
+  if (tabCtrl.handleEvent(msg))
+  {
+      // 事件已被处理
+  }
+  ```
+
+  
+
+#### void add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&& control)
+
+- **用途：** 添加一个页签和对应的页面到TabControl。
+
+- **参数：**
+
+  - `control`：包含按钮页签和Canvas页面的pair对象，使用移动语义传递
+
+- **返回值：** 无
+
+- **行为细节：** 将新的页签-页面对添加到控件列表中，初始化页签栏和页面布局。为新页签设置父控件、启用工具提示、设置为切换模式，并注册切换状态的监听器。新添加的页面默认不可见。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  auto tabPair = std::make_pair(std::make_unique<Button>(), std::make_unique<Canvas>());
+  tabPair.first->setButtonText("Tab 1");
+  tabCtrl.add(std::move(tabPair));
+  ```
+
+  
+
+#### void add(std::string tabText, std::unique_ptr<Control> control)
+
+- **用途：** 为指定页签添加子控件。
+
+- **参数：**
+
+  - `tabText`：目标页签的文本标识
+  - `control`：要添加的子控件
+
+- **返回值：** 无
+
+- **行为细节：** 根据页签文本查找对应的页面Canvas，将子控件添加到该页面中。子控件的可见性会与目标页面同步。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  auto button = std::make_unique<Button>(20, 20, 80, 30, "Click me");
+  tabCtrl.add("Tab 1", std::move(button));
+  ```
+
+  
+
+#### void setTabPlacement(StellarX::TabPlacement placement)
+
+- **用途：** 设置页签的排列位置。
+
+- **参数：**
+
+  - `placement`：页签排列方式，为TabPlacement枚举值
+
+- **返回值：** 无
+
+- **行为细节：** 设置页签在顶部、底部、左侧或右侧排列，会触发页签栏和页面的重新布局，并标记控件为脏状态需要重绘。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.setTabPlacement(StellarX::TabPlacement::Left);
+  ```
+
+  
+
+#### void setTabBarHeight(int height)
+
+- **用途：** 设置页签栏的高度（对于左右排列时为宽度）。
+
+- **参数：**
+
+  - `height`：页签栏的新高度值
+
+- **返回值：** 无
+
+- **行为细节：** 修改页签栏的尺寸，触发页签栏和页面的重新布局，并标记控件为脏状态需要重绘。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.setTabBarHeight(30);
+  ```
+
+  
+
+#### void setIsVisible(bool visible) override
+
+- **用途：** 设置控件的可见性，并同步所有子控件的可见状态。
+
+- **参数：**
+
+  - `visible`：是否可见
+
+- **返回值：** 无
+
+- **行为细节：** 重写基类方法，首先调用Canvas的setIsVisible处理背景快照逻辑，然后设置自身可见性，最后同步所有页签按钮和页面的可见状态。页面设为不可见时会清除其背景快照。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.setIsVisible(false); // 隐藏整个TabControl及其所有子控件
+  ```
+
+  
+
+#### void onWindowResize() override
+
+- **用途：** 响应窗口大小变化事件。
+
+- **参数：** 无
+
+- **返回值：** 无
+
+- **行为细节：** 重写基类方法，调用父类的窗口大小变化处理，然后通知所有页签按钮和页面进行自适应调整。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.onWindowResize();
+  ```
+
+  
+
+#### int getActiveIndex() const
+
+- **用途：** 获取当前激活页签的索引。
+
+- **参数：** 无
+
+- **返回值：** `int` - 当前激活页签的索引，如果没有激活的页签返回-1
+
+- **行为细节：** 遍历所有页签按钮，返回第一个处于点击状态（激活状态）的页签索引。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  int activeIndex = tabCtrl.getActiveIndex();
+  ```
+
+  
+
+#### void setActiveIndex(int idx)
+
+- **用途：** 设置指定索引的页签为激活状态。
+
+- **参数：**
+
+  - `idx`：要激活的页签索引
+
+- **返回值：** 无
+
+- **行为细节：** 如果索引有效且对应页签未被禁用，则将其设置为激活状态。如果页签已经是激活状态但页面不可见，会显示页面；如果不是激活状态，则模拟点击激活它。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  tabCtrl.setActiveIndex(2); // 激活第三个页签
+  ```
+
+  
+
+#### int count() const
+
+- **用途：** 获取TabControl中的页签数量。
+
+- **参数：** 无
+
+- **返回值：** `int` - 页签的总数
+
+- **行为细节：** 返回控件中页签-页面对的数量。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  int tabCount = tabCtrl.count();
+  ```
+
+  
+
+#### int indexOf(const std::string& tabText) const
+
+- **用途：** 通过页签文本查找对应的索引。
+
+- **参数：**
+
+  - `tabText`：要查找的页签文本
+
+- **返回值：** `int` - 匹配页签的索引，如果未找到返回-1
+
+- **行为细节：** 遍历所有页签按钮，比较按钮文本与目标文本，返回第一个匹配的页签索引。
+
+- **示例：**
+
+  c++
+
+  ```c++
+  int index = tabCtrl.indexOf("Settings");
+  ```
+
+  
+
+#### 使用示例
+
+c++
+
+```c++
+//创建选项卡控件
+auto ta = std::make_unique<TabControl>(10, 10, 950, 240);
+//创建页签按钮
+auto but = std::make_unique<Button>(0, 0, 100, 15, "按钮1");
+//创建一个pair用来包页签和页整体添加到选项卡
+std::pair<std::unique_ptr<Button>,std::unique_ptr<Canvas>> p;
+p.first =std::move( but);
+p.second = std::make_unique<Canvas>(200, 200, 100, 100);
+p.second->setCanvasBkColor(RGB(0,255,0));
+p.second->addControl(std::move(table));
+
+std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>> p1;
+p1.first = std::make_unique<Button>(0, 0, 100, 15, "按钮2");
+p1.second = std::make_unique<Canvas>(200, 200, 100, 100);
+p1.second->setCanvasBkColor(RGB(255,200,0));
+//设置页签栏位置
+ta->setTabPlacement(StellarX::TabPlacement::Bottom);
+//为选项卡添加控件
+ta->add(std::move(p))；
+ta->add(std::move(p1));
+ta->setCanvasfillMode(StellarX::FillMode::Null);
+//将选项卡添加到窗口控件列表
+mainWindow.addControl(std::move(ta));
+```

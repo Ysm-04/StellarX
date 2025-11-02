@@ -171,20 +171,10 @@ public:
     //设置提示框位置偏移
     void setTooltipOffset(int dx, int dy) { tipOffsetX = dx; tipOffsetY = dy; }
     //设置提示框样式
-    void setTooltipStyle(COLORREF text, COLORREF bk, bool transparent) 
-    {
-        tipLabel.setTextColor(text);
-        tipLabel.setTextBkColor(bk);
-        tipLabel.setTextdisap(transparent);
-    }
+    void setTooltipStyle(COLORREF text, COLORREF bk, bool transparent);
     //设置提示框文本
     void setTooltipText(const std::string& s){ tipTextClick = s; tipUserOverride = true; }
-    void setTooltipTextsForToggle(const std::string& onText, const std::string& offText)
-    {
-        tipTextOn = onText;
-        tipTextOff = offText;
-        tipUserOverride = true;
-    }
+    void setTooltipTextsForToggle(const std::string& onText, const std::string& offText);
 private:
     //初始化按钮
     void initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);

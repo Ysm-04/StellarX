@@ -22,6 +22,34 @@
 #include "Button.h"
 #include "Label.h"
 
+ // === Table metrics (layout) ===
+#define TABLE_PAD_X                 10   // 单元格左右内边距
+#define TABLE_PAD_Y                  5   // 单元格上下内边距
+#define TABLE_COL_GAP               20   // 列间距（列与列之间）
+#define TABLE_HEADER_EXTRA          10   // 表头额外高度（若不想复用 pad 计算）
+#define TABLE_ROW_EXTRA             10   // 行额外高度（同上；或直接用 2*TABLE_PAD_Y）
+#define TABLE_BTN_GAP               12   // 页码与按钮的水平间距
+#define TABLE_BTN_PAD_H             12   // 按钮水平 padding
+#define TABLE_BTN_PAD_V              0   // 按钮垂直 padding（initButton）
+#define TABLE_BTN_TEXT_PAD_V         8   // 计算页脚高度时的按钮文字垂直 padding（initTextWaH）
+#define TABLE_FOOTER_PAD            16   // 页脚额外高度（底部留白）
+#define TABLE_FOOTER_BLANK           8   // 页脚顶部留白
+#define TABLE_PAGE_TEXT_OFFSET_X   (-40) // 页码文本的临时水平修正
+
+// === Table defaults (theme) ===
+#define TABLE_DEFAULT_ROWS_PER_PAGE  5
+#define TABLE_DEFAULT_BORDER_WIDTH   1
+#define TABLE_DEFAULT_BORDER_COLOR   RGB(0,0,0)
+#define TABLE_DEFAULT_BG_COLOR       RGB(255,255,255)
+
+// === Strings (i18n ready) ===
+#define TABLE_STR_PREV             "上一页"
+#define TABLE_STR_NEXT             "下一页"
+#define TABLE_STR_PAGE_PREFIX      "第"
+#define TABLE_STR_PAGE_MID         "页/共"
+#define TABLE_STR_PAGE_SUFFIX      "页"
+
+
 class Table :public Control
 {
 private:
@@ -29,12 +57,12 @@ private:
 	std::vector<std::string> headers;           // 表格表头
 	std::string pageNumtext = "页码标签";       // 页码标签文本
 
-	int tableBorderWidth = 1;                   // 边框宽度
+	int tableBorderWidth = TABLE_DEFAULT_BORDER_WIDTH;                   // 边框宽度
 
 	std::vector<int> colWidths;                // 每列的宽度
 	std::vector<int> lineHeights;			   // 每行的高度
 
-	int rowsPerPage = 5;                        // 每页显示的行数
+	int rowsPerPage = TABLE_DEFAULT_ROWS_PER_PAGE;  // 每页显示的行数
 	int currentPage = 1;                        // 当前页码
 	int totalPages  = 1;                         // 总页数
 
@@ -54,8 +82,8 @@ private:
 
 	StellarX::FillMode  tableFillMode = StellarX::FillMode::Solid;    //填充模式
 	StellarX::LineStyle tableLineStyle = StellarX::LineStyle::Solid; // 线型
-	COLORREF tableBorderClor = RGB(0, 0, 0);     // 表格边框颜色
-	COLORREF tableBkClor = RGB(255, 255, 255);         // 表格背景颜色
+	COLORREF tableBorderClor = TABLE_DEFAULT_BORDER_COLOR;     // 表格边框颜色
+	COLORREF tableBkClor = TABLE_DEFAULT_BG_COLOR;         // 表格背景颜色
 
 	void initTextWaH();  //初始化文本像素宽度和高度
 	void initButton();   //初始化翻页按钮

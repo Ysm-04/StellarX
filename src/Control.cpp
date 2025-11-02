@@ -42,6 +42,18 @@ bool StellarX::ControlText::operator!=(const ControlText& text)
 		return true;
 	return false;
 }
+void Control::setIsVisible(bool show)
+{
+	if (!show)
+		this->updateBackground();
+	this->show = show;
+}
+void Control::onWindowResize()
+{
+	// 自己：丢快照 + 标脏
+	discardBackground();
+	setDirty(true);
+}
 // 保存当前的绘图状态（字体、颜色、线型等）
 // 在控件绘制前调用，确保不会影响全局绘图状态
 void Control::saveStyle()
@@ -63,6 +75,20 @@ void Control::restoreStyle()
 	setlinestyle(currentLineStyle);
 	setlinecolor(*currentBorderColor);
 	setfillstyle(BS_SOLID);//恢复填充
+}
+
+void Control::requestRepaint()
+{
+	if (parent) parent->requestRepaint();   // 向上冒泡
+	else        onRequestRepaintAsRoot();   // 到根控件/窗口兜底
+}
+
+void Control::onRequestRepaintAsRoot()
+{
+
+	discardBackground();
+	setDirty(true);
+	draw();    // 只有“无父”时才允许立即画，不会被谁覆盖
 }
 
 void Control::saveBackground(int x, int y, int w, int h)
@@ -105,10 +131,6 @@ void Control::discardBackground()
 
 void Control::updateBackground()
 {
-	if (saveBkImage)
-	{
-		delete saveBkImage;
-		saveBkImage = nullptr;
-	}
-	hasSnap = false; saveWidth = saveHeight = 0;
+	restBackground();
+	discardBackground();
 }

@@ -128,8 +128,23 @@ static std::string ellipsize_cjk_pref(const std::string& text, int maxW, const c
 	return head;
 }
 
+void Button::setTooltipStyle(COLORREF text, COLORREF bk, bool transparent)
+{
+	tipLabel.textStyle.color = text;
+	tipLabel.setTextBkColor(bk);
+	tipLabel.setTextdisap(transparent);
+}
+
+void Button::setTooltipTextsForToggle(const std::string& onText, const std::string& offText)
+{
+	tipTextOn = onText;
+	tipTextOff = offText;
+	tipUserOverride = true;
+}
+
 void Button::initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch)
 {
+	this->id = "Button";
 	this->text = text;
 	this->mode = mode;
 	this->shape = shape;
@@ -142,7 +157,7 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 	// === Tooltip 默认：文本=按钮文本；白底黑字；不透明；用当前按钮字体样式 ===
 	tipTextClick = tipTextOn = tipTextOff = this->text;
 	tipLabel.setText(tipTextClick);
-	tipLabel.setTextColor(RGB(167, 170, 172));
+	tipLabel.textStyle.color = (RGB(167, 170, 172));
 	tipLabel.setTextBkColor(RGB(255, 255, 255));
 	tipLabel.setTextdisap(false);
 	tipLabel.textStyle = this->textStyle;  // 复用按钮字体样式
@@ -158,105 +173,109 @@ Button::~Button()
 
 void Button::draw()
 {
-	if (dirty && show)
-	{
-		//保存当前样式和颜色
-		saveStyle();
+	if (!dirty || !show)return;
 
-		if (StellarX::ButtonMode::DISABLED == mode)   //设置禁用按钮色
+	//保存当前样式和颜色
+	saveStyle();
+
+	if (StellarX::ButtonMode::DISABLED == mode)   //设置禁用按钮色
+	{
+		setfillcolor(DISABLEDCOLOUR);
+		textStyle.bStrikeOut = true;
+	}
+	else
+	{
+		// 点击状态优先级最高，然后是悬停状态，最后是默认状态
+		COLORREF col = click ? buttonTrueColor : (hover ? buttonHoverColor : buttonFalseColor);
+		setfillcolor(col);
+	}
+	//
+	//设置字体背景色透明
+	setbkmode(TRANSPARENT);
+	//边框颜色
+	setlinecolor(buttonBorderColor);
+
+	//设置字体颜色
+	settextcolor(textStyle.color);
+	//设置字体样式
+	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
+		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+
+	if (needCutText)
+		cutButtonText();
+
+	//获取字符串像素高度和宽度
+	if ((this->oldtext_width != this->text_width || this->oldtext_height != this->text_height)
+		|| (-1 == oldtext_width && oldtext_height == -1))
+	{
+		if (isUseCutText)
 		{
-			setfillcolor(DISABLEDCOLOUR);
-			textStyle.bStrikeOut = true;
+			this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->cutText.c_str()));
+			this->oldtext_height = this->text_height = textheight(LPCTSTR(this->cutText.c_str()));
 		}
 		else
 		{
-			// 点击状态优先级最高，然后是悬停状态，最后是默认状态
-			COLORREF col = click ? buttonTrueColor : (hover ? buttonHoverColor : buttonFalseColor);
-			setfillcolor(col);
+			this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->text.c_str()));
+			this->oldtext_height = this->text_height = textheight(LPCTSTR(this->text.c_str()));
 		}
-		//
-		//设置字体背景色透明
-		setbkmode(TRANSPARENT);
-		//边框颜色
-		setlinecolor(buttonBorderColor);
-
-		//设置字体颜色
-		settextcolor(textStyle.color);
-		//设置字体样式
-		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
-
-		if (needCutText)
-			cutButtonText();
-
-		//获取字符串像素高度和宽度
-		if ((this->oldtext_width != this->text_width || this->oldtext_height != this->text_height)
-			|| (-1 == oldtext_width && oldtext_height == -1))
-		{
-			if(isUseCutText)
-			{
-				this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->cutText.c_str()));
-				this->oldtext_height = this->text_height = textheight(LPCTSTR(this->cutText.c_str()));
-			}
-			else
-			{
-				this->oldtext_width = this->text_width = textwidth(LPCTSTR(this->text.c_str()));
-				this->oldtext_height = this->text_height = textheight(LPCTSTR(this->text.c_str()));
-			}
-		}
-
-		//设置按钮填充模式
-		setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
-		//根据按钮形状绘制
-		switch (shape)
-		{
-		case StellarX::ControlShape::RECTANGLE://有边框填充矩形
-			fillrectangle(x, y, x + width, y + height);
-			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::B_RECTANGLE://无边框填充矩形
-			solidrectangle(x, y, x + width, y + height);
-			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::ROUND_RECTANGLE://有边框填充圆角矩形
-			fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
-			isUseCutText? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::B_ROUND_RECTANGLE://无边框填充圆角矩形
-			solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
-			isUseCutText? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::CIRCLE://有边框填充圆形
-			fillcircle(x + width / 2, y + height / 2, min(width, height) / 2);
-			isUseCutText? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
-				:outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::B_CIRCLE://无边框填充圆形
-			solidcircle(x + width / 2, y + height / 2, min(width, height) / 2);
-			isUseCutText ? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
-				:outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::ELLIPSE://有边框填充椭圆
-			fillellipse(x, y, x + width, y + height);
-			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		case StellarX::ControlShape::B_ELLIPSE://无边框填充椭圆
-			solidellipse(x, y, x + width, y + height);
-			isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
-				:outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
-			break;
-		}
-
-		restoreStyle();//恢复默认字体样式和颜色
-		dirty = false;     //标记按钮不需要重绘
-		
 	}
+
+	//设置按钮填充模式
+	setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
+	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
+		saveBackground(this->x, this->y, this->width, this->height);
+	// 恢复背景（清除旧内容）
+	restBackground();
+	//根据按钮形状绘制
+	switch (shape)
+	{
+	case StellarX::ControlShape::RECTANGLE://有边框填充矩形
+		fillrectangle(x, y, x + width, y + height);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::B_RECTANGLE://无边框填充矩形
+		solidrectangle(x, y, x + width, y + height);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::ROUND_RECTANGLE://有边框填充圆角矩形
+		fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::B_ROUND_RECTANGLE://无边框填充圆角矩形
+		solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::CIRCLE://有边框填充圆形
+		fillcircle(x + width / 2, y + height / 2, min(width, height) / 2);
+		isUseCutText ? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
+			: outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::B_CIRCLE://无边框填充圆形
+		solidcircle(x + width / 2, y + height / 2, min(width, height) / 2);
+		isUseCutText ? outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(cutText.c_str()))
+			: outtextxy(x + width / 2 - text_width / 2, y + height / 2 - text_height / 2, LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::ELLIPSE://有边框填充椭圆
+		fillellipse(x, y, x + width, y + height);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	case StellarX::ControlShape::B_ELLIPSE://无边框填充椭圆
+		solidellipse(x, y, x + width, y + height);
+		isUseCutText ? outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(cutText.c_str()))
+			: outtextxy((x + (width - text_width) / 2), (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+		break;
+	}
+
+	restoreStyle();//恢复默认字体样式和颜色
+	dirty = false;     //标记按钮不需要重绘
+
+
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
@@ -398,7 +417,7 @@ bool Button::handleEvent(const ExMessage& msg)
 
 	// 如果需要重绘，立即执行
 	if (dirty)
-		draw();
+		requestRepaint();
 	if(tipEnabled && tipVisible)
 		tipLabel.draw();
 	return consume;
@@ -420,8 +439,11 @@ void Button::setOnToggleOffListener(const std::function<void()>&& callback)
 
 void Button::setbuttonMode(StellarX::ButtonMode mode)
 {
+	if (this->mode == StellarX::ButtonMode::DISABLED && mode != StellarX::ButtonMode::DISABLED)
+		textStyle.bStrikeOut = false;
 	//取值范围参考 buttMode的枚举注释
     this->mode = mode;
+	dirty = true; // 标记需要重绘
 }
 
 void Button::setROUND_RECTANGLEwidth(int width)
@@ -532,7 +554,7 @@ void Button::setButtonClick(BOOL click)
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
 	if (dirty)
-		draw();
+		requestRepaint();
 }
 
 

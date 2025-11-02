@@ -7,6 +7,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.2.0] - 2025-11-02
+
+**Highlights**: Officially introduces the TabControl, enhances control show/hide and layout responsiveness, and refines the text styling mechanism; fixes several UI details to improve stability.
+
+### ✨ Added
+
+- **TabControl (tabbed container control)**: Added the `TabControl` class to implement a multi-page tabbed UI. The tab bar supports **top/bottom/left/right** positions via `TabControl::setTabPlacement(...)`. Provides `TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&&)` to add a “tab button + page content” pair in one go and automatically manage switching. Each page’s content area is hosted by a `Canvas`; clicking different tabs (Button, TOGGLE mode) switches the visible page **(see API)**. TabControl can automatically adjust tab layout when the window size changes and uses background snapshots to avoid ghosting under transparent themes.
+- **Control visibility**: All controls now support runtime **show/hide** toggling. The base class adds `Control::setIsVisible(bool)` to control a control’s own visibility; hidden controls no longer participate in drawing and events. Container controls (`Canvas`) override this to implement **cascading hide**: hiding a container automatically hides all its child controls, and showing it restores them. This makes it more convenient to toggle the visibility of a group of UI elements.
+- **Window resize handling**: Introduces the virtual function `Control::onWindowResize()`, called when the parent window size changes. Controls can implement this to respond to window resizing (e.g., reset background caches, adjust layout). `Canvas` implements this and **recursively notifies child controls** to call `onWindowResize()`, ensuring nested layouts update correctly. This improvement fixes possible misalignment or background issues that occurred after resizing.
+- **Label text style structure**: The `Label` control now uses a unified `ControlText` style structure to manage fonts and colors. By accessing the public member `Label::textStyle`, you can set font name, size, color, underline, etc., achieving **full text style customization** (replacing the previous `setTextColor` interface). This enables richer formatting when displaying text with Label.
+- **Dialog de-duplication mechanism**: `Window` adds an internal check to **prevent popping up duplicate dialogs with the same content**. When using `MessageBox::showAsync` for a non-modal popup, the framework checks if a dialog with the same title and message is already open; if so, it avoids creating another one. This prevents multiple identical prompts from appearing in quick succession.
+
+### ⚙️ Changed
+
+- **Text color interface adjustment**: `Label` removes the outdated `setTextColor` method; use the public `textStyle.color` to set text color instead. To change a Label’s text color, modify `label.textStyle.color` and redraw. This improves consistency in text property management but may be incompatible with older code and require replacement.
+- **Tooltip styling and toggle**: The `Button` Tooltip interface is adjusted to support more customization. `Button::setTooltipStyle` can now flexibly set tooltip text color, background color, and transparency; `setTooltipTextsForToggle(onText, offText)` is added so toggle buttons can display different tooltip texts in **ON/OFF** states. The original tooltip-text setting interface remains compatible, but the internal implementation is optimized, fixing the previous issue where toggle-button tooltip text didn’t update.
+- **Control coordinate system and layout**: Controls now maintain both **global coordinates** and **local coordinates**. `Control` adds members (such as `getLocalX()/getLocalY()`) to get positions relative to the parent container, and a `parent` pointer to the parent container. This makes layout calculations in nested containers more convenient and accurate. In absolute-layout scenarios, a control’s global coordinates are automatically converted and stored as local coordinates when added to a container. Note: in the new version, when moving controls or changing sizes, prefer using the control’s own setters to keep internal coordinates in sync.
+- **Window resizing defaults**: Resizing is changed from experimental to **enabled by default**. The framework always enables resizable styles for the main window (`WS_THICKFRAME | WS_MAXIMIZEBOX | ...`), so there’s no need to call a separate method to enable it. This simplifies usage and means created windows can be resized by users by default. For scenarios where resizing is not desired, pass specific mode flags at creation time to disable it.
+
+### ✅ Fixed
+
+- **Toggle-button tooltip updates**: Fixed an issue where tooltips for toggle-mode buttons did not update promptly when the state changed. With `setTooltipTextsForToggle`, the tooltip now correctly shows the corresponding text when switching between **ON/OFF**.
+- **Background ghosting and coordinate sync for controls**: Fixed defects where, in some cases, control backgrounds were not refreshed in time and position calculations deviated after window/container resizing. By using `onWindowResize` to uniformly discard and update background snapshots, background ghosting and misalignment during window resizing are avoided, improving overall stability.
+- **`Control` class background-snapshot memory leak**: The destructor now calls `discardBackground` to free and restore the background snapshot, preventing the memory leak caused by not releasing `*saveBkImage` in the previous version.
+- **Duplicate dialog pop-ups**: Fixed an issue where repeatedly calling a non-modal message box in quick succession could create multiple identical dialogs. The new de-duplication check ensures that only one non-modal dialog with the same content exists at a time, avoiding UI disruption.
+- **Other**: Optimized the control drawing/refresh strategy to reduce unnecessary repaints in certain scenarios and improve performance; corrected minor memory-management details to eliminate potential leaks. These enhancements further improve the framework’s performance and reliability.
+
 ## [v2.1.0] - 2025-10-27
 
 **Focus**: Resizable/maximized window (EasyX reinforced by Win32), first-phase layout manager (HBox/VBox), early Tabs control. We also fixed black borders, maximize “ghosts”, flicker, and the issue where controls only appeared after interaction. Control-level **background snapshot/restore**, **single-line truncation**, and **tooltips** are now standardized.

@@ -319,4 +319,28 @@ namespace StellarX
         int flowBreak = 0; // 1=强制换行
     };
 #endif
+
+    /*
+     * @枚举名称: TabPlacement
+     * @功能描述: 定义了选项卡页签的不同位置
+     *
+     * @详细说明:
+     * 根据选项卡页签的位置，选项卡页签可以有不同的布局方式。
+     *
+     * @成员说明:
+     *  Top,   - 选项卡页签位于顶部
+     *  Bottom, - 选项卡页签位于底部
+     *  Left,  - 选项卡页签位于左侧
+     *  Right  - 选项卡页签位于右侧
+     *
+     * @使用示例:
+     *   TabPlacement placement = TabPlacement::Top;
+     */
+    enum class TabPlacement
+    {
+        Top,
+        Bottom,
+        Left,
+        Right
+    };
 }

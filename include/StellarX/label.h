@@ -22,7 +22,6 @@
 class Label : public Control
 {
     std::string text;         //标签文本
-    COLORREF    textColor;   //标签文本颜色
     COLORREF    textBkColor; //标签背景颜色
     bool        textBkDisap = false;   //标签背景是否透明
 
@@ -42,8 +41,6 @@ public:
     void hide();
     //设置标签背景是否透明
     void setTextdisap(bool key);
-    //设置标签文本颜色
-    void setTextColor(COLORREF color);
     //设置标签背景颜色
     void setTextBkColor(COLORREF color);
     //设置标签文本
