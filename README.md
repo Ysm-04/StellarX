@@ -2,6 +2,11 @@
 
 [English document](README.en.md)
 
+> 本仓库为 **StellarX** 主仓：开发与 Issue/PR 均在 GitHub 进行。  
+> GitCode 仅为只读镜像：如需反馈请到 GitHub:https://github.com/Ysm-04/StellarX
+
+[![Mirror on GitCode](https://img.shields.io/badge/Mirror-GitCode-blue)](https://gitcode.com/Ysm-04/StellarX)
+
 ------
 
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
