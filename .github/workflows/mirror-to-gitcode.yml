@@ -1,0 +1,29 @@
+name: Mirror to GitCode
+on:
+  push:
+    branches: [ "**" ]        # 任意分支推送触发
+  create:
+    tags: [ "*" ]             # 新建 tag 触发
+  workflow_dispatch:          # 支持手动触发
+
+permissions:
+  contents: read
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0      # 必须拿全历史+所有 tag
+      - name: Push --mirror to GitCode
+        env:
+          GITCODE_USER: ${{ secrets.GITCODE_USER }}
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+        run: |
+          set -e
+          git config --global user.name  "mirror-bot"
+          git config --global user.email "mirror-bot@users.noreply.github.com"
+          # 如果你的命名空间不是个人用户，而是组织，请把 ${GITCODE_USER} 换成组织名
+          git remote add gitcode https://${GITCODE_USER}:${GITCODE_TOKEN}@gitcode.com/${GITCODE_USER}/StellarX.git
+          git push --prune --mirror gitcode
