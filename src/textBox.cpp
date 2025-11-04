@@ -91,7 +91,7 @@ bool TextBox::handleEvent(const ExMessage& msg)
         flushmessage(EX_MOUSE | EX_KEY);
     }
     if (dirty)
-        requestRepaint();
+        requestRepaint(parent);
 
     if (click)
         click = false;

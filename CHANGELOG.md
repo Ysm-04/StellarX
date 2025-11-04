@@ -7,6 +7,27 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v2.2.1] - 2025 - 11 - 4
+
+==此版本为v2.2.0的修复版本==
+
+### ✅ 修复
+
+- `TabControl`类重写了基类的`setDirty`方法保证页签+页列表同步更新
+
+  状态
+
+- `Canvas`容器和特殊容器`TabControl`以及对话框`Dialog`重写`requestRepaint`方法，控件向上冒泡时传递父指针，请求重绘时只向上到父一级，不再传递到根。并且不再重绘整个父容器，而是由父容器重绘标脏的子控件，避免了频繁真个容器重绘导致的频闪
+
+- `Dialog`中重写了`saveBackground`和`restBackground`方法，保证对话框关闭后不会有边框残留
+
+### ⚙️ 变更
+
+- 彻底禁用`Control`的移动构造`Control(const Control&) = delete;`
+  `Control& operator=(const Control&) = delete;`
+  `Control(Control&&) = delete;`
+  `Control& operator=(Control&&) = delete;`
+
 ## [v2.2.0] - 2025-11-02
 
 **重点**：正式引入选项卡控件(TabControl)，增强控件显隐与布局响应能力，并完善文本样式机制；修复若干UI细节问题以提升稳定性。

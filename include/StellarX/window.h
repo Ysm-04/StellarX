@@ -76,6 +76,8 @@ public:
 	COLORREF getBkcolor() const;
 	//获取窗口背景图片
 	IMAGE* getBkImage() const;
+	//获取窗口背景图片文件名
+	std::string getBkImageFile() const;
 	//获取控件管理
 	std::vector<std::unique_ptr<Control>>& getControls();
 

@@ -61,8 +61,8 @@ protected:
 
     Control(const Control&) = delete;
     Control& operator=(const Control&) = delete;
-    Control(Control&&) = default;
-    Control& operator=(Control&&) = default;
+    Control(Control&&) = delete;
+    Control& operator=(Control&&) = delete;
 
     Control() : localx(0),x(0), localy(0),y(0), localWidth(100),width(100),height(100), localHeight(100) {}
     Control(int x, int y, int width, int height)
@@ -85,14 +85,15 @@ public:
         discardBackground();
     }
 protected:
-    virtual void requestRepaint();
+    //向上请求重绘
+    virtual void requestRepaint(Control* parent);
     //根控件/无父时触发重绘
     virtual void onRequestRepaintAsRoot();
 protected:
     //保存背景快照
-    void saveBackground(int x, int y, int w, int h);
+    virtual void saveBackground(int x, int y, int w, int h);
     // putimage 回屏
-    void restBackground();         
+    virtual void restBackground();
     // 释放快照（窗口重绘/尺寸变化后必须作废）
     void discardBackground();
 public:

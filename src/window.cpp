@@ -69,7 +69,14 @@ void Window::draw(std::string imagePath)
 		hWnd = initgraph(width, height, windowMode);
     SetWindowText(hWnd, headline.c_str());
     loadimage(background, imagePath.c_str(), width, height, true);
-    putimage(0, 0, background);
+   if(background)
+	   putimage(0, 0, background);
+   else
+   {
+	   // 设置背景色并清屏
+	   setbkcolor(wBkcolor);
+	   cleardevice();
+   }
     // 同样应用可拉伸样式
     LONG style = GetWindowLong(hWnd, GWL_STYLE);
     style |= WS_THICKFRAME | WS_MAXIMIZEBOX | WS_MINIMIZEBOX;
@@ -78,7 +85,11 @@ void Window::draw(std::string imagePath)
 
     // 绘制控件（含对话框）到窗口
     BeginBatchDraw();
-    for (auto& control : controls) control->draw();
+	for (auto& control : controls)
+	{
+		control->setDirty(true);
+		control->draw();
+	}
     for (auto& dlg : dialogs) dlg->draw();
     EndBatchDraw();
 }
@@ -326,6 +337,11 @@ COLORREF Window::getBkcolor() const
 IMAGE* Window::getBkImage() const
 {
 	return this->background;
+}
+
+std::string Window::getBkImageFile() const
+{
+	return this->bkImageFile;
 }
 
 std::vector<std::unique_ptr<Control>>& Window::getControls()

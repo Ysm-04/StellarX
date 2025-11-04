@@ -275,7 +275,6 @@ void Button::draw()
 	restoreStyle();//恢复默认字体样式和颜色
 	dirty = false;     //标记按钮不需要重绘
 
-
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
@@ -417,9 +416,11 @@ bool Button::handleEvent(const ExMessage& msg)
 
 	// 如果需要重绘，立即执行
 	if (dirty)
-		requestRepaint();
-	if(tipEnabled && tipVisible)
+		requestRepaint(parent);
+
+	if (tipEnabled && tipVisible)
 		tipLabel.draw();
+	
 	return consume;
 }
 
@@ -554,7 +555,7 @@ void Button::setButtonClick(BOOL click)
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
 	if (dirty)
-		requestRepaint();
+		requestRepaint(parent);
 }
 
 
@@ -684,7 +685,6 @@ void Button::hideTooltip()
 
 void Button::refreshTooltipTextForState()
 {
-	if (!tipUserOverride) return;
 	if (tipUserOverride)   return; // 用户显式设置过 tipText，保持不变
 	if(mode==StellarX::ButtonMode::NORMAL)
 		tipLabel.setText(tipTextClick);

@@ -27,8 +27,9 @@ void Canvas::draw()
 	setfillcolor(canvasBkClor);//设置填充色
 	setfillstyle((int)canvasFillMode);//设置填充模式
 	setlinestyle((int)canvasLineStyle, canvaslinewidth);
+	
 	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-		saveBackground(this->x, this->y, this->width, this->height);
+		saveBackground(x, y, width, height);
 	// 恢复背景（清除旧内容）
 	restBackground();
 	//根据画布形状绘制
@@ -69,7 +70,7 @@ bool Canvas::handleEvent(const ExMessage& msg)
 		consumed |= it->get()->handleEvent(msg);
 		if (it->get()->isDirty()) anyDirty = true;
 	}
-	if (anyDirty) requestRepaint();
+	if (anyDirty) requestRepaint(parent);
 	return consumed;
 }
 
@@ -157,6 +158,21 @@ void Canvas::onWindowResize()
 	Control::onWindowResize();          // 先处理自己
 	for (auto& ch : controls)          // 再转发给所有子控件
 		ch->onWindowResize();
+}
+
+void Canvas::requestRepaint(Control* parent)
+{
+	if (this == parent)
+	{
+		for (auto& control : controls)
+			if (control->isDirty() && control->IsVisible())
+			{
+				control->draw();
+				break;
+			}
+	}
+	else
+		onRequestRepaintAsRoot();
 }
 
 

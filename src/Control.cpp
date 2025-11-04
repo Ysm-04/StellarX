@@ -77,9 +77,9 @@ void Control::restoreStyle()
 	setfillstyle(BS_SOLID);//恢复填充
 }
 
-void Control::requestRepaint()
+void Control::requestRepaint(Control* parent)
 {
-	if (parent) parent->requestRepaint();   // 向上冒泡
+	if (parent) parent->requestRepaint(parent);   // 向上冒泡
 	else        onRequestRepaintAsRoot();   // 到根控件/窗口兜底
 }
 
@@ -93,9 +93,9 @@ void Control::onRequestRepaintAsRoot()
 
 void Control::saveBackground(int x, int y, int w, int h)
 {
+	
 	if (w <= 0 || h <= 0) return;
 	saveBkX = x; saveBkY = y; saveWidth = w; saveHeight = h;
-
 	if (saveBkImage)
 	{
 		//尺寸变了才重建，避免反复 new/delete

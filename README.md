@@ -25,15 +25,17 @@
 
 ---
 
-==由于2.2.0更新了重绘机制和事件传递，导致部分控件频闪，正在加急修改，可先使用2.1.0的Releas包==
+## 🆕v2.2.1（v2.2.0修复版）
 
-从 [Releases](https://github.com/Ysm-04/StellarX/releases/latest) 获取预编译包。
+- 解决了使用Canvas和TabControl容器时，出现频闪问题
 
----
+- 修复了Dialog对话框关闭时概率出边边框残留和功能按钮残留问题
+
+  详情参考[更新日志](CHANGELOG.md)
 
 
 
-## 🆕 v2.2.0 有何变化
+##  V2.2.0 有何变化
 
 - **新增 TabControl 控件，实现多页面选项卡界面：** 通过 `TabControl` 可以轻松创建选项卡式布局，支持页签在上下左右排列、点击切换显示不同内容页面。适用于设置面板、多视图切换等场景。
 - **控件显隐与布局响应能力增强：** 现在所有控件都可以使用统一接口动态隐藏或显示（`setIsVisible`），容器控件隐藏时其内部子控件会自动随之隐藏/显示。与此同时，引入控件对窗口尺寸变化的响应机制（`onWindowResize`），窗口拉伸后界面各元素可协调更新，杜绝拉伸过程中出现残影或错位。
@@ -297,5 +299,5 @@ MIT（见 `LICENSE`）。
 ## 📞 支持与反馈
 
 - 查看 [examples/](examples/)
-- 查阅 [更新日志](CHANGELOG.md / CHANGELOG.en.md)
+- 查阅 [更新日志](CHANGELOG.md)[CHANGELOG](CHANGELOG.en.md)
 - 在 GitHub 提交 Issue

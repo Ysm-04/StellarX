@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.2.1] - 2025-11-04
+
+==This release is a hotfix for v2.2.0==
+
+### ✅ Fixed
+
+- The `TabControl` class overrode the base class's `setDirty` method to ensure synchronized update status between the tab and its page list.
+- The `Canvas` container, special container `TabControl`, and dialog `Dialog` overrode the `requestRepaint` method. When control bubbling propagates upward, the parent pointer is passed. Repaint requests now only bubble up one level to the parent and no longer propagate to the root. Furthermore, the entire parent container is no longer repainted; instead, the parent container repaints only the dirtied child controls, avoiding flickering caused by frequent repaints of the entire container.
+- The `saveBackground` and `restoreBackground` methods were overridden in `Dialog` to ensure no border remnants remain after the dialog is closed.
+
+### ⚙️ Changed
+
+- Completely disabled copy and move semantics for the `Control` class:
+  `Control(const Control&) = delete;`
+  `Control& operator=(const Control&) = delete;`
+  `Control(Control&&) = delete;`
+  `Control& operator=(Control&&) = delete;`
+
 ## [v2.2.0] - 2025-11-02
 
 **Highlights**: Officially introduces the TabControl, enhances control show/hide and layout responsiveness, and refines the text styling mechanism; fixes several UI details to improve stability.

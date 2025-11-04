@@ -62,5 +62,7 @@ public:
     int count() const; 
     //通过页签文本返回索引
     int indexOf(const std::string& tabText) const;
+    void setDirty(bool dirty) override;
+    void requestRepaint(Control* parent)override;
 };
 

@@ -34,21 +34,19 @@ void Dialog::draw()
     if (dirty && show)
     {
         // 保存当前绘图状态
-        saveStyle();
-
-
-		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-			saveBackground(this->x, this->y, this->width, this->height);
+		saveStyle();
 
 		Canvas::setBorderColor(this->borderColor);
-		Canvas::setLinewidth(this->BorderWidth);
+		Canvas::setLinewidth(BorderWidth);
 		Canvas::setCanvasBkColor(this->backgroundColor);
 		Canvas::setShape(StellarX::ControlShape::ROUND_RECTANGLE);
 
+		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
+			saveBackground(this->x, this->y, this->width, this->height);
 		//设置所有控件为脏状态
-		for(auto& c :this->controls)
-			c->setDirty(true);
-
+		/*for(auto& c :this->controls)
+			c->setDirty(true);*/
+		restBackground();
 		Canvas::draw();
 
 		//绘制消息文本
@@ -88,12 +86,12 @@ bool Dialog::handleEvent(const ExMessage& msg)
 		}
 		return false;
 	}
-
+	
 	// 如果正在清理或标记为待清理，则不处理事件
 	if (pendingCleanup || isCleaning)
 		return false;
 	// 模态对话框：点击对话框外部区域时，发出提示音(\a)并吞噬该事件，不允许操作背景内容。
-	 if (modal && msg.message == WM_LBUTTONUP &&
+	if (modal && msg.message == WM_LBUTTONUP &&
 		(msg.x < x || msg.x > x + width || msg.y < y || msg.y > y + height))
 	{
 		std::cout << "\a" << std::endl;
@@ -170,10 +168,11 @@ void Dialog::Show()
 	shouldClose = false;
 
 	if (modal)
-	{
+	{	
 		// 模态对话框需要阻塞当前线程直到对话框关闭
 		while (show && !close)
 		{
+			
 			// 处理消息
 			ExMessage msg;
 			if (peekmessage(&msg, EX_MOUSE | EX_KEY))
@@ -191,14 +190,13 @@ void Dialog::Show()
 			// 重绘
 			if (dirty)
 			{
-				requestRepaint();
+				requestRepaint(parent);
 				FlushBatchDraw();
 			}
 
 			// 避免CPU占用过高
 			Sleep(10);
 		}
-
 		// 模态对话框关闭后执行清理
 		if (pendingCleanup && !isCleaning)
 			performDelayedCleanup();
@@ -218,9 +216,7 @@ void Dialog::Close()
 	close = true;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
-	auto& c  =  hWnd.getControls();
-	for(auto& control:c)
-		control->setDirty(true);
+	
 
 	// 工厂模式下非模态触发回调 返回结果
 	if (resultCallback&& !modal) 
@@ -461,6 +457,7 @@ void Dialog::initCloseButton()
 			StellarX::ControlShape::B_RECTANGLE
 		);
 	but.get()->setButtonFalseColor(this->backgroundColor);
+	but.get()->enableTooltip(false);
 	but->setOnClickListener([this]() {
 		this->SetResult(StellarX::MessageBoxResult::Cancel);
 		this->hWnd.dialogClose = true;
@@ -586,6 +583,31 @@ void Dialog::initDialogSize()
 	initCloseButton(); // 初始化关闭按钮
 }
 
+void Dialog::saveBackground(int x, int y, int w, int h)
+{
+	if (w <= 0 || h <= 0) return;
+	saveBkX = x; saveBkY = y; saveWidth = w; saveHeight = h;
+	if (saveBkImage)
+	{
+		//尺寸变了才重建，避免反复 new/delete
+		if (saveBkImage->getwidth() != w || saveBkImage->getheight() != h)
+		{
+			delete saveBkImage; saveBkImage = nullptr;
+		}
+	}
+	if (!saveBkImage) saveBkImage = new IMAGE(w + BorderWidth*2, h + BorderWidth*2);
+
+	SetWorkingImage(nullptr);                 // ★抓屏幕
+	getimage(saveBkImage, x - BorderWidth, y - BorderWidth, w + BorderWidth*2, h+ BorderWidth*2);
+	hasSnap = true;
+}
+void Dialog::restBackground()
+{
+	if (!hasSnap || !saveBkImage) return;
+	// 直接回贴屏幕（与抓取一致）
+	SetWorkingImage(nullptr);
+	putimage(saveBkX - BorderWidth, saveBkY - BorderWidth,saveBkImage);
+}
 
 // 延迟清理策略：由于对话框绘制时保存了背景快照，必须在对话框隐藏后、
 // 所有控件析构前恢复背景，否则会导致背景图像被错误覆盖。
@@ -596,20 +618,22 @@ void Dialog::performDelayedCleanup()
 
 	isCleaning = true;
 
-	// 清除所有控件
+	auto& c = hWnd.getControls();
+	for (auto& control : c)
+		control->setDirty(true);
+	
 	controls.clear();
 
 	// 重置指针
 	closeButton = nullptr;
 	title.reset();
-
 	// 释放背景图像资源
 	if (saveBkImage && hasSnap)
 	{
 		restBackground();
+		FlushBatchDraw();
 		discardBackground();
 	}
-
 	// 重置状态
 	needsInitialization = true;
 	pendingCleanup = false;
@@ -655,4 +679,18 @@ std::unique_ptr<Button> Dialog::createDialogButton(int x, int y, const std::stri
 	return btn;
 }
 
+void Dialog::requestRepaint(Control* parent)
+{
+	if (this == parent)
+	{
+		for (auto& control : controls)
+			if (control->isDirty()&&control->IsVisible())
+			{
+				control->draw();
+				break;
+			}
 
+	}
+	else
+		onRequestRepaintAsRoot();
+}

@@ -20,7 +20,7 @@
 #pragma once
 #include"StellarX.h"
 
-#define closeButtonWidth 23   //关闭按钮宽度
+#define closeButtonWidth 30   //关闭按钮宽度
 #define closeButtonHeight 20  //关闭按钮高度  同时作为对话框标题栏高度
 #define functionButtonWidth  70 //按钮宽度
 #define functionButtonHeight 30  //按钮高度
@@ -29,7 +29,7 @@
 #define buttonAreaHeight     50 //按钮区域高度
 #define titleToTextMargin    10 //标题到文本的距离
 #define textToBorderMargin   10 //文本到边框的距离
-
+#define BorderWidth          3 //边框宽度
 class Dialog : public Canvas 
 {
 	Window& hWnd;               //窗口引用
@@ -37,7 +37,6 @@ class Dialog : public Canvas
 	int textWidth = 0;			//文本宽度
 	int textHeight = 0;		    //文本高度
 	int buttonNum = 0;         // 按钮数量
-	int BorderWidth = 2;  //边框宽度
 
 	StellarX::MessageBoxType type = StellarX::MessageBoxType::OK;   //对话框类型
 	std::string titleText = "提示";				     //标题文本
@@ -124,11 +123,14 @@ private:
 	void getTextSize();	      
 	//初始化对话框尺寸
 	void initDialogSize(); 
-	
+	void saveBackground(int x, int y, int w, int h)override;
+
+	void restBackground()override;
 
 	
 	// 清除所有控件
 	void clearControls(); 
 	//创建对话框按钮
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
+	void requestRepaint(Control* parent) override;
 };

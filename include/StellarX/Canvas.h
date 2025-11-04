@@ -60,6 +60,7 @@ public:
     void setIsVisible(bool visible) override;
     void setDirty(bool dirty) override;
     void onWindowResize() override;
+    void requestRepaint(Control* parent)override;
     //获取子控件列表
     std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
 private:

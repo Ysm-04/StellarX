@@ -22,10 +22,8 @@
 class Label : public Control
 {
     std::string text;         //标签文本
-    COLORREF    textBkColor; //标签背景颜色
-    bool        textBkDisap = false;   //标签背景是否透明
-
-
+       COLORREF textBkColor; //标签背景颜色
+           bool textBkDisap = false;   //标签背景是否透明
 
     //标签事件处理（标签无事件）不实现具体代码
     bool handleEvent(const ExMessage& msg) override { return false; }

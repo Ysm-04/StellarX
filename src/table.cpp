@@ -358,7 +358,7 @@ bool Table::handleEvent(const ExMessage& msg)
 			consume = nextButton->handleEvent(msg);
 	}
 	if (dirty)
-		requestRepaint();
+		requestRepaint(parent);
 	return consume;
 }
 

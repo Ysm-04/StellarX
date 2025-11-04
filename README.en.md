@@ -25,7 +25,14 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
-## 🆕 What’s new in v2.2.0
+## **🆕 v2.2.1 (Hotfix for v2.2.0)**
+
+- Addressed a flickering issue that occurred when using the Canvas and TabControl containers.
+- Fixed issues where border remnants and functional buttons could persist after closing a Dialog.
+
+For details, please refer to the [CHANGELOG.en](CHANGELOG.en.md).
+
+## What’s new in v2.2.0
 
 - **New TabControl for multi-page tabbed UIs:** With `TabControl`, it’s easy to create a tabbed layout. Tabs can be arranged on the top, bottom, left, or right, and clicking switches the displayed page. Suitable for settings panels and multi-view switching.
 - **Enhanced control show/hide and resize responsiveness:** All controls now share a unified interface (`setIsVisible`) to toggle visibility. When a container control is hidden, its child controls automatically hide/show with it. Meanwhile, we introduce `onWindowResize` for controls to respond to window size changes so elements update in sync after resizing, eliminating artifacts or misalignment.

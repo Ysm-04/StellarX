@@ -203,7 +203,7 @@ bool TabControl::handleEvent(const ExMessage& msg)
 				break;
 			}
 	if (dirty)
-		requestRepaint();
+		requestRepaint(parent);
 	return consume;
 }
 
@@ -347,4 +347,35 @@ int TabControl::indexOf(const std::string& tabText) const
 	return idx;
 }
 
+void TabControl::setDirty(bool dirty)
+{
+	this->dirty = dirty;
+	for (auto& c : controls)
+	{
+		c.first->setDirty(dirty);
+		c.second->setDirty(dirty);
+	}
+}
 
+void TabControl::requestRepaint(Control* parent)
+{
+	if (this == parent)
+	{
+		for (auto& control : controls)
+		{
+			if (control.first->isDirty() && control.first->IsVisible())
+			{
+				control.first->draw();
+				break;
+			}
+			else if (control.second->isDirty()&&control.second->IsVisible())
+			{
+				control.second->draw();
+				break;
+			}
+		}
+	}
+
+	else
+		onRequestRepaintAsRoot();
+}
