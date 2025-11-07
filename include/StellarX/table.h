@@ -127,6 +127,8 @@ public:
 	void setTableLineStyle(StellarX::LineStyle style);
 	//设置边框宽度
 	void setTableBorderWidth(int width);
+	//窗口变化丢快照+标脏
+	void onWindowResize() override;
 
 	//************************** 获取属性 *****************************/
 

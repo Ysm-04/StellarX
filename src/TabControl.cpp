@@ -364,15 +364,9 @@ void TabControl::requestRepaint(Control* parent)
 		for (auto& control : controls)
 		{
 			if (control.first->isDirty() && control.first->IsVisible())
-			{
 				control.first->draw();
-				break;
-			}
 			else if (control.second->isDirty()&&control.second->IsVisible())
-			{
 				control.second->draw();
-				break;
-			}
 		}
 	}
 

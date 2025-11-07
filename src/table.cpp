@@ -464,6 +464,14 @@ void Table::setTableBorderWidth(int width)
 	this->dirty = true;
 }
 
+void Table::onWindowResize()
+{
+	Control::onWindowResize();          // 先处理自己
+	prevButton->onWindowResize();
+	nextButton->onWindowResize();
+	pageNum->onWindowResize();
+}
+
 int Table::getCurrentPage() const
 {
 	return this->currentPage;

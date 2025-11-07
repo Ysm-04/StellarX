@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.2.2] - 2025 - 11- 08
+
+### ⚙️ Changes
+
+- Modified the coordinate transfer method for the Canvas container. Child control coordinates are now passed as relative coordinates (with the origin at the top-left corner of the container, obtainable via the `getX`/`getY` interface), instead of the original global coordinates. Child control coordinates can now be set to negative values.
+- The example under `examples\register-viewer` has been updated to the latest version, aligning container child controls to use relative coordinates.
+
+### ✅ Fixes
+
+- Fixed jittering/bouncing and flickering when resizing the window (left/top edges):
+  - `WM_SIZING` only clamps the minimum size; `WM_GETMINMAXINFO` sets the window-level minimum tracking size.
+  - Freezes redrawing during dragging and handles resizing uniformly upon release; `WM_SIZE` only records the new size without interfering with drawing.
+  - Disabled `WM_ERASEBKGND` background erasing and removed `CS_HREDRAW`/`CS_VREDRAW` to reduce flickering.
+- Fixed issues related to dialog boxes:
+  - Resolved occasional residual functional buttons after closing a dialog.
+  - Fixed issues where window resizing failed to redraw or displayed a corrupted background when a modal dialog was active.
+- Fixed delayed updates of background snapshots for the table control's pagination buttons and page number labels during window changes.
+
 ## [v2.2.1] - 2025-11-04
 
 ==This release is a hotfix for v2.2.0==

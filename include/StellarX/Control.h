@@ -9,23 +9,20 @@
  *     - 定义控件基本属性（坐标、尺寸、脏标记）
  *     - 提供绘图状态管理（saveStyle/restoreStyle）
  *     - 声明纯虚接口（draw、handleEvent等）
- *     - 支持移动语义，禁止拷贝语义
+ *     - 禁止移动语义，禁止拷贝语义
  *
  * @使用场景: 作为所有具体控件类的基类，不直接实例化
  * @所属框架: 星垣(StellarX) GUI框架
  * @作者: 我在人间做废物
  ******************************************************************************/
 #pragma once
-
 #ifndef _WIN32_WINNT
 #define _WIN32_WINNT 0x0600  
 #endif
 #ifndef WINVER
 #define WINVER _WIN32_WINNT
 #endif
-
 #include <windows.h>
-
 #include <vector>
 #include <memory>
 #include <easyx.h>

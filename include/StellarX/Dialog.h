@@ -126,7 +126,7 @@ private:
 	void saveBackground(int x, int y, int w, int h)override;
 
 	void restBackground()override;
-
+	void addControl(std::unique_ptr<Control> control);
 	
 	// 清除所有控件
 	void clearControls(); 

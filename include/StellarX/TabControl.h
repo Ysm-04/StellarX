@@ -64,5 +64,6 @@ public:
     int indexOf(const std::string& tabText) const;
     void setDirty(bool dirty) override;
     void requestRepaint(Control* parent)override;
+   
 };
 

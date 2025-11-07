@@ -7,12 +7,12 @@
 auto   blackColor = RGB(202, 255, 255);
 char initData[33] = "00000000000000000000000000000000";//初始数据
 bool gSigned = false;      //是否为有符号数
-void main()
-{ 
-	Window mainWindow(700,500,NULL,RGB(255,255,255), "寄存器查看工具 V1.0——我在人间做废物                         (同类工具定制：3150131407(Q / V))");
-	
+int main()
+{
+	Window mainWindow(700, 510, NULL, RGB(255, 255, 255), "寄存器查看工具 V1.0——我在人间做废物                         (同类工具定制：3150131407(Q / V))");
+
 	//选择区控件
-	auto selectionAreaLabel = std::make_unique<Label>(18, 0,"32位选择区");
+	auto selectionAreaLabel = std::make_unique<Label>(18, 0, "32位选择区");
 	selectionAreaLabel->setTextdisap(true);
 	std::vector<std::unique_ptr<Label>>selectionAreaButtonLabel;
 	std::vector<std::unique_ptr<Button>>selectionAreaButton;
@@ -21,22 +21,22 @@ void main()
 
 	selectionArea->setCanvasBkColor(blackColor);
 	selectionArea->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
-	
-	for (int y = 0; y < 2; y ++)
+
+	for (int y = 0; y < 2; y++)
 	{
 		std::ostringstream os;
-		for (int x = 0; x <16; x++)
+		for (int x = 0; x < 16; x++)
 		{
 			if (0 == y)
 			{
-				selectionAreaButtonLabel.push_back(std::make_unique<Label>(x * 35 + 40 + 28 * (x / 4), 26, "", RGB(208, 208, 208)));
+				selectionAreaButtonLabel.push_back(std::make_unique<Label>(x * 35 + 25 + 28 * (x / 4), 26, "", RGB(208, 208, 208)));
 				os << std::setw(2) << std::setfill('0') << 31 - x;
 				selectionAreaButtonLabel.back()->setText(os.str());
 				selectionAreaButtonLabel.back()->setTextdisap(true);
 
 				selectionAreaButton.push_back(
-					std::make_unique<Button>(x * 35 + 42 + 28 * (x / 4), 58,20,32,"0",
-						blackColor,RGB(171, 196, 220),StellarX::ButtonMode::TOGGLE));
+					std::make_unique<Button>(x * 35 + 27 + 28 * (x / 4), 58, 25, 30, "0",
+						blackColor, RGB(171, 196, 220), StellarX::ButtonMode::TOGGLE));
 				selectionAreaButton.back()->textStyle.color = RGB(226, 116, 152);
 				selectionAreaButton.back()->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 				selectionAreaButton_ptr.push_back(selectionAreaButton.back().get());
@@ -55,19 +55,19 @@ void main()
 			}
 			else
 			{
-				selectionAreaButtonLabel.push_back(std::make_unique<Label>(x * 35 + 40 + 28 * (x / 4), 90, "", RGB(208, 208, 208)));
-				os << std::setw(2) << std::setfill('0') << 15-x;
+				selectionAreaButtonLabel.push_back(std::make_unique<Label>(x * 35 + 25 + 28 * (x / 4), 90, "", RGB(208, 208, 208)));
+				os << std::setw(2) << std::setfill('0') << 15 - x;
 				selectionAreaButtonLabel.back()->setText(os.str());
 				selectionAreaButtonLabel.back()->setTextdisap(true);
 
 				selectionAreaButton.push_back(
-					std::make_unique<Button>(x * 35 + 42 + 28 * (x / 4), 120, 20, 32, "0",
+					std::make_unique<Button>(x * 35 + 27 + 28 * (x / 4), 120, 25, 30, "0",
 						blackColor, RGB(171, 196, 220), StellarX::ButtonMode::TOGGLE));
 				selectionAreaButton.back()->textStyle.color = RGB(226, 116, 152);
 				selectionAreaButton.back()->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 				selectionAreaButton_ptr.push_back(selectionAreaButton.back().get());
-				int k =15 - x;
-				selectionAreaButton.back()->setOnToggleOnListener([k,btn = selectionAreaButton_ptr.back()]()
+				int k = 15 - x;
+				selectionAreaButton.back()->setOnToggleOnListener([k, btn = selectionAreaButton_ptr.back()]()
 					{
 						btn->setButtonText("1");
 						initData[k] = '1';
@@ -78,8 +78,8 @@ void main()
 						initData[k] = '0';
 					});
 			}
-			os.str("");     
-			os.clear();     
+			os.str("");
+			os.clear();
 
 		}
 	}
@@ -92,8 +92,8 @@ void main()
 	//功能区总容器
 	auto function = std::make_unique<Canvas>(0, 0, 0, 0);
 	function->setCanvasfillMode(StellarX::FillMode::Null);
-	
-	auto bitInvert = std::make_unique<Canvas>(10,170,220,70);
+
+	auto bitInvert = std::make_unique<Canvas>(10, 170, 220, 70);
 	auto leftShift = std::make_unique<Canvas>(240, 170, 220, 70);
 	auto rightShift = std::make_unique<Canvas>(470, 170, 220, 70);
 	bitInvert->setCanvasBkColor(blackColor);
@@ -102,13 +102,13 @@ void main()
 	leftShift->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
 	rightShift->setCanvasBkColor(blackColor);
 	rightShift->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
-	
-	
-	auto bitInvertLabel = std::make_unique<Label>(18,160,"位取反");
+
+
+	auto bitInvertLabel = std::make_unique<Label>(13, -10, "位取反");
 	bitInvertLabel->setTextdisap(true);
-	auto leftShiftLabel = std::make_unique<Label>(248, 160, "左移位");
+	auto leftShiftLabel = std::make_unique<Label>(13, -10, "左移位");
 	leftShiftLabel->setTextdisap(true);
-	auto rightShiftLabel = std::make_unique<Label>(478, 160, "右移位");
+	auto rightShiftLabel = std::make_unique<Label>(13, -10, "右移位");
 	rightShiftLabel->setTextdisap(true);
 
 	// ====== 公用小工具======
@@ -139,22 +139,22 @@ void main()
 
 	//取反区控件
 	std::array<std::unique_ptr<Label>, 4> bitInvertFunctionLabel;
-	bitInvertFunctionLabel[0] = std::make_unique<Label>(35, 180, "低位");
-	bitInvertFunctionLabel[1] = std::make_unique<Label>(90, 180, "高位");
-	bitInvertFunctionLabel[2] = std::make_unique<Label>(15, 198, "从");
-	bitInvertFunctionLabel[3] = std::make_unique<Label>(75, 198, "到");
+	bitInvertFunctionLabel[0] = std::make_unique<Label>(35, 10, "低位");
+	bitInvertFunctionLabel[1] = std::make_unique<Label>(90, 10, "高位");
+	bitInvertFunctionLabel[2] = std::make_unique<Label>(15, 38, "从");
+	bitInvertFunctionLabel[3] = std::make_unique<Label>(75, 38, "到");
 
 	std::array<std::unique_ptr<TextBox>, 2> bitInvertFunctionTextBox;
-	bitInvertFunctionTextBox[0] = std::make_unique<TextBox>(35, 203, 35, 30, "0");
-	bitInvertFunctionTextBox[1] = std::make_unique<TextBox>(95, 203, 35, 30, "0");
+	bitInvertFunctionTextBox[0] = std::make_unique<TextBox>(35, 35, 35, 30, "0");
+	bitInvertFunctionTextBox[1] = std::make_unique<TextBox>(95, 35, 35, 30, "0");
 	auto invL = bitInvertFunctionTextBox[0].get();
 	auto invH = bitInvertFunctionTextBox[1].get();
-	auto bitInvertFunctionButton = std::make_unique<Button>(150,195, 70, 35, "位取反",
+	auto bitInvertFunctionButton = std::make_unique<Button>(135, 35, 80, 30, "位取反",
 		blackColor, RGB(171, 196, 220));
 	bitInvertFunctionButton->textStyle.color = RGB(226, 116, 152);
 	bitInvertFunctionButton->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 	auto bitInvertFunctionButton_ptr = bitInvertFunctionButton.get();
-	
+
 	bitInvert->addControl(std::move(bitInvertFunctionButton));
 	bitInvert->addControl(std::move(bitInvertLabel));
 	for (auto& b : bitInvertFunctionTextBox)
@@ -171,22 +171,22 @@ void main()
 		bitInvert->addControl(std::move(b));
 	}
 	//左移控件
-	auto leftShiftFunctionLabel = std::make_unique<Label>(435, 198, "位");
+	auto leftShiftFunctionLabel = std::make_unique<Label>(198, 30, "位");
 	leftShiftFunctionLabel->setTextdisap(true);
 
-	auto leftShiftFunctionTextBox = std::make_unique<TextBox>(325, 195, 100, 30, "0");
+	auto leftShiftFunctionTextBox = std::make_unique<TextBox>(90, 30, 100, 30, "0");
 	leftShiftFunctionTextBox->setMaxCharLen(3);
 	leftShiftFunctionTextBox->textStyle.color = RGB(226, 116, 152);
 	leftShiftFunctionTextBox->setTextBoxBk(RGB(244, 234, 142));
 	leftShiftFunctionTextBox->setTextBoxshape(StellarX::ControlShape::B_RECTANGLE);
 	auto shlBox = leftShiftFunctionTextBox.get();
-	auto leftShiftFunctionButton = std::make_unique<Button>(250, 195, 60, 30, "左移",
+	auto leftShiftFunctionButton = std::make_unique<Button>(15, 30, 60, 30, "左移",
 		blackColor, RGB(171, 196, 220));
 	leftShiftFunctionButton->textStyle.color = RGB(226, 116, 152);
 	leftShiftFunctionButton->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 	auto leftShiftFunctionButton_ptr = leftShiftFunctionButton.get();
-	
-	
+
+
 	leftShift->addControl(std::move(leftShiftFunctionButton));
 	leftShift->addControl(std::move(leftShiftFunctionTextBox));
 
@@ -194,29 +194,29 @@ void main()
 	leftShift->addControl(std::move(leftShiftFunctionLabel));
 
 	//右移控件
-	auto rightShiftFunctionLabel = std::make_unique<Label>(665, 198, "位");
+	auto rightShiftFunctionLabel = std::make_unique<Label>(198, 30, "位");
 	rightShiftFunctionLabel->setTextdisap(true);
-	auto rightShiftFunctionTextBox = std::make_unique<TextBox>(555, 195, 100, 30, "0");
+	auto rightShiftFunctionTextBox = std::make_unique<TextBox>(90, 30, 100, 30, "0");
 	rightShiftFunctionTextBox->setMaxCharLen(3);
 	rightShiftFunctionTextBox->textStyle.color = RGB(226, 116, 152);
 	rightShiftFunctionTextBox->setTextBoxBk(RGB(244, 234, 142));
 	rightShiftFunctionTextBox->setTextBoxshape(StellarX::ControlShape::B_RECTANGLE);
 	auto shrBox = rightShiftFunctionTextBox.get();
 
-	auto rightShiftFunctionButton = std::make_unique<Button>(480, 195, 60, 30, "右移",
+	auto rightShiftFunctionButton = std::make_unique<Button>(15, 30, 60, 30, "右移",
 		blackColor, RGB(171, 196, 220));
 	rightShiftFunctionButton->textStyle.color = RGB(226, 116, 152);
 	rightShiftFunctionButton->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 	auto rightShiftFunctionButton_ptr = rightShiftFunctionButton.get();
-	
-	
+
+
 
 	rightShift->addControl(std::move(rightShiftFunctionButton));
 
 	rightShift->addControl(std::move(rightShiftFunctionTextBox));
 	rightShift->addControl(std::move(rightShiftLabel));
 	rightShift->addControl(std::move(rightShiftFunctionLabel));
-	
+
 	function->addControl(std::move(bitInvert));
 	function->addControl(std::move(leftShift));
 	function->addControl(std::move(rightShift));
@@ -226,15 +226,15 @@ void main()
 	auto NumericalDisplayArea = std::make_unique<Canvas>(10, 255, 680, 70);
 	NumericalDisplayArea->setCanvasBkColor(blackColor);
 	NumericalDisplayArea->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
-	
+
 	std::array<std::unique_ptr<Label>, 3> NumericalDisplayAreaLabel;
-	NumericalDisplayAreaLabel[0] = std::make_unique<Label>(18, 245, "数值显示区");
-	NumericalDisplayAreaLabel[1] = std::make_unique<Label>(20, 278, "十六进制");
-	NumericalDisplayAreaLabel[2] = std::make_unique<Label>(330, 278, "十进制");
+	NumericalDisplayAreaLabel[0] = std::make_unique<Label>(18, -10, "数值显示区");
+	NumericalDisplayAreaLabel[1] = std::make_unique<Label>(20, 25, "十六进制");
+	NumericalDisplayAreaLabel[2] = std::make_unique<Label>(330, 25, "十进制");
 
 	std::array<std::unique_ptr<TextBox>, 2> NumericalDisplayAreaTextBox;
-	NumericalDisplayAreaTextBox[0] = std::make_unique<TextBox>(110, 275, 200, 30, "0");
-	NumericalDisplayAreaTextBox[1] = std::make_unique<TextBox>(400, 275, 200, 30, "0");
+	NumericalDisplayAreaTextBox[0] = std::make_unique<TextBox>(110, 25, 200, 30, "0");
+	NumericalDisplayAreaTextBox[1] = std::make_unique<TextBox>(400, 25, 200, 30, "0");
 	auto hex = NumericalDisplayAreaTextBox[0].get();
 	auto dec = NumericalDisplayAreaTextBox[1].get();
 
@@ -257,15 +257,15 @@ void main()
 	auto BinaryDisplayArea = std::make_unique<Canvas>(10, 335, 680, 110);
 	BinaryDisplayArea->setCanvasBkColor(blackColor);
 	BinaryDisplayArea->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
-	
+
 	std::array<std::unique_ptr<Label>, 3> BinaryDisplayAreaLabel;
-	BinaryDisplayAreaLabel[0] = std::make_unique<Label>(18, 325, "二进制显示区");
-	BinaryDisplayAreaLabel[1] = std::make_unique<Label>(35, 353, "上次值");
-	BinaryDisplayAreaLabel[2] = std::make_unique<Label>(35, 400, "本次值");
+	BinaryDisplayAreaLabel[0] = std::make_unique<Label>(18, -10, "二进制显示区");
+	BinaryDisplayAreaLabel[1] = std::make_unique<Label>(35, 20, "上次值");
+	BinaryDisplayAreaLabel[2] = std::make_unique<Label>(35, 67, "本次值");
 
 	std::array<std::unique_ptr<TextBox>, 2> BinaryDisplayAreaTextBox;
-	BinaryDisplayAreaTextBox[0] = std::make_unique<TextBox>(110, 350, 520, 30, "0000_0000_0000_0000_0000_0000_0000_0000");
-	BinaryDisplayAreaTextBox[1] = std::make_unique<TextBox>(110, 400, 520, 30, "0000_0000_0000_0000_0000_0000_0000_0000");
+	BinaryDisplayAreaTextBox[0] = std::make_unique<TextBox>(110, 20, 520, 30, "0000_0000_0000_0000_0000_0000_0000_0000");
+	BinaryDisplayAreaTextBox[1] = std::make_unique<TextBox>(110, 67, 520, 30, "0000_0000_0000_0000_0000_0000_0000_0000");
 	auto Last = BinaryDisplayAreaTextBox[0].get();
 	auto This = BinaryDisplayAreaTextBox[1].get();
 
@@ -366,17 +366,17 @@ void main()
 	auto configuration = std::make_unique<Canvas>(10, 455, 680, 40);
 	configuration->setCanvasBkColor(blackColor);
 	configuration->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
-	
-    	auto configurationLabel = std::make_unique<Label>(20, 445, "配置区");
+
+	auto configurationLabel = std::make_unique<Label>(20, -10, "配置区");
 	configurationLabel->setTextdisap(true);
 
-	std::array<std::unique_ptr<Button>,2> configurationButton;
-	configurationButton[0] = std::make_unique<Button>(450, 465, 80, 20, "一键置0",
+	std::array<std::unique_ptr<Button>, 2> configurationButton;
+	configurationButton[0] = std::make_unique<Button>(420, 10, 90, 20, "一键置0",
 		blackColor, RGB(171, 196, 220));
 	configurationButton[0]->textStyle.color = RGB(226, 116, 152);
 	configurationButton[0]->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
-	
-	configurationButton[1] = std::make_unique<Button>(550, 465, 80, 20, "一键置1",
+
+	configurationButton[1] = std::make_unique<Button>(530, 10, 90, 20, "一键置1",
 		blackColor, RGB(171, 196, 220));
 	configurationButton[1]->textStyle.color = RGB(226, 116, 152);
 	configurationButton[1]->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
@@ -419,16 +419,16 @@ void main()
 
 
 	auto signedToggle = std::make_unique<Button>(
-		350, 465, 80, 20, "无符号",
+		330, 10, 80, 20, "无符号",
 		blackColor, RGB(171, 196, 220), StellarX::ButtonMode::TOGGLE);
 	signedToggle->textStyle.color = RGB(226, 116, 152);
 	signedToggle->setButtonShape(StellarX::ControlShape::B_RECTANGLE);
 	auto* signedTogglePtr = signedToggle.get();
-	
+
 	signedTogglePtr->setOnToggleOnListener([&]() {
 		gSigned = true;
 		signedTogglePtr->setButtonText("有符号");
-
+		StellarX::MessageBox::showAsync(mainWindow, "有符号模式下，\n最高位为符号位，\n其余位为数值位。", "有符号模式");
 		// 立即刷新十进制显示：用当前位图算出新值，仅改 dec
 		auto cur = snapshotBits();
 		const uint32_t u = [&] { uint32_t v = 0; for (int b = 0; b < 32; ++b) if (cur[b]) v |= (1u << b); return v; }();
@@ -438,12 +438,13 @@ void main()
 	signedTogglePtr->setOnToggleOffListener([&]() {
 		gSigned = false;
 		signedTogglePtr->setButtonText("无符号");
-
+		StellarX::MessageBox::showAsync(mainWindow, "无符号模式下，\n所有位均为数值位。", "无符号模式");
 		auto cur = snapshotBits();
 		const uint32_t u = [&] { uint32_t v = 0; for (int b = 0; b < 32; ++b) if (cur[b]) v |= (1u << b); return v; }();
 		dec->setText(std::to_string(u));
 		});
-
+	signedTogglePtr->enableTooltip(true);
+	signedTogglePtr->setTooltipTextsForToggle("切换无符号模式", "切换有符号模式");
 
 	configuration->addControl(std::move(configurationButton[0]));
 	configuration->addControl(std::move(configurationButton[1]));

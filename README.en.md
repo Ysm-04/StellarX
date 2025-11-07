@@ -25,21 +25,14 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
-## **🆕 v2.2.1 (Hotfix for v2.2.0)**
+## 🆕 v2.2.2 — Stable Release
 
-- Addressed a flickering issue that occurred when using the Canvas and TabControl containers.
-- Fixed issues where border remnants and functional buttons could persist after closing a Dialog.
+- In the next planned update, control states will synchronize in real-time during window resizing operations.
+- Modified the coordinate transfer method for Canvas containers. Child control coordinates are now passed as relative coordinates (with the origin at the top-left corner of the container, obtainable via the `getX`/`getY` interface) instead of global coordinates. Child control coordinates can now be set to negative values.
+- The example under `examples\register-viewer` has been updated to the latest version, aligning container child controls to use relative coordinates.
+- Addressed issues related to window resizing and dialog boxes as mentioned above.
 
 For details, please refer to the [CHANGELOG.en](CHANGELOG.en.md).
-
-## What’s new in v2.2.0
-
-- **New TabControl for multi-page tabbed UIs:** With `TabControl`, it’s easy to create a tabbed layout. Tabs can be arranged on the top, bottom, left, or right, and clicking switches the displayed page. Suitable for settings panels and multi-view switching.
-- **Enhanced control show/hide and resize responsiveness:** All controls now share a unified interface (`setIsVisible`) to toggle visibility. When a container control is hidden, its child controls automatically hide/show with it. Meanwhile, we introduce `onWindowResize` for controls to respond to window size changes so elements update in sync after resizing, eliminating artifacts or misalignment.
-- **Refined text-style mechanism:** The Label control now uses a unified `ControlText` style structure. Developers can easily customize font, color, size, etc. (replacing older interfaces, and more flexible). Button Tooltips also support richer customization and different texts for toggle states.
-- **Other improvements:** Dialog management gains de-duplication to prevent identical prompts from popping up repeatedly. Several bug fixes and refresh optimizations further improve stability.
-
-See `CHANGELOG.md / CHANGELOG.en.md` for the full list.
 
 ------
 

@@ -1,86 +1,105 @@
 ﻿
+/**
+ * Window（头文件）
+ *
+ * 设计目标：
+ *  - 提供一个基于 Win32 + EasyX 的“可拉伸且稳定不抖”的窗口容器。
+ *  - 通过消息过程子类化（WndProcThunk）接管关键消息（WM_SIZING/WM_SIZE/...）。
+ *  - 将“几何变化记录（pendingW/H）”与“统一收口重绘（needResizeDirty）”解耦。
+ *
+ * 关键点（与 .cpp 中实现对应）：
+ *  - isSizing：处于交互拉伸阶段时，冻结重绘；松手后统一重绘，防止抖动。
+ *  - WM_SIZING：只做“最小尺寸夹紧”，不回滚矩形、不做对齐；把其余交给系统。
+ *  - WM_GETMINMAXINFO：按最小“客户区”换算到“窗口矩形”，提供系统层最小轨迹值。
+ *  - runEventLoop：只记录 WM_SIZE 的新尺寸；真正绘制放在 needResizeDirty 时集中处理。
+ */
 #pragma once
-#include"Control.h"
-/*******************************************************************************
- * @类: Window
- * @摘要: 应用程序主窗口类，管理窗口生命周期和消息循环
- * @描述:
- *     创建和管理应用程序主窗口，作为所有控件的根容器。
- *     处理消息分发、事件循环和渲染调度。
- *
- * @特性:
- *     - 多种窗口模式配置（双缓冲、控制台等）
- *     - 背景图片和颜色支持
- *     - 集成的对话框管理系统
- *     - 完整的消息处理循环
- *     - 控件和对话框的生命周期管理
- *
- * @使用场景: 应用程序主窗口，GUI程序的入口和核心
- * @所属框架: 星垣(StellarX) GUI框架
- * @作者: 我在人间做废物
- ******************************************************************************/
+
+#include "Control.h"
+#include <string>
+#include <vector>
+#include <memory>
+#include <windows.h>
+
 class Window
 {
-	            int           width;              //窗口宽度
-				int           height;             //窗口高度
-				int           windowMode = NULL;     //窗口模式
+    // —— 尺寸状态 ——（绘制尺寸与待应用尺寸分离；收口时一次性更新）
+    int           width;                 // 当前有效宽（已应用到画布/控件的客户区宽）
+    int           height;                // 当前有效高（已应用到画布/控件的客户区高）
+    int           pendingW;              // 待应用宽（WM_SIZE/拉伸中记录用）
+    int           pendingH;              // 待应用高
+    int           minClientW;            // 业务设定的最小客户区宽（用于 GETMINMAXINFO 与 SIZING 夹紧）
+    int           minClientH;            // 业务设定的最小客户区高
+    int           windowMode = NULL;     // EasyX 初始化模式（EX_SHOWCONSOLE/EX_TOPMOST/...）
+    bool          needResizeDirty = false; // 统一收口重绘标志（置位后在事件环末尾处理）
+    bool          isSizing = false;      // 是否处于拖拽阶段（ENTER/EXIT SIZEMOVE 切换）
 
-				// --- 尺寸变化去抖用 ---
-				int           pendingW;
-				int           pendingH;
-				bool          needResizeDirty = false;
+    // —— 原生窗口句柄与子类化钩子 ——（子类化 EasyX 的窗口过程以拦截关键消息）
+    HWND          hWnd = NULL;           // EasyX 初始化后的窗口句柄
+    WNDPROC       oldWndProc = nullptr;  // 保存旧过程（CallWindowProc 回落）
+    bool          procHooked = false;    // 避免重复子类化
+    static LRESULT CALLBACK WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l); // 静态过程分发到 this
 
-	           HWND           hWnd = NULL;           //窗口句柄
-	    std::string           headline;              //窗口标题
-	       COLORREF           wBkcolor = BLACK;      //窗口背景
-	          IMAGE*                  background = nullptr;  //窗口背景图片
-			  std::string             bkImageFile;           //窗口背景图片文件名
-std::vector<std::unique_ptr<Control>> controls;               //控件管理
-std::vector<std::unique_ptr<Control>> dialogs;                //对话框管理
+    // —— 绘制相关 ——（是否使用合成双缓冲、窗口标题、背景等）
+    bool          useComposited = true;  // 是否启用 WS_EX_COMPOSITED（部分机器可能增加一帧观感延迟）
+    std::string   headline;              // 窗口标题文本
+    COLORREF      wBkcolor = BLACK;      // 纯色背景（无背景图时使用）
+    IMAGE* background = nullptr;  // 背景图对象指针（存在时优先绘制）
+    std::string   bkImageFile;           // 背景图文件路径（loadimage 用）
 
+    // —— 控件/对话框 ——（容器内的普通控件与非模态对话框）
+    std::vector<std::unique_ptr<Control>> controls;
+    std::vector<std::unique_ptr<Control>> dialogs;
 
 public:
-	bool dialogClose = false; //是否有对话框关闭
+    bool dialogClose = false;            // 项目内使用的状态位
 
-	Window(int width, int height, int mode);
-	Window(int width, int height, int mode, COLORREF bkcloc);
-	Window(int width, int height, int mode , COLORREF bkcloc, std::string headline = "窗口");
-	~Window();
-	//绘制窗口
-	void draw();
-	void draw(std::string pImgFile);
-	//事件循环
-	int runEventLoop();
-	//设置窗口背景图片
-	void setBkImage(std::string pImgFile);
-	//设置窗口背景颜色
-	void setBkcolor(COLORREF c);
-	//设置窗口标题
-	void setHeadline(std::string headline);
-	//添加控件
-	void addControl(std::unique_ptr<Control> control);
-	//添加对话框
-	void addDialog(std::unique_ptr<Control>  dialogs);
-	//检查是否已有对话框显示用于去重，防止工厂模式调用非模态对话框，多次打开污染对话框背景快照
-	bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
+    // —— 构造/析构 ——（仅初始化成员；实际样式与子类化在 draw() 中完成）
+    Window(int width, int height, int mode);
+    Window(int width, int height, int mode, COLORREF bkcloc);
+    Window(int width, int height, int mode, COLORREF bkcloc, std::string headline);
+    ~Window();
+    
+    // —— 绘制与事件循环 ——（draw* 完成一次全量绘制；runEventLoop 驱动事件与统一收口）
+    void draw();                         // 纯色背景版本
+    void draw(std::string pImgFile);     // 背景图版本
+    int  runEventLoop();                 // 主事件循环（PeekMessage + 统一收口重绘）
 
-	//获取窗口句柄
-	HWND getHwnd() const;
-	//获取窗口宽度
-	int getWidth() const;
-	//获取窗口高度
-	int getHeight() const;
-	//获取窗口标题
-	std::string getHeadline() const;
-	//获取窗口背景颜色
-	COLORREF getBkcolor() const;
-	//获取窗口背景图片
-	IMAGE* getBkImage() const;
-	//获取窗口背景图片文件名
-	std::string getBkImageFile() const;
-	//获取控件管理
-	std::vector<std::unique_ptr<Control>>& getControls();
+    // —— 背景/标题设置 ——（更换背景、背景色与标题；立即触发一次批量绘制）
+    void setBkImage(std::string pImgFile);
+    void setBkcolor(COLORREF c);
+    void setHeadline(std::string headline);
 
+    // —— 控件/对话框管理 ——（添加到容器，或做存在性判断）
+    void addControl(std::unique_ptr<Control> control);
+    void addDialog(std::unique_ptr<Control> dialogs);
+    bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
+
+    // —— 访问器 ——（只读接口，供外部查询当前窗口/标题/背景等）
+    HWND        getHwnd() const;
+    int         getWidth() const;
+    int         getHeight() const;
+    std::string getHeadline() const;
+    COLORREF    getBkcolor() const;
+    IMAGE* getBkImage() const;
+    std::string getBkImageFile() const;
+    std::vector<std::unique_ptr<Control>>& getControls();
+
+    // —— 配置开关 ——（动态调整最小客户区、合成双缓冲）
+    inline void setMinClientSize(int w, int h)
+    {
+        // 仅更新阈值；实际约束在 WM_GETMINMAXINFO/WM_SIZING 中生效
+        minClientW = w;
+        minClientH = h;
+    }
+
+    inline void setComposited(bool on)
+    {
+        // 更新标志；真正应用在 draw()/样式 SetWindowLongEx + SWP_FRAMECHANGED
+        useComposited = on;
+    }
+
+    void processWindowMessage(const ExMessage & msg); // 处理 EX_WINDOW 中的 WM_SIZE 等
+    void pumpResizeIfNeeded();                       // 执行一次统一收口重绘
+    void scheduleResizeFromModal(int w, int h);
 };
-
-

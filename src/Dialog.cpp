@@ -170,33 +170,71 @@ void Dialog::Show()
 	if (modal)
 	{	
 		// 模态对话框需要阻塞当前线程直到对话框关闭
-		while (show && !close)
+		if (modal)
 		{
-			
-			// 处理消息
-			ExMessage msg;
-			if (peekmessage(&msg, EX_MOUSE | EX_KEY))
-			{
-				handleEvent(msg);
+			// 记录当前窗口客户区尺寸，供轮询对比
+			RECT rc0;
+			GetClientRect(hWnd.getHwnd(), &rc0);
+			int lastW = rc0.right - rc0.left;
+			int lastH = rc0.bottom - rc0.top;
 
-				// 检查是否需要关闭
-				if (shouldClose)
+			while (show && !close)
+			{
+				// ① 轮询窗口尺寸（不依赖 WM_SIZE）
+				RECT rc;
+				GetClientRect(hWnd.getHwnd(), &rc);
+				const int cw = rc.right - rc.left;
+				const int ch = rc.bottom - rc.top;
+
+				if (cw != lastW || ch != lastH)
 				{
-					Close();
-					break;
+					lastW = cw;
+					lastH = ch;
+
+					// 通知父窗口：有新尺寸 → 标记 needResizeDirty
+					hWnd.scheduleResizeFromModal(cw, ch);
+
+					// 立即统一收口：父窗重绘 背景+普通控件（不会画到这只模态）
+					hWnd.pumpResizeIfNeeded();
+
+					// 这只模态在新尺寸下重建布局 / 重抓背景 → 本帧要画自己
+					setInitialization(true);
+					setDirty(true);
 				}
+
+				// ② 处理这只对话框的鼠标/键盘（沿用你原来 EX_MOUSE | EX_KEY）
+				ExMessage msg;
+				if (peekmessage(&msg, EX_MOUSE | EX_KEY))
+				{
+					handleEvent(msg);
+					if (shouldClose)
+					{
+						Close();
+						break;
+					}
+				}
+
+				// ③ 最后一笔：只画这只模态，保证永远在最上层
+				if (dirty)
+				{
+					BeginBatchDraw();
+					this->draw();   // 注意：不要 requestRepaint(parent)，只画自己
+					EndBatchDraw();
+					dirty = false;
+				}
+
+				Sleep(10);
 			}
 
-			// 重绘
-			if (dirty)
-			{
-				requestRepaint(parent);
-				FlushBatchDraw();
-			}
-
-			// 避免CPU占用过高
-			Sleep(10);
+			if (pendingCleanup && !isCleaning)
+				performDelayedCleanup();
 		}
+		else
+		{
+			// 非模态仍由主循环托管
+			dirty = true;
+		}
+
 		// 模态对话框关闭后执行清理
 		if (pendingCleanup && !isCleaning)
 			performDelayedCleanup();
@@ -609,6 +647,13 @@ void Dialog::restBackground()
 	putimage(saveBkX - BorderWidth, saveBkY - BorderWidth,saveBkImage);
 }
 
+void Dialog::addControl(std::unique_ptr<Control> control)
+{
+	control->setParent(this);
+	controls.push_back(std::move(control));
+	dirty = true;
+}
+
 // 延迟清理策略：由于对话框绘制时保存了背景快照，必须在对话框隐藏后、
 // 所有控件析构前恢复背景，否则会导致背景图像被错误覆盖。
 // 此方法在对话框不可见且被标记为待清理时由 draw() 或 handleEvent() 调用。
@@ -633,6 +678,23 @@ void Dialog::performDelayedCleanup()
 		restBackground();
 		FlushBatchDraw();
 		discardBackground();
+	}
+	if (!(saveBkImage && hasSnap))
+	{
+		// 没有背景快照：强制一次完整重绘，立即擦掉残影
+		hWnd.pumpResizeIfNeeded(); // 如果正好有尺寸标志，顺便统一收口
+		// 即使没有尺寸变化，也重绘一帧
+		BeginBatchDraw();
+		// 背景
+		if (hWnd.getBkImage() && !hWnd.getBkImageFile().empty())
+			putimage(0, 0, hWnd.getBkImage());
+		else { setbkcolor(hWnd.getBkcolor()); cleardevice(); }
+		// 所有普通控件
+		for (auto& c : hWnd.getControls()) c->draw();
+		// 其他对话框（this 已经 show=false，会早退不绘）
+		// 注意：此处若有容器管理，需要按你的现状遍历 dialogs 再 draw
+		EndBatchDraw();
+		FlushBatchDraw();
 	}
 	// 重置状态
 	needsInitialization = true;
@@ -684,11 +746,8 @@ void Dialog::requestRepaint(Control* parent)
 	if (this == parent)
 	{
 		for (auto& control : controls)
-			if (control->isDirty()&&control->IsVisible())
-			{
+			if (control->isDirty() && control->IsVisible())
 				control->draw();
-				break;
-			}
 
 	}
 	else

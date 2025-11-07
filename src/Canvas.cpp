@@ -76,6 +76,9 @@ bool Canvas::handleEvent(const ExMessage& msg)
 
 void Canvas::addControl(std::unique_ptr<Control> control)
 {
+	//坐标转化
+	control->setX(control->getLocalX() + this->x);
+	control->setY(control->getLocalY() + this->y);
 	control->setParent(this);
 	controls.push_back(std::move(control));
 	dirty = true;
@@ -166,10 +169,7 @@ void Canvas::requestRepaint(Control* parent)
 	{
 		for (auto& control : controls)
 			if (control->isDirty() && control->IsVisible())
-			{
 				control->draw();
-				break;
-			}
 	}
 	else
 		onRequestRepaintAsRoot();
