@@ -43,9 +43,9 @@ protected:
     bool show = true; // 是否显示
 
     /* == 布局模式 == */
-    StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
-    StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 锚点
-    StellarX::Anchor anchor_2 = StellarX::Anchor::Left; // 锚点
+    StellarX::LayoutMode layoutMode = StellarX::LayoutMode::AnchorToEdges;  // 布局模式
+    StellarX::Anchor anchor_1 = StellarX::Anchor::Left; // 锚点
+    StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 锚点
 
     /* == 背景快照 ==  */
     IMAGE* saveBkImage = nullptr;

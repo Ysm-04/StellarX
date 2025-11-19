@@ -79,8 +79,12 @@ bool TextBox::handleEvent(const ExMessage& msg)
         click = true;
         if(StellarX::TextBoxmode::INPUT_MODE == mode)
 		{
-			dirty = InputBox(LPTSTR(text.c_str()), (int)maxCharLen, "输入框", NULL, text.c_str(), NULL, NULL, false);
-			consume = true;
+			char* temp = new char[maxCharLen + 1];
+			dirty = InputBox(temp, (int)maxCharLen, "输入框", NULL, text.c_str(), NULL, NULL, false);
+            if(dirty)text = temp;
+			delete[] temp;
+			temp = nullptr;
+            consume = true;
 		}
         else if (StellarX::TextBoxmode::READONLY_MODE == mode)
         {
