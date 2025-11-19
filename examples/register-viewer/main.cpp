@@ -90,12 +90,18 @@ int main()
 		selectionArea->addControl(std::move(s));
 	//功能区控件
 	//功能区总容器
-	auto function = std::make_unique<Canvas>(0, 0, 0, 0);
+	auto function = std::make_unique<Canvas>(10, 170, 680, 70);
 	function->setCanvasfillMode(StellarX::FillMode::Null);
+	function->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
+	function->setCanvasBkColor(blackColor);
+	auto bitInvert_que = std::make_unique<Canvas>(0, 0, 220, 70);
+	auto leftShift_que = std::make_unique<Canvas>(230, 0, 220, 70);
+	auto rightShift_que = std::make_unique<Canvas>(460, 0, 220, 70);
 
-	auto bitInvert = std::make_unique<Canvas>(10, 170, 220, 70);
-	auto leftShift = std::make_unique<Canvas>(240, 170, 220, 70);
-	auto rightShift = std::make_unique<Canvas>(470, 170, 220, 70);
+	auto bitInvert = bitInvert_que.get();
+	auto leftShift = leftShift_que.get();
+	auto rightShift = rightShift_que.get();
+
 	bitInvert->setCanvasBkColor(blackColor);
 	bitInvert->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
 	leftShift->setCanvasBkColor(blackColor);
@@ -103,6 +109,9 @@ int main()
 	rightShift->setCanvasBkColor(blackColor);
 	rightShift->setShape(StellarX::ControlShape::B_ROUND_RECTANGLE);
 
+	function->addControl(std::move(bitInvert_que));
+	function->addControl(std::move(leftShift_que));
+	function->addControl(std::move(rightShift_que));
 
 	auto bitInvertLabel = std::make_unique<Label>(13, -10, "位取反");
 	bitInvertLabel->setTextdisap(true);
@@ -139,7 +148,7 @@ int main()
 
 	//取反区控件
 	std::array<std::unique_ptr<Label>, 4> bitInvertFunctionLabel;
-	bitInvertFunctionLabel[0] = std::make_unique<Label>(35, 10, "低位");
+	bitInvertFunctionLabel[0] = std::make_unique<Label>(30, 10, "低位");
 	bitInvertFunctionLabel[1] = std::make_unique<Label>(90, 10, "高位");
 	bitInvertFunctionLabel[2] = std::make_unique<Label>(15, 38, "从");
 	bitInvertFunctionLabel[3] = std::make_unique<Label>(75, 38, "到");
@@ -217,9 +226,6 @@ int main()
 	rightShift->addControl(std::move(rightShiftLabel));
 	rightShift->addControl(std::move(rightShiftFunctionLabel));
 
-	function->addControl(std::move(bitInvert));
-	function->addControl(std::move(leftShift));
-	function->addControl(std::move(rightShift));
 
 	//显示区控件
 	//数值显示
@@ -428,7 +434,7 @@ int main()
 	signedTogglePtr->setOnToggleOnListener([&]() {
 		gSigned = true;
 		signedTogglePtr->setButtonText("有符号");
-		StellarX::MessageBox::showAsync(mainWindow, "有符号模式下，\n最高位为符号位，\n其余位为数值位。", "有符号模式");
+		StellarX::MessageBox::showModal(mainWindow, "有符号模式下，\n最高位为符号位，\n其余位为数值位。", "有符号模式");
 		// 立即刷新十进制显示：用当前位图算出新值，仅改 dec
 		auto cur = snapshotBits();
 		const uint32_t u = [&] { uint32_t v = 0; for (int b = 0; b < 32; ++b) if (cur[b]) v |= (1u << b); return v; }();
@@ -443,6 +449,7 @@ int main()
 		const uint32_t u = [&] { uint32_t v = 0; for (int b = 0; b < 32; ++b) if (cur[b]) v |= (1u << b); return v; }();
 		dec->setText(std::to_string(u));
 		});
+
 	signedTogglePtr->enableTooltip(true);
 	signedTogglePtr->setTooltipTextsForToggle("切换无符号模式", "切换有符号模式");
 
@@ -450,7 +457,6 @@ int main()
 	configuration->addControl(std::move(configurationButton[1]));
 	configuration->addControl(std::move(signedToggle));
 	configuration->addControl(std::move(configurationLabel));
-
 
 	mainWindow.addControl(std::move(selectionArea));
 	mainWindow.addControl(std::move(function));

@@ -343,4 +343,47 @@ namespace StellarX
         Left,
         Right
     };
+    /*
+    * @枚举名称: LayoutMode
+    * @功能描述: 定义了两种布局模式
+    *
+    * @详细说明:
+    * 根据不同模式，在窗口拉伸时采用不同的布局策略
+    *
+    * @成员说明:
+    * Fixed,          - 固定布局
+    * AnchorToEdges   - 锚定布局
+    *
+    * @使用示例:
+    *   LayoutMode mode = LayoutMode::Fixed;
+    */
+    enum class LayoutMode 
+    {
+        Fixed, 
+        AnchorToEdges 
+    };
+    /*
+    * @枚举名称: Anchor
+    * @功能描述: 定义了控件相对于窗口锚定的位置
+    *
+    * @详细说明:
+    * 根据不同的锚定位置，有不同的拉伸策略
+    *
+    * @成员说明:
+    *  Top,    - 锚定上边，控件上边与窗口上侧距离保持不变
+    *  Bottom, - 锚定底边，控件底边与窗口底边距离保持不变
+    *  Left,   - 锚定左边，控件左边与窗口左侧距离保持不变
+    *  Right   - 锚定右边，控件上边与窗口右侧距离保持不变
+    *
+    * @使用示例:
+    *   Anchor a = Anchor::Top;
+    */
+    enum class Anchor
+    {
+        NoAnchor = 0,
+        Left = 1,
+        Right,
+        Top,
+        Bottom
+    };
 }

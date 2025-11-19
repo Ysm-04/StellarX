@@ -25,7 +25,9 @@ class Window
 {
     // —— 尺寸状态 ——（绘制尺寸与待应用尺寸分离；收口时一次性更新）
     int           width;                 // 当前有效宽（已应用到画布/控件的客户区宽）
-    int           height;                // 当前有效高（已应用到画布/控件的客户区高）
+    int           height;                // 当前有效高（已应用到画布/控件的客户区高） 
+    int           localwidth;            // 基准宽（创建时的宽度）
+    int           localheight;           // 基准高（创建是的高度）
     int           pendingW;              // 待应用宽（WM_SIZE/拉伸中记录用）
     int           pendingH;              // 待应用高
     int           minClientW;            // 业务设定的最小客户区宽（用于 GETMINMAXINFO 与 SIZING 夹紧）
@@ -102,4 +104,7 @@ public:
     void processWindowMessage(const ExMessage & msg); // 处理 EX_WINDOW 中的 WM_SIZE 等
     void pumpResizeIfNeeded();                       // 执行一次统一收口重绘
     void scheduleResizeFromModal(int w, int h);
+private:
+    void adaptiveLayout(std::unique_ptr<Control>& c,const int finalH, const int finalW);
+
 };

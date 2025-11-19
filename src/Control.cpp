@@ -54,6 +54,27 @@ void Control::onWindowResize()
 	discardBackground();
 	setDirty(true);
 }
+void Control::setLayoutMode(StellarX::LayoutMode layoutMode_)
+{
+	this->layoutMode = layoutMode_;
+}
+void Control::steAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2)
+{
+	this->anchor_1 = anchor_1;
+	this->anchor_2 = anchor_2;
+}
+StellarX::Anchor Control::getAnchor_1() const
+{
+	return this->anchor_1;
+}
+StellarX::Anchor Control::getAnchor_2() const
+{
+	return this->anchor_2;
+}
+StellarX::LayoutMode Control::getLayoutMode() const
+{
+	return this->layoutMode;
+}
 // 保存当前的绘图状态（字体、颜色、线型等）
 // 在控件绘制前调用，确保不会影响全局绘图状态
 void Control::saveStyle()

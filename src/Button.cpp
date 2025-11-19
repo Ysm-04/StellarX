@@ -22,7 +22,7 @@ static inline int gbk_char_len(const std::string& s, size_t i)
 {
 	unsigned char b = (unsigned char)s[i];
 	if (b <= 0x7F) return 1; // ASCII
-	if (b >= 0x81 && b <= 0xFE && i + 1 < s.size()) 
+	if (b >= 0x81 && b <= 0xFE && i + 1 < s.size())
 	{
 		unsigned char b2 = (unsigned char)s[i + 1];
 		if (b2 >= 0x40 && b2 <= 0xFE && b2 != 0x7F) return 2; // 合法双字节
@@ -30,10 +30,10 @@ static inline int gbk_char_len(const std::string& s, size_t i)
 	return 1; // 容错
 }
 
-static inline void rtrim_spaces_gbk(std::string& s) 
+static inline void rtrim_spaces_gbk(std::string& s)
 {
 	while (!s.empty() && s.back() == ' ') s.pop_back();           // ASCII 空格
-	while (s.size() >= 2) 
+	while (s.size() >= 2)
 	{                                       // 全角空格 A1 A1
 		unsigned char a = (unsigned char)s[s.size() - 2];
 		unsigned char b = (unsigned char)s[s.size() - 1];
@@ -42,26 +42,26 @@ static inline void rtrim_spaces_gbk(std::string& s)
 	}
 }
 
-static inline bool is_ascii_only(const std::string& s) 
+static inline bool is_ascii_only(const std::string& s)
 {
 	for (unsigned char c : s) if (c > 0x7F) return false;
 	return true;
 }
 
-static inline bool is_word_boundary_char(unsigned char c) 
+static inline bool is_word_boundary_char(unsigned char c)
 {
 	return c == ' ' || c == '-' || c == '_' || c == '/' || c == '\\' || c == '.' || c == ':';
 }
 
 // 英文优先策略：优先在“词边界”回退，再退化到逐字符；省略号为 "..."
-static std::string ellipsize_ascii_pref(const std::string& text, int maxW) 
+static std::string ellipsize_ascii_pref(const std::string& text, int maxW)
 {
 	if (maxW <= 0) return "";
 	if (textwidth(LPCTSTR(text.c_str())) <= maxW) return text;
 
 	const std::string ell = "...";
 	int ellW = textwidth(LPCTSTR(ell.c_str()));
-	if (ellW > maxW) 
+	if (ellW > maxW)
 	{ // 连 ... 都放不下
 		std::string e = ell;
 		while (!e.empty() && textwidth(LPCTSTR(e.c_str())) > maxW) e.pop_back();
@@ -71,7 +71,7 @@ static std::string ellipsize_ascii_pref(const std::string& text, int maxW)
 
 	// 先找到能放下的最长前缀
 	size_t i = 0, lastFit = 0;
-	while (i < text.size()) 
+	while (i < text.size())
 	{
 		int clen = gbk_char_len(text, i);
 		size_t j = text.size() < i + (size_t)clen ? text.size() : i + (size_t)clen;
@@ -83,7 +83,7 @@ static std::string ellipsize_ascii_pref(const std::string& text, int maxW)
 
 	// 在已适配前缀范围内，向左找最近的词边界
 	size_t cutPos = lastFit;
-	for (size_t k = lastFit; k > 0; --k) 
+	for (size_t k = lastFit; k > 0; --k)
 	{
 		unsigned char c = (unsigned char)text[k - 1];
 		if (c <= 0x7F && is_word_boundary_char(c)) { cutPos = k - 1; break; }
@@ -96,14 +96,14 @@ static std::string ellipsize_ascii_pref(const std::string& text, int maxW)
 }
 
 // 中文优先策略：严格逐“字符”(1/2字节)回退；省略号用全角 "…"
-static std::string ellipsize_cjk_pref(const std::string& text, int maxW, const char* ellipsis = "…") 
+static std::string ellipsize_cjk_pref(const std::string& text, int maxW, const char* ellipsis = "…")
 {
 	if (maxW <= 0) return "";
 	if (textwidth(LPCTSTR(text.c_str())) <= maxW) return text;
 
 	std::string ell = ellipsis ? ellipsis : "…";
 	int ellW = textwidth(LPCTSTR(ell.c_str()));
-	if (ellW > maxW) 
+	if (ellW > maxW)
 	{ // 连省略号都放不下
 		std::string e = ell;
 		while (!e.empty() && textwidth(LPCTSTR(e.c_str())) > maxW) e.pop_back();
@@ -112,7 +112,7 @@ static std::string ellipsize_cjk_pref(const std::string& text, int maxW, const c
 	const int limit = maxW - ellW;
 
 	size_t i = 0, lastFit = 0;
-	while (i < text.size()) 
+	while (i < text.size())
 	{
 		int clen = gbk_char_len(text, i);
 		size_t j = text.size() < i + (size_t)clen ? text.size() : i + (size_t)clen;
@@ -166,8 +166,8 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 
 Button::~Button()
 {
-    if (buttonFileIMAGE) 
-        delete buttonFileIMAGE;
+	if (buttonFileIMAGE)
+		delete buttonFileIMAGE;
 	buttonFileIMAGE = nullptr;
 }
 
@@ -314,7 +314,7 @@ bool Button::handleEvent(const ExMessage& msg)
 	// 处理鼠标点击事件
 	if (msg.message == WM_LBUTTONDOWN && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
-		
+
 		if (mode == StellarX::ButtonMode::NORMAL)
 		{
 			click = true;
@@ -327,7 +327,7 @@ bool Button::handleEvent(const ExMessage& msg)
 		}
 	}
 	// NORMAL 模式：鼠标在按钮上释放时才触发点击回调，如果移出区域则取消点击状态。
-    // TOGGLE 模式：在释放时切换状态，并触发相应的开/关回调。
+	// TOGGLE 模式：在释放时切换状态，并触发相应的开/关回调。
 	else if (msg.message == WM_LBUTTONUP && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
 		hideTooltip();  // 隐藏悬停提示
@@ -349,7 +349,7 @@ bool Button::handleEvent(const ExMessage& msg)
 			dirty = true;
 			consume = true;
 			refreshTooltipTextForState();
-			hideTooltip();            
+			hideTooltip();
 			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 			flushmessage(EX_MOUSE | EX_KEY);
 		}
@@ -367,23 +367,23 @@ bool Button::handleEvent(const ExMessage& msg)
 			dirty = true;
 	}
 
-	if (tipEnabled) 
+	if (tipEnabled)
 	{
-		if (hover && !oldHover) 
+		if (hover && !oldHover)
 		{
 			// 刚刚进入悬停：开计时，暂不显示
 			tipHoverTick = GetTickCount64();
 			tipVisible = false;
 		}
-		if (!hover && oldHover) 
+		if (!hover && oldHover)
 		{
 			// 刚移出：立即隐藏
 			hideTooltip();
 		}
-		if (hover && !tipVisible) 
+		if (hover && !tipVisible)
 		{
 			// 到点就显示
-			if (GetTickCount64() - tipHoverTick >= (ULONGLONG)tipDelayMs) 
+			if (GetTickCount64() - tipHoverTick >= (ULONGLONG)tipDelayMs)
 			{
 				tipVisible = true;
 
@@ -420,18 +420,18 @@ bool Button::handleEvent(const ExMessage& msg)
 
 	if (tipEnabled && tipVisible)
 		tipLabel.draw();
-	
+
 	return consume;
 }
 
 void Button::setOnClickListener(const std::function<void()>&& callback)
 {
-    this->onClickCallback = callback;
+	this->onClickCallback = callback;
 }
 
 void Button::setOnToggleOnListener(const std::function<void()>&& callback)
 {
-    this->onToggleOnCallback = callback;
+	this->onToggleOnCallback = callback;
 }
 void Button::setOnToggleOffListener(const std::function<void()>&& callback)
 {
@@ -443,37 +443,37 @@ void Button::setbuttonMode(StellarX::ButtonMode mode)
 	if (this->mode == StellarX::ButtonMode::DISABLED && mode != StellarX::ButtonMode::DISABLED)
 		textStyle.bStrikeOut = false;
 	//取值范围参考 buttMode的枚举注释
-    this->mode = mode;
+	this->mode = mode;
 	dirty = true; // 标记需要重绘
 }
 
 void Button::setROUND_RECTANGLEwidth(int width)
 {
-     rouRectangleSize.ROUND_RECTANGLEwidth = width;
+	rouRectangleSize.ROUND_RECTANGLEwidth = width;
 	this->dirty = true; // 标记需要重绘
 
 }
 
 void Button::setROUND_RECTANGLEheight(int height)
 {
-    rouRectangleSize.ROUND_RECTANGLEheight = height;
+	rouRectangleSize.ROUND_RECTANGLEheight = height;
 	this->dirty = true; // 标记需要重绘
 }
 
 bool Button::isClicked() const
 {
-    return this->click;
+	return this->click;
 }
 
 void Button::setFillMode(StellarX::FillMode mode)
 {
-    this->buttonFillMode = mode;
+	this->buttonFillMode = mode;
 	this->dirty = true; // 标记需要重绘
 }
 
 void Button::setFillIma(StellarX::FillStyle ima)
 {
-    buttonFillIma = ima;
+	buttonFillIma = ima;
 	this->dirty = true;
 }
 
@@ -484,8 +484,8 @@ void Button::setFillIma(std::string imaNAme)
 		delete buttonFileIMAGE;
 		buttonFileIMAGE = nullptr;
 	}
-    buttonFileIMAGE = new IMAGE;
-    loadimage(buttonFileIMAGE, imaNAme.c_str(),width,height);
+	buttonFileIMAGE = new IMAGE;
+	loadimage(buttonFileIMAGE, imaNAme.c_str(), width, height);
 	this->dirty = true;
 }
 
@@ -493,7 +493,7 @@ void Button::setFillIma(std::string imaNAme)
 void Button::setButtonBorder(COLORREF Border)
 {
 	buttonBorderColor = Border;
-		this->dirty = true;
+	this->dirty = true;
 }
 
 void Button::setButtonFalseColor(COLORREF color)
@@ -504,7 +504,7 @@ void Button::setButtonFalseColor(COLORREF color)
 
 void Button::setButtonText(const char* text)
 {
-    this->text = std::string(text);
+	this->text = std::string(text);
 	this->text_width = textwidth(LPCTSTR(this->text.c_str()));
 	this->text_height = textheight(LPCTSTR(this->text.c_str()));
 	this->dirty = true;
@@ -526,7 +526,7 @@ void Button::setButtonText(std::string text)
 
 void Button::setButtonShape(StellarX::ControlShape shape)
 {
-    this->shape = shape;
+	this->shape = shape;
 	this->dirty = true;
 	this->needCutText = true;
 }
@@ -535,7 +535,7 @@ void Button::setButtonShape(StellarX::ControlShape shape)
 void Button::setButtonClick(BOOL click)
 {
 	this->click = click;
-	
+
 	if (mode == StellarX::ButtonMode::NORMAL && click)
 	{
 		if (onClickCallback) onClickCallback();
@@ -550,7 +550,7 @@ void Button::setButtonClick(BOOL click)
 		else if (!click && onToggleOffCallback) onToggleOffCallback();
 		dirty = true;
 		refreshTooltipTextForState();
-		hideTooltip();                
+		hideTooltip();
 		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
@@ -561,52 +561,52 @@ void Button::setButtonClick(BOOL click)
 
 std::string Button::getButtonText() const
 {
-    return this->text;
+	return this->text;
 }
 
 const char* Button::getButtonText_c() const
 {
-    return this->text.c_str();
+	return this->text.c_str();
 }
 
 StellarX::ButtonMode Button::getButtonMode() const
 {
-    return this->mode;
+	return this->mode;
 }
 
 StellarX::ControlShape Button::getButtonShape() const
 {
-    return this->shape;
+	return this->shape;
 }
 
 StellarX::FillMode Button::getFillMode() const
 {
-    return this->buttonFillMode;
+	return this->buttonFillMode;
 }
 
 StellarX::FillStyle Button::getFillIma() const
 {
-    return this->buttonFillIma;
+	return this->buttonFillIma;
 }
 
 IMAGE* Button::getFillImaImage() const
 {
-    return this->buttonFileIMAGE;
+	return this->buttonFileIMAGE;
 }
 
 COLORREF Button::getButtonBorder() const
 {
-    return this->buttonBorderColor;
+	return this->buttonBorderColor;
 }
 
 COLORREF Button::getButtonTextColor() const
 {
-    return this->textStyle.color;
+	return this->textStyle.color;
 }
 
 StellarX::ControlText Button::getButtonTextStyle() const
 {
-    return this->textStyle;
+	return this->textStyle;
 }
 
 int Button::getButtonWidth() const
@@ -623,11 +623,11 @@ int Button::getButtonHeight() const
 
 bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
 {
-    double dis = sqrt(pow(mouseX - x, 2) + pow(mouseY - y, 2));
-    if (dis <= radius)
-        return true;
-    else 
-        return false;
+	double dis = sqrt(pow(mouseX - x, 2) + pow(mouseY - y, 2));
+	if (dis <= radius)
+		return true;
+	else
+		return false;
 }
 
 bool Button::isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, int height)
@@ -636,15 +636,15 @@ bool Button::isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, i
 	int centerY = (y + height) / 2;
 	int majorAxis = (width - x) / 2;
 	int minorAxis = (height - y) / 2;
-    double dx = mouseX - centerX;
-    double dy = mouseY - centerY;
-    double normalizedDistance = (dx * dx) / (majorAxis * majorAxis) + (dy * dy) / (minorAxis * minorAxis);
+	double dx = mouseX - centerX;
+	double dy = mouseY - centerY;
+	double normalizedDistance = (dx * dx) / (majorAxis * majorAxis) + (dy * dy) / (minorAxis * minorAxis);
 
-    // 判断鼠标是否在椭圆内
-    if (normalizedDistance <= 1.0)
-        return true;
-    else
-        return false;
+	// 判断鼠标是否在椭圆内
+	if (normalizedDistance <= 1.0)
+		return true;
+	else
+		return false;
 }
 
 void Button::cutButtonText()
@@ -659,18 +659,18 @@ void Button::cutButtonText()
 	}
 
 	// 放不下：按语言偏好裁切（ASCII→词边界；CJK→逐字符，不撕裂双字节）
-	if (is_ascii_only(this->text)) 
+	if (is_ascii_only(this->text))
 	{
 		cutText = ellipsize_ascii_pref(this->text, contentW);   // "..."
 	}
 	else
 	{
 		cutText = ellipsize_cjk_pref(this->text, contentW, "…"); // 全角省略号
-		
+
 	}
 	isUseCutText = true;
 	needCutText = false;
-	
+
 }
 
 void Button::hideTooltip()
@@ -686,9 +686,9 @@ void Button::hideTooltip()
 void Button::refreshTooltipTextForState()
 {
 	if (tipUserOverride)   return; // 用户显式设置过 tipText，保持不变
-	if(mode==StellarX::ButtonMode::NORMAL)
+	if (mode == StellarX::ButtonMode::NORMAL)
 		tipLabel.setText(tipTextClick);
-	else if(mode==StellarX::ButtonMode::TOGGLE)
+	else if (mode == StellarX::ButtonMode::TOGGLE)
 		tipLabel.setText(click ? tipTextOn : tipTextOff);
 }
 

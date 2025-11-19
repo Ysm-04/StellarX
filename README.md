@@ -12,8 +12,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.2.1-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.2.1_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-2.3.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -30,14 +30,27 @@
 
 ---
 
-## 🆕v2.2.2 ——稳定版本
+## 🆕V2.3.0——重要更新
 
-- 预计下次版本更新，将同步窗口拉伸时，控件同步更新状态
+**本版本是一次重大更新，增加了响应式布局系统，由静态布局转变为动态布局，并且彻底修复了之前存在的由重入重绘导致的概率出现的渲染错乱问题**
 
-- Canvas容器坐标传递方式改变，子控件坐标由原来的传递全局坐标改为传递相对坐标（坐标原点为容器的左上角坐标可通过getX/Y接口获得）可以设置子控件坐标为负值
-- examples\register-viewer下的案例已同步修改为最新，同步容器子控件为相对坐标
-- 对于窗口拉伸和对话框问题进行了修复
-- 详情参考[更新日志](CHANGELOG.md)
+- **优化窗口尺寸调节机制**：重构 `WndProcThunk`、`runEventLoop` 和 `pumpResizeIfNeeded`，统一记录尺寸变化并在事件循环末尾集中重绘，避免重复重绘导致的抖动和顺序错乱。
+
+- **新增对话框尺寸调度接口**：引入 `Window::scheduleResizeFromModal()` 与 `pumpResizeIfNeeded()` 的组合，模态对话框在拉伸期间也可通知父窗口更新尺寸。底层控件将在统一收口时重新布局，而对话框自身保持尺寸不变。
+
+- **自适应布局改进**：内部新增 `adaptiveLayout()` 函数，按照锚点重新计算控件位置和尺寸，使双锚定（左右或上下）控件随窗口变化自适应伸缩。
+
+- **修复模态对话框拉伸问题**：解决模态对话框打开时，窗口拉伸导致底层控件无法根据锚点更新的位置和尺寸的问题；同时避免对话框反复重绘导致的残影。
+
+- **进一步解决绘制顺序错乱**：拉伸过程中采用 `ValidateRect` 替代 `InvalidateRect`，确保窗口仅在一次统一收口绘制后标记为有效，杜绝系统再次触发 `WM_PAINT` 造成重入。
+
+- 其他修复：修正表格和对话框背景快照某些边界情况下的更新不及时问题。
+
+  ![](image/1.png)
+
+![](image/2.png)
+
+详细变更请参阅[更新日志](CHANGELOG.md)
 
 ---
 
@@ -178,6 +191,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | `MessageBoxType`   | 消息框类型 | `OK`, `OKCancel`, `YesNo`, ...                               |
 | `MessageBoxResult` | 结果       | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
 | `TabPlacement`     | 页签位置   | `Top`,`Bottom`,`Left`,`Right`                                |
+
+| 枚举         | 描述                   | 常用值                                       |
+| ------------ | ---------------------- | -------------------------------------------- |
+| `LayoutMode` | 窗口布局模式           | `Fixed`,  `AnchorToEdges`                    |
+| Anchor       | 控件相对于父容器的锚点 | `NoAnchor` ,`Left` , `Right`, `Top`,`Bottom` |
+
+
 
 ### 结构体
 

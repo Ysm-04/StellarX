@@ -59,7 +59,7 @@ void Dialog::draw()
 		
 		
 		int ty = y + closeButtonHeight + titleToTextMargin; // 文本起始Y坐标
-		for (auto line:lines)
+		for (auto& line:lines)
 		{
 			int tx = this->x + ((this->width - textwidth(line.c_str())) / 2); // 文本起始X坐标
 			outtextxy(tx, ty, LPCTSTR(line.c_str()));
@@ -555,7 +555,7 @@ void Dialog::getTextSize()
 	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
-	for (auto text : lines)
+	for (auto& text : lines)
 	{
 		int w = textwidth(LPCTSTR(text.c_str()));
 		int h = textheight(LPCTSTR(text.c_str()));

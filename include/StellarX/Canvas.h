@@ -18,6 +18,7 @@
 
 #pragma once
 #include "Control.h"
+#include"Table.h"
 
 class Canvas : public Control
 {
@@ -39,6 +40,7 @@ public:
     Canvas();
     Canvas(int x, int y, int width, int height);
     ~Canvas() {}
+
     //绘制容器及其子控件
     void draw() override;
     bool handleEvent(const ExMessage& msg) override;

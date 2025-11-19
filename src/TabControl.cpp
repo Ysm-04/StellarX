@@ -165,22 +165,37 @@ TabControl::~TabControl()
 void TabControl::draw()
 {
 	if (!dirty || !show)return;
-	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-		saveBackground(this->x, this->y, this->width, this->height);
-	// 恢复背景（清除旧内容）
-	restBackground();
-	Canvas::draw();
+    // 在绘制 TabControl 之前，先恢复并更新背景快照：
+    if (hasSnap)
+    {
+        // 先回贴旧快照，清除之前的绘制
+        restBackground();
+        // 如位置或尺寸变化，丢弃旧快照并重新抓取
+        if (!saveBkImage || saveBkX != this->x || saveBkY != this->y || saveWidth != this->width || saveHeight != this->height)
+        {
+            discardBackground();
+            saveBackground(this->x, this->y, this->width, this->height);
+        }
+    }
+    else
+    {
+        // 首次绘制时抓取背景
+        saveBackground(this->x, this->y, this->width, this->height);
+    }
+    // 再次恢复最新背景，保证绘制区域干净
+    restBackground();
+    // 绘制画布背景和基本形状及其子画布控件
+    Canvas::draw();
 	for (auto& c : controls)
 	{
 		c.first->setDirty(true);
 		c.first->draw();
 	}
 	for (auto& c : controls)
-		if(c.second->IsVisible())
-		{
-			c.second->setDirty(true);
-			c.second->draw();
-		}
+	{
+		c.second->setDirty(true);
+		c.second->draw();
+	}
 	dirty = false;
 
 }
@@ -216,6 +231,7 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 	controls[idx].first->setParent(this);
 	controls[idx].first->enableTooltip(true);
 	controls[idx].first->setbuttonMode(StellarX::ButtonMode::TOGGLE);
+
 	controls[idx].first->setOnToggleOnListener([this,idx]()
 		{
 			controls[idx].second->setIsVisible(true);
@@ -291,12 +307,19 @@ void TabControl::setIsVisible(bool visible)
 
 void TabControl::onWindowResize()
 {
-	Control::onWindowResize();
-	for (auto& c : controls)
-	{
-		c.first->onWindowResize();
-		c.second->onWindowResize();
-	}
+    // 调用基类的窗口变化处理，丢弃快照并标记脏
+    Control::onWindowResize();
+    // 根据当前 TabControl 的新尺寸重新计算页签栏和页面区域
+    initTabBar();
+    initTabPage();
+    // 转发窗口尺寸变化给所有页签按钮和页面
+    for (auto& c : controls)
+    {
+        c.first->onWindowResize();
+        c.second->onWindowResize();
+    }
+    // 尺寸变化后需要重绘自身
+    dirty = true;
 }
 
 int TabControl::getActiveIndex() const

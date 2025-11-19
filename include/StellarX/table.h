@@ -69,6 +69,7 @@ private:
 	bool isShowPageButton = true;			    // 是否显示翻页按钮
 	bool isNeedDrawHeaders = true;              // 是否需要绘制表头
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
+	bool isNeedButtonAndPageNum = true;         // 是否需要计算翻页按钮和页码信息
 
 	Button* prevButton = nullptr;               // 上一页按钮
 	Button* nextButton = nullptr;			    // 下一页按钮
@@ -98,7 +99,8 @@ private:
 	bool model() const override { return false; };
 public:
 	StellarX::ControlText textStyle; // 文本样式
-
+	void setWidth(int width) override;
+	void setHeight(int height) override;
 public:
 	Table(int x, int y);
 	~Table();
@@ -154,6 +156,9 @@ public:
 	std::vector<std::vector<std::string>> getData() const;
 	//获取表格边框宽度
 	int getTableBorderWidth() const;
+	//获取表格尺寸
+	int getTableWidth() const;
+	int getTableHeight() const;
 
 
 };

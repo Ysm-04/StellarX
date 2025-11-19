@@ -1,7 +1,7 @@
 ﻿#include "Window.h"
 #include "Dialog.h"
 
-#include <graphics.h>
+#include <easyx.h>
 #include <algorithm>
 
 /**
@@ -95,23 +95,23 @@ static void ApplyMinSizeOnSizing(RECT* prc, WPARAM edge, HWND hWnd, int minClien
  */
 Window::Window(int w, int h, int mode)
 {
-    minClientW = pendingW = width = w;
-    minClientH = pendingH = height = h;
+    localwidth  = minClientW = pendingW = width = w;
+    localheight = minClientH = pendingH = height = h;
     windowMode = mode;
 }
 
 Window::Window(int w, int h, int mode, COLORREF bk)
 {
-    minClientW = pendingW = width = w;
-    minClientH = pendingH = height = h;
+    localwidth = minClientW = pendingW = width = w;
+    localheight = minClientH = pendingH = height = h;
     windowMode = mode;
     wBkcolor = bk;
 }
 
 Window::Window(int w, int h, int mode, COLORREF bk, std::string title)
 {
-    minClientW = pendingW = width = w;
-    minClientH = pendingH = height = h;
+    localwidth = minClientW = pendingW = width = w;
+    localheight = minClientH = pendingH = height = h;
     windowMode = mode;
     wBkcolor = bk;
     headline = std::move(title);
@@ -128,7 +128,7 @@ Window::~Window()
 // ---------------- 原生消息钩子----------------
 
 /**
- * WndProcThunk
+ * WndProcThun
  * 作用：替换 EasyX 的窗口过程，接管关键消息。
  * 关键处理：
  *  - WM_ERASEBKGND：返回 1，交由自绘清屏，避免系统擦背景造成闪烁。
@@ -191,18 +191,10 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
             self->needResizeDirty = true;
         }
 
-        // 关键：立刻做统一收口，不用等下一条消息
-        self->pumpResizeIfNeeded();
-
-        // 不擦背景、不触发立即 WM_PAINT
-        // InvalidateRect(h, nullptr, TRUE);
-        // UpdateWindow(h);
-        InvalidateRect(h, nullptr, FALSE);
-
-        // 解冻 + 触发一次刷新（InvalidateRect TRUE 会擦背景；如需无擦背景可传 FALSE）
+        // 结束拉伸后不立即执行重绘，待事件循环统一收口。
+        // 立即解冻重绘标志，同时标记区域为有效，避免触发额外 WM_PAINT。
         SendMessage(h, WM_SETREDRAW, TRUE, 0);
-        InvalidateRect(h, nullptr, TRUE);
-        UpdateWindow(h);
+        ValidateRect(h, nullptr);
         return 0;
     }
 
@@ -510,8 +502,8 @@ int Window::runEventLoop()
                 // 批量通知控件“窗口尺寸变化”，并标记重绘
                 for (auto& c : controls)
                 {
+                    adaptiveLayout(c,finalH,finalW);
                     c->onWindowResize();
-                    c->setDirty(true);
                 }
                 for (auto& d : dialogs)
                 {
@@ -528,9 +520,9 @@ int Window::runEventLoop()
 
                 EndBatchDraw();
 
-                // 解冻并触发一次无效化（这里 TRUE 表示会擦背景；如要避免闪白可改 FALSE）
+                // 解冻后标记区域有效，避免系统再次触发 WM_PAINT 覆盖自绘内容。
                 SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
-                InvalidateRect(hWnd, nullptr, TRUE);
+                ValidateRect(hWnd, nullptr);
             }
 
             needResizeDirty = false; // 收口完成，清标志
@@ -595,9 +587,7 @@ void Window::setHeadline(std::string title)
     // 设置窗口标题（仅改文本，不触发重绘）
     headline = std::move(title);
     if (hWnd)
-    {
         SetWindowText(hWnd, headline.c_str());
-    }
 }
 
 void Window::addControl(std::unique_ptr<Control> control)
@@ -711,13 +701,20 @@ void Window::pumpResizeIfNeeded()
         loadimage(background, bkImageFile.c_str(), rc.right - rc.left, rc.bottom - rc.top, true);
         putimage(0, 0, background);
     }
-    else { setbkcolor(wBkcolor); cleardevice(); }
+    else
+    {
+        setbkcolor(wBkcolor);
+        cleardevice();
 
+    }
     width = rc.right - rc.left; height = rc.bottom - rc.top;
 
     // 通知控件/对话框
     for (auto& c : controls)
+    {
+        adaptiveLayout(c, finalH, finalW);
         c->onWindowResize();
+    }
     for (auto& d : dialogs)
         if (auto* dd = dynamic_cast<Dialog*>(d.get()))
             dd->setInitialization(true); // 强制对话框在新尺寸下重建布局/快照
@@ -729,9 +726,10 @@ void Window::pumpResizeIfNeeded()
     EndBatchDraw();
     SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
 
-    // 原来是 TRUE：会擦背景再触发 WM_PAINT，容易把刚画好的层“盖掉”
-    // InvalidateRect(hWnd, nullptr, TRUE);
-    InvalidateRect(hWnd, nullptr, FALSE);
+    // 原实现在此调用 InvalidateRect 导致系统再次发送 WM_PAINT，从而重复绘制，
+    // 这里改为 ValidateRect：直接标记区域为有效，通知系统我们已完成绘制，不必再触发 WM_PAINT。
+    // 这样可以避免收口阶段的绘制与系统重绘叠加造成顺序错乱。
+    ValidateRect(hWnd, nullptr);
 
     needResizeDirty = false;
 }
@@ -747,6 +745,75 @@ void Window::scheduleResizeFromModal(int w, int h)
         pendingW = w;
         pendingH = h;
         needResizeDirty = true;   // 交给 pumpResizeIfNeeded 做统一收口+重绘
+    }
+}
+
+void Window::adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const int finalW)
+{
+    int origParentW = this->localwidth;
+    int origParentH = this->localheight;
+    if (c->getLayoutMode() == StellarX::LayoutMode::AnchorToEdges)
+    {
+        if ((StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2())
+            || (StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2()))
+        {
+            int origRightDist = origParentW - (c->getLocalX() + c->getLocalWidth());
+            int newWidth = finalW - c->getLocalX() - origRightDist;
+            c->setWidth(newWidth);
+            // 左侧距离固定，ctrl->x 保持为 localx 相对窗口左侧（父容器为窗口，偏移0）
+            c->setX(c->getLocalX());
+        }
+        else if ((StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
+            || (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2())
+            || (StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2()))
+        {
+            // 仅左锚定：宽度固定不变
+            c->setX(c->getLocalX());
+            c->setWidth(c->getLocalWidth());
+        }
+        else if ((StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
+            || (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2())
+            || (StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2()))
+        {
+            int origRightDist = origParentW - (c->getLocalX() + c->getLocalWidth());
+            c->setWidth(c->getLocalWidth()); // 宽度不变
+            c->setX(finalW - origRightDist - c->getWidth());
+        }
+        else if (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
+        {
+            c->setX(c->getLocalX());
+            c->setWidth(c->getLocalWidth());
+        }
+
+        if ((StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2())
+            || (StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2()))
+        {
+            // 上下锚定：高度随窗口变化
+            int origBottomDist = origParentH - (c->getLocalY() + c->getLocalHeight());
+            int newHeight = finalH - c->getLocalY() - origBottomDist;
+            c->setHeight(newHeight);
+            c->setY(c->getLocalY());
+        }
+        else if ((StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
+            || (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2())
+            || (StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2()))
+        {
+            c->setY(c->getLocalY());
+            c->setHeight(c->getLocalHeight());
+        }
+        else if ((StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
+            || (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2())
+            || (StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2()))
+        {
+            int origBottomDist = origParentH - (c->getLocalY() + c->getLocalHeight());
+            c->setHeight(c->getLocalHeight());
+            c->setY(finalH - origBottomDist - c->getHeight());
+        }
+        else {
+            // 垂直无锚点：默认为顶部定位，高度固定
+            c->setY(c->getLocalY());
+            c->setHeight(c->getLocalHeight());
+        }
     }
 }
 

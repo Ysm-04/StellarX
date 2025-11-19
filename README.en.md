@@ -7,8 +7,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
  [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.2.1-brightgreen.svg)
- ![Download](https://img.shields.io/badge/Download-2.2.1_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen.svg)
+ ![Download](https://img.shields.io/badge/Download-2.3.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
  ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -25,12 +25,25 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
-## 🆕 v2.2.2 — Stable Release
+## 🆕 V2.3.0 - Major Update
 
-- In the next planned update, control states will synchronize in real-time during window resizing operations.
-- Modified the coordinate transfer method for Canvas containers. Child control coordinates are now passed as relative coordinates (with the origin at the top-left corner of the container, obtainable via the `getX`/`getY` interface) instead of global coordinates. Child control coordinates can now be set to negative values.
-- The example under `examples\register-viewer` has been updated to the latest version, aligning container child controls to use relative coordinates.
-- Addressed issues related to window resizing and dialog boxes as mentioned above.
+**This version represents a significant milestone, introducing a responsive layout system that transitions from static to dynamic layout management, and comprehensively resolves the previously encountered random rendering corruption issues caused by reentrant drawing operations.**
+
+- **Optimized Window Resizing Mechanism**: Refactored `WndProcThunk`, `runEventLoop`, and `pumpResizeIfNeeded` to uniformly record size changes and perform centralized repainting at the end of the event loop, eliminating jitter and sequencing confusion caused by repeated redraws.
+
+- **New Dialog Size Scheduling Interface**: Introduced the combination of `Window::scheduleResizeFromModal()` and `pumpResizeIfNeeded()`, enabling modal dialogs to notify the parent window of size updates even during resizing operations. Underlying controls are relayout during unified finalization while dialogs maintain their original dimensions.
+
+- **Enhanced Adaptive Layout System**: Internally added the `adaptiveLayout()` function to recalculate control positions and sizes based on anchor points, allowing dual-anchored controls (left-right or top-bottom) to adaptively stretch with window resizing.
+
+- **Fixed Modal Dialog Resizing Issues**: Resolved the problem where window resizing while modal dialogs were open prevented underlying controls from updating their positions and sizes according to anchor points; simultaneously eliminated ghosting artifacts caused by repeated dialog redraws.
+
+- **Further Resolved Drawing Sequence Confusion**: Replaced `InvalidateRect` with `ValidateRect` during resizing operations, ensuring the window is marked as valid only after a single unified drawing pass, preventing system-triggered `WM_PAINT` messages from causing reentrancy.
+
+- **Additional Fixes**: Corrected delayed background snapshot updates in tables and dialogs under certain edge cases.
+
+![](image/1.png)
+
+![](image/2.png)
 
 For details, please refer to the [CHANGELOG.en](CHANGELOG.en.md).
 
@@ -173,6 +186,11 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | `MessageBoxType`   | Message box type | `OK`, `OKCancel`, `YesNo`, ...                               |
 | `MessageBoxResult` | Result           | `OK`, `Cancel`, `Yes`, `No`, `Abort`, `Retry`, `Ignore`      |
 | `TabPlacement`     | Tab position     | `Top`, `Bottom`, `Left`, `Right`                             |
+
+| Enum         | Description            | Common values                                |
+| ------------ | ---------------------- | -------------------------------------------- |
+| `LayoutMode` | 窗口布局模式           | `Fixed`,  `AnchorToEdges`                    |
+| `Anchor`     | 控件相对于父容器的锚点 | `NoAnchor` ,`Left` , `Right`, `Top`,`Bottom` |
 
 ### Structs
 

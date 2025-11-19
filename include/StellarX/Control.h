@@ -42,6 +42,11 @@ protected:
     bool dirty = true; // 是否重绘
     bool show = true; // 是否显示
 
+    /* == 布局模式 == */
+    StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
+    StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 锚点
+    StellarX::Anchor anchor_2 = StellarX::Anchor::Left; // 锚点
+
     /* == 背景快照 ==  */
     IMAGE* saveBkImage = nullptr;
     int saveBkX = 0, saveBkY = 0;      // 快照保存起始坐标
@@ -115,8 +120,8 @@ public:
 
     void setX(int x) { this->x = x; dirty = true; }
     void setY(int y) { this->y = y; dirty = true; }
-    void setWidth(int width) { this->width = width; dirty = true; }
-    void setHeight(int height) { this->height = height; dirty = true; }
+    virtual void setWidth(int width) { this->width = width; dirty = true; }
+    virtual void setHeight(int height) { this->height = height; dirty = true; }
 public:
 
     virtual void draw() = 0;
@@ -127,7 +132,6 @@ public:
     void setParent(Control* parent) { this->parent = parent; }
     //设置是否重绘
     virtual void setDirty(bool dirty) { this->dirty = dirty; }
-
     //检查控件是否可见
     bool IsVisible() const { return show; };
     //获取控件id
@@ -136,6 +140,12 @@ public:
     bool isDirty() { return dirty; }
     //用来检查对话框是否模态，其他控件不用实现
     virtual bool model()const = 0;
+    //布局
+    void setLayoutMode(StellarX::LayoutMode layoutMode_);
+    void steAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2);
+    StellarX::Anchor getAnchor_1() const;
+    StellarX::Anchor getAnchor_2() const;
+    StellarX::LayoutMode getLayoutMode() const;
 protected:
     void saveStyle();
     void restoreStyle();

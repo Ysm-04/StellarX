@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.3.0] - 2025-11-18
+
+### ✨ Added
+
+- Introduced `LayoutMode` adaptive layout mode and `Anchor` anchor points. Controls can now call `setLayoutMode` to set layout mode and `steAnchor` to set anchor points, enabling controls to adapt to window changes during resizing. Dialog controls only recalculate their position during window resizing to maintain center alignment.
+- Added `adaptiveLayout()` API to `Window`, called by the main event loop to recalculate control positions and sizes based on anchor points during window resizing, enabling dual-anchored controls (left-right or top-bottom) to automatically stretch with window changes.
+
+### ⚙️ Changed
+
+- **Optimized Window Resizing Mechanism**: Refactored `WndProcThunk`, `runEventLoop`, and `pumpResizeIfNeeded` to uniformly record window size changes and perform one-time repainting at the end of the event loop, preventing jitter and sequencing issues caused by repeated drawing during resizing.
+- **Added Dialog Size Scheduling Interface**: Introduced `Window::scheduleResizeFromModal()`, used in conjunction with `pumpResizeIfNeeded()`. During modal dialog display, the parent window can update client area size in real time and relayout child controls during unified finalization, while the dialog maintains its original size.
+- **Redraw Sequence Optimization**: Replaced `InvalidateRect` with `ValidateRect` during the finalization phase after window size changes, preventing the system from sending additional `WM_PAINT` messages that could cause reentrant drawing.
+- **Other Improvements**: Fixed delayed background snapshot updates for table pagination buttons and page number labels; improved dialog background capture logic.
+
+### ✅ Fixed
+
+- **Modal Dialog Resizing Fix**: Resolved the issue where window resizing during modal dialog display prevented underlying controls from updating their sizes and positions according to anchor points; simultaneously eliminated ghosting artifacts caused by repeated dialog redrawing.
+- **Drawing Sequence Disorder Fix**: Addressed sporadic drawing sequence disorders, control ghosting, and border flickering during window resizing, ensuring controls are drawn in the order they were added.
+- **Stability Fixes**: Corrected abnormal frames caused by sudden window size changes in certain scenarios; resolved delayed background snapshot updates for tables and dialogs under edge conditions.
+
 ## [v2.2.2] - 2025 - 11- 08
 
 ### ⚙️ Changes
