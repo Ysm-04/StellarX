@@ -12,8 +12,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.3.0_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.1-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-2.3.1_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -32,31 +32,26 @@
 
 ## ==公告==
 
-### 关于获取对话框TextBox返回值的问题
+## 🙏 鸣谢
 
-在TextBox的实现里把保存文本的std::string.c_str()强转变成可写，这会导致调用getText()无法获取文本框的内容，需要使用getText().c_str()来获取，这个问题目前已经修复，感谢用户反馈特此公告
+- 感谢用户 [@To-KongBai](https://github.com/To-KongBai) 提供稳定复现步骤与关键现象对比（容器嵌套孙控件坐标转换问题），帮助我们快速确认多容器嵌套时的控件坐标转换问题并修复。（[Issues#6](https://github.com/Ysm-04/StellarX/issues/6)）
+- 在即将上线的官网中（ICP备案中）我们计划加入一个贡献者鸣谢墙，欢迎各位用户反馈BUG或者分享自己用星垣做的界面，我们将认真阅读并收录鸣谢
+- 真诚的感谢每一位反馈BUG的用户，你们的反馈将使星垣更加稳定和健壮
 
 ---
 
-## 🆕V2.3.0——重要更新
+## 🆕V2.3.1——重要更新
 
-**本版本是一次重大更新，增加了响应式布局系统，由静态布局转变为动态布局，并且彻底修复了之前存在的由重入重绘导致的概率出现的渲染错乱问题**
+### ✨ 新增
 
-- **优化窗口尺寸调节机制**：重构 `WndProcThunk`、`runEventLoop` 和 `pumpResizeIfNeeded`，统一记录尺寸变化并在事件循环末尾集中重绘，避免重复重绘导致的抖动和顺序错乱。
+新增一个登录界面Demo在主仓库**examples/**目录下
 
-- **新增对话框尺寸调度接口**：引入 `Window::scheduleResizeFromModal()` 与 `pumpResizeIfNeeded()` 的组合，模态对话框在拉伸期间也可通知父窗口更新尺寸。底层控件将在统一收口时重新布局，而对话框自身保持尺寸不变。
+### ⚙️ 变更
 
-- **自适应布局改进**：内部新增 `adaptiveLayout()` 函数，按照锚点重新计算控件位置和尺寸，使双锚定（左右或上下）控件随窗口变化自适应伸缩。
+- **Dialog背景快照机制：**`Dialog`不在自己抓取和销毁快照，**删除**重载的抓取和恢复快照的方法，完全交由基类`Canvas`处理，`Dialog`的`draw`方法中不在处理快照
+- **窗口变化重绘时控件和窗口重绘的时机调整：**主事件循环中窗口大小发生变化时先处理控件尺寸，并回贴和释放旧快照，然后再重绘新尺寸窗口，最后绘制控件
 
-- **修复模态对话框拉伸问题**：解决模态对话框打开时，窗口拉伸导致底层控件无法根据锚点更新的位置和尺寸的问题；同时避免对话框反复重绘导致的残影。
-
-- **进一步解决绘制顺序错乱**：拉伸过程中采用 `ValidateRect` 替代 `InvalidateRect`，确保窗口仅在一次统一收口绘制后标记为有效，杜绝系统再次触发 `WM_PAINT` 造成重入。
-
-- 其他修复：修正表格和对话框背景快照某些边界情况下的更新不及时问题。
-
-  ![](image/1.png)
-
-![](image/2.png)
+本次针对用户反馈和已知内容进行了一些修复……
 
 详细变更请参阅[更新日志](CHANGELOG.md)
 

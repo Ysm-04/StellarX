@@ -58,7 +58,7 @@ void Control::setLayoutMode(StellarX::LayoutMode layoutMode_)
 {
 	this->layoutMode = layoutMode_;
 }
-void Control::steAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2)
+void Control::setAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2)
 {
 	this->anchor_1 = anchor_1;
 	this->anchor_2 = anchor_2;
@@ -144,6 +144,7 @@ void Control::discardBackground()
 {
 	if (saveBkImage)
 	{
+		restBackground();
 		delete saveBkImage;
 		saveBkImage = nullptr;
 	}

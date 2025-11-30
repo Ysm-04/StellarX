@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.3.1] - 2025-11-30
+
+## 🙏 Acknowledgements
+
+- Special thanks to user [@To-KongBai](https://github.com/To-KongBai) for providing stable reproduction steps and key phenomenon comparisons (container nested child control coordinate transformation issue), which helped us quickly identify and fix the control coordinate transformation problem in deeply nested containers. ([Issues#6](https://github.com/Ysm-04/StellarX/issues/6))
+- In the upcoming website (currently undergoing ICP filing), we plan to add a contributors' wall to acknowledge users. We welcome everyone to report bugs or share interfaces created with StellarX, and we will carefully read and include acknowledgements.
+- Sincere thanks to every user who reports bugs—your feedback makes StellarX more stable and robust.
+
+### ⚙️ Changes
+
+- **Dialog Background Snapshot Mechanism:** `Dialog` no longer captures and destroys its own snapshot. The methods for capturing and restoring snapshots have been **removed** from `Dialog`, and the base class `Canvas` now handles all snapshot management. The `draw` method in `Dialog` no longer deals with snapshots.
+- **Timing Adjustment for Window and Control Redrawing on Size Change:** In the main event loop, when the window size changes, control sizes are processed first. Old snapshots are discarded, followed by the redrawing of the window with the new size, and finally, the controls are redrawn.
+
+### ✅ Fixes
+
+- **Child Control Coordinate Transformation in Nested Containers:** `Canvas` overrides the base class's `setX/Y` methods to synchronize the global coordinates of child controls when the parent container's global coordinates change. This prevents child controls in nested containers from incorrectly treating the container's relative coordinates as global coordinates.
+- **Solid Background Window Title Not Applied:** In the `Window`'s `draw()` method, the window title is forcibly set to ensure that the title passed when creating the window is applied correctly, preventing the issue where the window title doesn't take effect.
+- **Tab Control Background Residue when Changing Coordinates:** In the overridden `setX/Y` methods of `TabControl`, all tabs and their child controls are forced to discard snapshots when the tab's coordinates change. This prevents background residue caused by incorrect snapshot restoration order after modifying coordinates.
+- **Table Page Number Label and Pagination Button Misalignment when Changing Coordinates:** In `Table`'s `setX/Y`, the `isNeedButtonAndPageNum` state is reset to `true`, ensuring that the pagination button and page number label are recalculated and remain centered directly beneath the table when redrawn.
+
 ## [v2.3.0] - 2025-11-18
 
 ### ✨ Added

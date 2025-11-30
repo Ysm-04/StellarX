@@ -25,6 +25,9 @@
 #define DISABLEDCOLOUR RGB(96, 96, 96) //禁用状态颜色
 #define TEXTMARGINS_X 6
 #define TEXTMARGINS_Y 4
+constexpr int bordWith = 1; //边框宽度，用于快照恢复时的偏移计算
+constexpr int bordHeight = 1; //边框高度，用于快照恢复时的偏移计算
+
 
 class Button : public Control
 {

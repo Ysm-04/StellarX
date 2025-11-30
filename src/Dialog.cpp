@@ -40,13 +40,7 @@ void Dialog::draw()
 		Canvas::setLinewidth(BorderWidth);
 		Canvas::setCanvasBkColor(this->backgroundColor);
 		Canvas::setShape(StellarX::ControlShape::ROUND_RECTANGLE);
-
-		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-			saveBackground(this->x, this->y, this->width, this->height);
-		//设置所有控件为脏状态
-		/*for(auto& c :this->controls)
-			c->setDirty(true);*/
-		restBackground();
+		
 		Canvas::draw();
 
 		//绘制消息文本
@@ -269,6 +263,7 @@ void Dialog::setInitialization(bool init)
 	{
 		initDialogSize();
 		saveBackground((x - BorderWidth), (y - BorderWidth), (width + 2 * BorderWidth), (height + 2 * BorderWidth));
+		this->dirty = true;
 	}
 }
 
@@ -619,32 +614,6 @@ void Dialog::initDialogSize()
 	initButtons();     // 初始化按钮
 	initTitle();       // 初始化标题标签
 	initCloseButton(); // 初始化关闭按钮
-}
-
-void Dialog::saveBackground(int x, int y, int w, int h)
-{
-	if (w <= 0 || h <= 0) return;
-	saveBkX = x; saveBkY = y; saveWidth = w; saveHeight = h;
-	if (saveBkImage)
-	{
-		//尺寸变了才重建，避免反复 new/delete
-		if (saveBkImage->getwidth() != w || saveBkImage->getheight() != h)
-		{
-			delete saveBkImage; saveBkImage = nullptr;
-		}
-	}
-	if (!saveBkImage) saveBkImage = new IMAGE(w + BorderWidth*2, h + BorderWidth*2);
-
-	SetWorkingImage(nullptr);                 // ★抓屏幕
-	getimage(saveBkImage, x - BorderWidth, y - BorderWidth, w + BorderWidth*2, h+ BorderWidth*2);
-	hasSnap = true;
-}
-void Dialog::restBackground()
-{
-	if (!hasSnap || !saveBkImage) return;
-	// 直接回贴屏幕（与抓取一致）
-	SetWorkingImage(nullptr);
-	putimage(saveBkX - BorderWidth, saveBkY - BorderWidth,saveBkImage);
 }
 
 void Dialog::addControl(std::unique_ptr<Control> control)

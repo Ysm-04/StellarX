@@ -12,6 +12,28 @@ Canvas::Canvas(int x, int y, int width, int height)
 	this->id = "Canvas";
 }
 
+void Canvas::setX(int x)
+{
+    this->x = x;
+    for (auto& c : controls)
+    {
+        c->onWindowResize();
+        c->setX(c->getLocalX() + this->x);
+    }
+	dirty = true;
+}
+
+void Canvas::setY(int y)
+{
+    this->y = y;
+    for (auto& c : controls)
+    {
+        c->onWindowResize();
+        c->setY(c->getLocalY() + this->y);
+    }
+    dirty = true;
+}
+
 void Canvas::clearAllControls()
 {
 	controls.clear();
@@ -36,21 +58,22 @@ void Canvas::draw()
     // 在绘制画布之前，先恢复并更新背景快照：
     // 1. 如果已有快照，则先回贴旧快照以清除之前的内容。
     // 2. 当坐标或尺寸变化，或缓存图像无效时，丢弃旧快照并重新抓取新的背景。
+    int margin = canvaslinewidth > 1 ? canvaslinewidth : 1;
     if (hasSnap)
     {
         // 恢复旧快照，清除上一次绘制
         restBackground();
         // 如果位置或尺寸变了，或没有有效缓存，则重新抓取
-        if (!saveBkImage || saveBkX != this->x || saveBkY != this->y || saveWidth != this->width || saveHeight != this->height)
+        if (!saveBkImage || saveBkX != this->x - margin || saveBkY != this->y - margin || saveWidth != this->width + margin * 2 || saveHeight != this->height + margin * 2)
         {
             discardBackground();
-            saveBackground(this->x, this->y, this->width, this->height);
+            saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
         }
     }
     else
     {
         // 首次绘制或没有快照时直接抓取背景
-        saveBackground(this->x, this->y, this->width, this->height);
+        saveBackground(this->x- margin, this->y- margin, this->width + margin*2, this->height + margin*2);
     }
     // 再次恢复最新快照，确保绘制区域干净
     restBackground();
@@ -98,6 +121,7 @@ bool Canvas::handleEvent(const ExMessage& msg)
 
 void Canvas::addControl(std::unique_ptr<Control> control)
 {
+   
 	//坐标转化
 	control->setX(control->getLocalX() + this->x);
 	control->setY(control->getLocalY() + this->y);
@@ -360,6 +384,8 @@ void Canvas::requestRepaint(Control* parent)
 	else
 		onRequestRepaintAsRoot();
 }
+
+
 
 
 

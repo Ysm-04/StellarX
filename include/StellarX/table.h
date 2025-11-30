@@ -99,6 +99,8 @@ private:
 	bool model() const override { return false; };
 public:
 	StellarX::ControlText textStyle; // 文本样式
+	void setX(int x) override;
+	void setY(int y) override;
 	void setWidth(int width) override;
 	void setHeight(int height) override;
 public:

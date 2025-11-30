@@ -123,9 +123,6 @@ private:
 	void getTextSize();	      
 	//初始化对话框尺寸
 	void initDialogSize(); 
-	void saveBackground(int x, int y, int w, int h)override;
-
-	void restBackground()override;
 	void addControl(std::unique_ptr<Control> control);
 	
 	// 清除所有控件

@@ -162,28 +162,56 @@ TabControl::~TabControl()
 {
 }
 
+void TabControl::setX(int x)
+{
+	this->x = x;
+	initTabBar();
+	initTabPage();
+	dirty = true;
+	for (auto& c : controls)
+	{
+		c.first->onWindowResize();
+		c.second->onWindowResize();
+	}
+
+}
+
+void TabControl::setY(int y)
+{
+	this->y = y;
+	initTabBar();
+	initTabPage();
+	dirty = true;
+	for (auto& c : controls)
+	{
+		c.first->onWindowResize();
+		c.second->onWindowResize();
+	}
+}
+
 void TabControl::draw()
 {
 	if (!dirty || !show)return;
-    // 在绘制 TabControl 之前，先恢复并更新背景快照：
-    if (hasSnap)
-    {
-        // 先回贴旧快照，清除之前的绘制
-        restBackground();
-        // 如位置或尺寸变化，丢弃旧快照并重新抓取
-        if (!saveBkImage || saveBkX != this->x || saveBkY != this->y || saveWidth != this->width || saveHeight != this->height)
-        {
-            discardBackground();
-            saveBackground(this->x, this->y, this->width, this->height);
-        }
-    }
-    else
-    {
-        // 首次绘制时抓取背景
-        saveBackground(this->x, this->y, this->width, this->height);
-    }
-    // 再次恢复最新背景，保证绘制区域干净
-    restBackground();
+ //   // 在绘制 TabControl 之前，先恢复并更新背景快照：
+	//int margin = canvaslinewidth > 1 ? canvaslinewidth : 1;
+	//if (hasSnap)
+	//{
+	//	// 恢复旧快照，清除上一次绘制
+	//	restBackground();
+	//	// 如果位置或尺寸变了，或没有有效缓存，则重新抓取
+	//	if (!saveBkImage || saveBkX != this->x - margin || saveBkY != this->y - margin || saveWidth != this->width + margin * 2 || saveHeight != this->height + margin * 2)
+	//	{
+	//		discardBackground();
+	//		saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
+	//	}
+	//}
+	//else
+	//{
+	//	// 首次绘制或没有快照时直接抓取背景
+	//	saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
+	//}
+ //   // 再次恢复最新背景，保证绘制区域干净
+ //   restBackground();
     // 绘制画布背景和基本形状及其子画布控件
     Canvas::draw();
 	for (auto& c : controls)

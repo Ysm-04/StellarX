@@ -39,6 +39,9 @@ public:
 	TabControl();
 	TabControl(int x,int y,int width,int height);
 	~TabControl();
+
+    void setX(int x)override;
+    void setY(int y)override;
 	
 	void draw() override;
 	bool handleEvent(const ExMessage& msg) override;

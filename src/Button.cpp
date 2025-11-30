@@ -224,7 +224,7 @@ void Button::draw()
 	//设置按钮填充模式
 	setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
 	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-		saveBackground(this->x, this->y, this->width, this->height);
+		saveBackground(this->x, this->y, (this->width + bordWith), (this->height + bordHeight));
 	// 恢复背景（清除旧内容）
 	restBackground();
 	//根据按钮形状绘制

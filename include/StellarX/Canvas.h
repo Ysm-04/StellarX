@@ -41,6 +41,9 @@ public:
     Canvas(int x, int y, int width, int height);
     ~Canvas() {}
 
+    void setX(int x)override;
+	void setY(int y)override;
+
     //绘制容器及其子控件
     void draw() override;
     bool handleEvent(const ExMessage& msg) override;
@@ -68,5 +71,6 @@ public:
 private:
     //用来检查对话框是否模态,此控件不做实现
     bool model() const override { return false; };
+    
 };
 

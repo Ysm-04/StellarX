@@ -243,7 +243,10 @@ void Window::draw()
         oldWndProc = (WNDPROC)SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)&Window::WndProcThunk);
         procHooked = (oldWndProc != nullptr);
     }
-
+    if (!headline.empty())
+    {
+        SetWindowText(hWnd, headline.c_str());
+    }
     ApplyResizableStyle(hWnd, useComposited);
 
     // 关闭类样式的整窗重绘标志（减少尺寸变化时的整窗 redraw）
@@ -470,6 +473,18 @@ int Window::runEventLoop()
                 // 调整底层画布尺寸
                 if (finalW != width || finalH != height)
                 {
+                    // 批量通知控件“窗口尺寸变化”，并标记重绘
+                    for (auto& c : controls)
+                        adaptiveLayout(c, finalH, finalW);
+                    for (auto& d : dialogs)
+                    {
+                        if (auto dd = dynamic_cast<Dialog*>(d.get()))
+                        {
+                            dd->setDirty(true);
+                            dd->setInitialization(true);
+                        }
+                    }
+                    //重绘窗口
                     Resize(nullptr, finalW, finalH);
 
                     // 重取一次实际客户区尺寸做确认
@@ -497,21 +512,6 @@ int Window::runEventLoop()
                     // 最终提交“当前已应用尺寸”（用于外部查询/下次比较）
                     width = renderWidth;
                     height = renderHeight;
-                }
-
-                // 批量通知控件“窗口尺寸变化”，并标记重绘
-                for (auto& c : controls)
-                {
-                    adaptiveLayout(c,finalH,finalW);
-                    c->onWindowResize();
-                }
-                for (auto& d : dialogs)
-                {
-                    if (auto dd = dynamic_cast<Dialog*>(d.get()))
-                    {
-                        dd->setDirty(true);
-                        dd->setInitialization(true);
-                    }
                 }
 
                 // 统一批量绘制
@@ -809,11 +809,13 @@ void Window::adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const
             c->setHeight(c->getLocalHeight());
             c->setY(finalH - origBottomDist - c->getHeight());
         }
-        else {
+        else 
+        {
             // 垂直无锚点：默认为顶部定位，高度固定
             c->setY(c->getLocalY());
             c->setHeight(c->getLocalHeight());
         }
+        c->onWindowResize();
     }
 }
 

@@ -250,6 +250,20 @@ void Table::drawButton()
 
 }
 
+void Table::setX(int x)
+{
+	this->x = x;
+	isNeedButtonAndPageNum = true;
+	dirty = true;
+}
+
+void Table::setY(int y)
+{
+	this->y = y;
+	isNeedButtonAndPageNum = true;
+	dirty = true;
+}
+
 void Table::setWidth(int width)
 {
     // 调整列宽以匹配新的表格总宽度。不修改 localWidth，避免累计误差。
@@ -285,6 +299,7 @@ void Table::setWidth(int width)
 
 void Table::setHeight(int height)
 {
+	//高度不变
 }
 
 Table::Table(int x, int y)

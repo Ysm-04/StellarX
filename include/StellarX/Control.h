@@ -43,8 +43,8 @@ protected:
     bool show = true; // 是否显示
 
     /* == 布局模式 == */
-    StellarX::LayoutMode layoutMode = StellarX::LayoutMode::AnchorToEdges;  // 布局模式
-    StellarX::Anchor anchor_1 = StellarX::Anchor::Left; // 锚点
+    StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
+    StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 锚点
     StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 锚点
 
     /* == 背景快照 ==  */
@@ -118,8 +118,8 @@ public:
     int getLocalRight() const { return localx + localWidth; }
     int getLocalBottom() const { return localy + localHeight; }
 
-    void setX(int x) { this->x = x; dirty = true; }
-    void setY(int y) { this->y = y; dirty = true; }
+    virtual void setX(int x) { this->x = x; dirty = true; }
+    virtual void setY(int y) { this->y = y; dirty = true; }
     virtual void setWidth(int width) { this->width = width; dirty = true; }
     virtual void setHeight(int height) { this->height = height; dirty = true; }
 public:
@@ -142,7 +142,7 @@ public:
     virtual bool model()const = 0;
     //布局
     void setLayoutMode(StellarX::LayoutMode layoutMode_);
-    void steAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2);
+    void setAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2);
     StellarX::Anchor getAnchor_1() const;
     StellarX::Anchor getAnchor_2() const;
     StellarX::LayoutMode getLayoutMode() const;
