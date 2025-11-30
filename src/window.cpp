@@ -815,7 +815,7 @@ void Window::adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const
             c->setY(c->getLocalY());
             c->setHeight(c->getLocalHeight());
         }
-        c->onWindowResize();
     }
+    c->onWindowResize();
 }
 
