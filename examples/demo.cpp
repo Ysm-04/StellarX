@@ -24,7 +24,7 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 	// 3. 为按钮设置点击事件（使用Lambda表达式）
 	myButton->setOnClickListener([&mainWindow]() {
 		// 使用消息框工厂创建模态对话框
-		auto result = StellarX::MessageBox::ShowModal(
+		auto result = StellarX::MessageBox::showModal(
 			mainWindow,
 			"欢迎使用星垣GUI\r\n作者：我在人间做废物",
 			"问候",
