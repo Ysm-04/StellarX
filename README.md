@@ -2,6 +2,8 @@
 
 [English document](README.en.md)
 
+官网地址：https://stellarx-gui.top
+
 > 本仓库为 **StellarX** 主仓：开发与 Issue/PR 均在 GitHub 进行。  
 > GitCode 仅为只读镜像：如需反馈请到 GitHub:https://github.com/Ysm-04/StellarX
 

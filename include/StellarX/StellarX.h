@@ -11,8 +11,8 @@
  *
  * @作者: 我在人间做废物
  * @邮箱: [3150131407@qq.com] | [ysm3150131407@gmail.com]
+ * @官网地址：https://stellarx-gui.top
  * @仓库: [https://github.com/Ysm-04/StellarX]
- * @官网：即将上线，敬请期待
  *
  * @许可证: MIT License
  * @版权: Copyright (c) 2025 我在人间做废物
