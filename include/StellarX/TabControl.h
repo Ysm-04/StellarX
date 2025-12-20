@@ -25,48 +25,48 @@
 #define BUTMINWIDTH  30
 class TabControl :public Canvas
 {
-    int tabBarHeight = BUTMINWIDTH;        //页签栏高度   
-    StellarX::TabPlacement tabPlacement = StellarX::TabPlacement::Top ; //页签排列方式
-	std::vector<std::pair<std::unique_ptr<Button>,std::unique_ptr<Canvas>>> controls; //页签/页列表
+	int tabBarHeight = BUTMINWIDTH;        //页签栏高度
+	bool IsFirstDraw = true;          //首次绘制标记
+	int defaultActivation = -1;      //默认激活页签索引
+	StellarX::TabPlacement tabPlacement = StellarX::TabPlacement::Top; //页签排列方式
+	std::vector<std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>> controls; //页签/页列表
 
 private:
-    using Canvas::addControl;                 // 禁止外部误用
-    void addControl(std::unique_ptr<Control>) = delete; // 精准禁用该重载
+	using Canvas::addControl;                 // 禁止外部误用
+	void addControl(std::unique_ptr<Control>) = delete; // 精准禁用该重载
 private:
-    inline void initTabBar();
-    inline void initTabPage();
+	inline void initTabBar();
+	inline void initTabPage();
 public:
 	TabControl();
-	TabControl(int x,int y,int width,int height);
+	TabControl(int x, int y, int width, int height);
 	~TabControl();
 
-    void setX(int x)override;
-    void setY(int y)override;
-	
+	void setX(int x)override;
+	void setY(int y)override;
+
 	void draw() override;
 	bool handleEvent(const ExMessage& msg) override;
-     
-    //添加页签+页
-    void add(std::pair<std::unique_ptr<Button> ,std::unique_ptr<Canvas>>&& control);
-    //添加为某个页添加控件
-    void add(std::string tabText,std::unique_ptr<Control> control);
-    //设置页签位置 
-    void setTabPlacement(StellarX::TabPlacement placement);
-    //设置页签栏高度 两侧排列时为宽度
-    void setTabBarHeight(int height);
-    //设置不可见后传递给子控件重写
-    void setIsVisible(bool visible) override;
-    void onWindowResize() override;
-    //获取当前激活页签索引
-    int getActiveIndex() const;
-    //设置当前激活页签索引
-    void setActiveIndex(int idx);
-    //获取页签数量
-    int count() const; 
-    //通过页签文本返回索引
-    int indexOf(const std::string& tabText) const;
-    void setDirty(bool dirty) override;
-    void requestRepaint(Control* parent)override;
-   
-};
 
+	//添加页签+页
+	void add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&& control);
+	//添加为某个页添加控件
+	void add(std::string tabText, std::unique_ptr<Control> control);
+	//设置页签位置
+	void setTabPlacement(StellarX::TabPlacement placement);
+	//设置页签栏高度 两侧排列时为宽度
+	void setTabBarHeight(int height);
+	//设置不可见后传递给子控件重写
+	void setIsVisible(bool visible) override;
+	void onWindowResize() override;
+	//获取当前激活页签索引
+	int getActiveIndex() const;
+	//设置当前激活页签索引
+	void setActiveIndex(int idx);
+	//获取页签数量
+	int count() const;
+	//通过页签文本返回索引
+	int indexOf(const std::string& tabText) const;
+	void setDirty(bool dirty) override;
+	void requestRepaint(Control* parent)override;
+};

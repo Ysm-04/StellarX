@@ -16,7 +16,7 @@
  * @所属框架: 星垣(StellarX) GUI框架
  * @作者: 我在人间做废物
  ******************************************************************************/
-  
+
 #pragma once
 #include "Control.h"
 #include "Button.h"
@@ -49,7 +49,6 @@
 #define TABLE_STR_PAGE_MID         "页/共"
 #define TABLE_STR_PAGE_SUFFIX      "页"
 
-
 class Table :public Control
 {
 private:
@@ -64,7 +63,7 @@ private:
 
 	int rowsPerPage = TABLE_DEFAULT_ROWS_PER_PAGE;  // 每页显示的行数
 	int currentPage = 1;                        // 当前页码
-	int totalPages  = 1;                         // 总页数
+	int totalPages = 1;                         // 总页数
 
 	bool isShowPageButton = true;			    // 是否显示翻页按钮
 	bool isNeedDrawHeaders = true;              // 是否需要绘制表头
@@ -73,8 +72,8 @@ private:
 
 	Button* prevButton = nullptr;               // 上一页按钮
 	Button* nextButton = nullptr;			    // 下一页按钮
-	Label*  pageNum = nullptr;                   //页码文本
-	
+	Label* pageNum = nullptr;                   //页码文本
+
 	int dX = x, dY = y;							// 单元格的开始坐标
 	int uX = x, uY = y;							// 单元格的结束坐标
 
@@ -131,6 +130,12 @@ public:
 	void setTableLineStyle(StellarX::LineStyle style);
 	//设置边框宽度
 	void setTableBorderWidth(int width);
+	//清空表头
+	void clearHeaders();
+	//清空表格数据
+	void clearData();
+	//清空表头和数据
+	void resetTable();
 	//窗口变化丢快照+标脏
 	void onWindowResize() override;
 
@@ -153,7 +158,7 @@ public:
 	//获取线型
 	StellarX::LineStyle getTableLineStyle() const;
 	//获取表头
-	std::vector<std::string> getHeaders () const;
+	std::vector<std::string> getHeaders() const;
 	//获取表格数据
 	std::vector<std::vector<std::string>> getData() const;
 	//获取表格边框宽度
@@ -161,7 +166,4 @@ public:
 	//获取表格尺寸
 	int getTableWidth() const;
 	int getTableHeight() const;
-
-
 };
-

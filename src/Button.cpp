@@ -163,7 +163,6 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 	tipLabel.textStyle = this->textStyle;  // 复用按钮字体样式
 }
 
-
 Button::~Button()
 {
 	if (buttonFileIMAGE)
@@ -274,7 +273,6 @@ void Button::draw()
 
 	restoreStyle();//恢复默认字体样式和颜色
 	dirty = false;     //标记按钮不需要重绘
-
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
@@ -314,7 +312,6 @@ bool Button::handleEvent(const ExMessage& msg)
 	// 处理鼠标点击事件
 	if (msg.message == WM_LBUTTONDOWN && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
-
 		if (mode == StellarX::ButtonMode::NORMAL)
 		{
 			click = true;
@@ -451,7 +448,6 @@ void Button::setROUND_RECTANGLEwidth(int width)
 {
 	rouRectangleSize.ROUND_RECTANGLEwidth = width;
 	this->dirty = true; // 标记需要重绘
-
 }
 
 void Button::setROUND_RECTANGLEheight(int height)
@@ -488,7 +484,6 @@ void Button::setFillIma(std::string imaNAme)
 	loadimage(buttonFileIMAGE, imaNAme.c_str(), width, height);
 	this->dirty = true;
 }
-
 
 void Button::setButtonBorder(COLORREF Border)
 {
@@ -558,7 +553,6 @@ void Button::setButtonClick(BOOL click)
 		requestRepaint(parent);
 }
 
-
 std::string Button::getButtonText() const
 {
 	return this->text;
@@ -619,8 +613,6 @@ int Button::getButtonHeight() const
 	return this->height;
 }
 
-
-
 bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
 {
 	double dis = sqrt(pow(mouseX - x, 2) + pow(mouseY - y, 2));
@@ -666,11 +658,9 @@ void Button::cutButtonText()
 	else
 	{
 		cutText = ellipsize_cjk_pref(this->text, contentW, "…"); // 全角省略号
-
 	}
 	isUseCutText = true;
 	needCutText = false;
-
 }
 
 void Button::hideTooltip()
@@ -691,6 +681,3 @@ void Button::refreshTooltipTextForState()
 	else if (mode == StellarX::ButtonMode::TOGGLE)
 		tipLabel.setText(click ? tipTextOn : tipTextOff);
 }
-
-
-

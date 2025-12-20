@@ -30,7 +30,7 @@
 #define titleToTextMargin    10 //标题到文本的距离
 #define textToBorderMargin   10 //文本到边框的距离
 #define BorderWidth          3 //边框宽度
-class Dialog : public Canvas 
+class Dialog : public Canvas
 {
 	Window& hWnd;               //窗口引用
 
@@ -45,18 +45,16 @@ class Dialog : public Canvas
 	std::string message;                  //提示信息
 	std::vector<std::string> lines;       //消息内容按行分割
 
-	
-	bool needsInitialization = true;      //是否需要初始化 
+	bool needsInitialization = true;      //是否需要初始化
 	bool close = false;					  //是否关闭
 	bool modal = true;                    //是否模态
 
-	COLORREF backgroundColor = RGB(240, 240, 240);   //背景颜色            
+	COLORREF backgroundColor = RGB(240, 240, 240);   //背景颜色
 	COLORREF borderColor = RGB(100, 100, 100);       //边框颜色
 
 	COLORREF buttonTrueColor = RGB(211, 190, 190);	  //按钮被点击颜色
 	COLORREF buttonFalseColor = RGB(215, 215, 215);   //按钮未被点击颜色
 	COLORREF buttonHoverColor = RGB(224, 224, 224);	  //按钮悬浮颜色
-
 
 	Button* closeButton = nullptr;  //关闭按钮
 
@@ -76,8 +74,7 @@ public:
 	//获取对话框消息，用以去重
 	std::string GetCaption() const;
 	//获取对话框消息，用以去重
-	std::string GetText() const; 
-	
+	std::string GetText() const;
 
 public:
 	Dialog(Window& hWnd, std::string text, std::string message = "对话框", StellarX::MessageBoxType type = StellarX::MessageBoxType::OK, bool modal = true);
@@ -105,28 +102,27 @@ public:
 	// 显示对话框
 	void Show();
 	// 关闭对话框
-	void Close(); 
+	void Close();
 	//初始化
 	void setInitialization(bool init);
 
-
 private:
 	// 初始化按钮
-	void initButtons();       
+	void initButtons();
 	// 初始化关闭按钮
-	void initCloseButton();   
+	void initCloseButton();
 	// 初始化标题
-	void initTitle();		  
+	void initTitle();
 	// 按行分割消息内容
-	void splitMessageLines(); 
+	void splitMessageLines();
 	// 获取文本大小
-	void getTextSize();	      
+	void getTextSize();
 	//初始化对话框尺寸
-	void initDialogSize(); 
+	void initDialogSize();
 	void addControl(std::unique_ptr<Control> control);
-	
+
 	// 清除所有控件
-	void clearControls(); 
+	void clearControls();
 	//创建对话框按钮
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
 	void requestRepaint(Control* parent) override;

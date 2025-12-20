@@ -14,8 +14,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.3.1-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.3.1_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.2-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-2.3.2_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -32,30 +32,26 @@
 
 ---
 
-## ==公告==
 
-## 🙏 鸣谢
 
-- 感谢用户 [@To-KongBai](https://github.com/To-KongBai) 提供稳定复现步骤与关键现象对比（容器嵌套孙控件坐标转换问题），帮助我们快速确认多容器嵌套时的控件坐标转换问题并修复。（[Issues#6](https://github.com/Ysm-04/StellarX/issues/6)）
-- 在即将上线的官网中（ICP备案中）我们计划加入一个贡献者鸣谢墙，欢迎各位用户反馈BUG或者分享自己用星垣做的界面，我们将认真阅读并收录鸣谢
-- 真诚的感谢每一位反馈BUG的用户，你们的反馈将使星垣更加稳定和健壮
+## 🆕V2.3.2——重要更新
 
----
+### 新增
 
-## 🆕V2.3.1——重要更新
-
-### ✨ 新增
-
-新增一个登录界面Demo在主仓库**examples/**目录下
+- **Table 支持运行期重置表头与数据：**新增 `Table::clearHeaders()`、`Table::clearData()`、`Table::resetTable()`，允许同一 `Table` 在运行过程中动态切换表头与数据，并触发必要的单元格尺寸/分页信息重算与重绘。
+- **TextBox 新增密码模式：**`TextBoxmode` 新增 `PASSWORD_MODE`；输入内容内部保存，绘制层面使用掩码字符（如 `*`）替代显示，真实文本可通过 `TextBox::getText()` 获取。
 
 ### ⚙️ 变更
 
-- **Dialog背景快照机制：**`Dialog`不在自己抓取和销毁快照，**删除**重载的抓取和恢复快照的方法，完全交由基类`Canvas`处理，`Dialog`的`draw`方法中不在处理快照
-- **窗口变化重绘时控件和窗口重绘的时机调整：**主事件循环中窗口大小发生变化时先处理控件尺寸，并回贴和释放旧快照，然后再重绘新尺寸窗口，最后绘制控件
+- **TabControl 默认激活页语义明确化：**
+  - 首次绘制前调用 `TabControl::setActiveIndex()`：仅记录默认激活索引，不再立即触发页签按钮点击回调；
+  - 首次绘制完成后：若设置了默认激活索引则应用激活状态并绘制激活页（索引越界时默认激活最后一个页）；
+  - 程序运行过程中调用 `TabControl::setActiveIndex()`：索引合法则立即切换激活页并绘制；索引越界则不做处理。
 
-本次针对用户反馈和已知内容进行了一些修复……
+### ✅ 修复
 
-详细变更请参阅[更新日志](CHANGELOG.md)
+- **TabControl::setActiveIndex 绘制前调用导致程序中断：**修复绘制前设置默认激活索引时触发空指针访问的问题；现在默认激活逻辑延后到首次绘制完成后再生效，避免崩溃并保证首次绘制即可绘制激活页。
+- **TabControl 由不可见设置为可见时绘制错乱：**修复 `setIsVisible(false) -> setIsVisible(true)` 后非激活页被错误绘制导致的多页重叠/残影；现在 TabControl 可见时仅激活页可见/可绘制，无激活页则不绘制任何页。
 
 ---
 

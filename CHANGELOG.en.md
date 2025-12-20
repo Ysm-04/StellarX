@@ -7,9 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v2.3.2] - 2025 - 12 - 20
+
+### ✨ Added
+
+- **Table: runtime reset for headers and data:** added `Table::clearHeaders()`, `Table::clearData()`, and `Table::resetTable()`. This allows a single `Table` instance to dynamically update its headers/data at runtime, and triggers the required recalculation (cell sizing / pagination info) and redraw.
+- **TextBox: password mode:** added `PASSWORD_MODE` to `TextBoxmode`. User input is stored internally, while the render layer displays masked characters (e.g., `*`). The real text can be retrieved via `TextBox::getText()`.
+
+### ⚙️ Changed
+
+- **TabControl: clarified default active page semantics:**
+  - Calling `TabControl::setActiveIndex()` **before the first draw** now only records the default active index; it no longer immediately triggers the tab button click callback.
+  - **After the first draw completes**, if a default active index was set, the active state is applied and the active page is drawn (if the index is out of range, the last page is activated by default).
+  - Calling `TabControl::setActiveIndex()` **during runtime (non-first draw)** switches the active page immediately when the index is valid; out-of-range indices are ignored.
+
+### ✅ Fixed
+
+- **TabControl::setActiveIndex crash when called before drawing:** fixed a null-pointer access caused by triggering the tab button click callback before initialization. The default activation is now applied after the first draw completes, preventing crashes and ensuring the active page is rendered on first draw.
+- **TabControl rendering glitches when toggling visibility (hidden -> visible):** fixed multi-page overlap/ghosting caused by non-active pages being incorrectly drawn after `setIsVisible(false) -> setIsVisible(true)`. Now, when TabControl is visible, only the active page is visible/drawable; if there is no active page, nothing is drawn.
+
 ## [v2.3.1] - 2025-11-30
 
-## 🙏 Acknowledgements
+### 🙏 Acknowledgements
 
 - Special thanks to user [@To-KongBai](https://github.com/To-KongBai) for providing stable reproduction steps and key phenomenon comparisons (container nested child control coordinate transformation issue), which helped us quickly identify and fix the control coordinate transformation problem in deeply nested containers. ([Issues#6](https://github.com/Ysm-04/StellarX/issues/6))
 - In the upcoming website (currently undergoing ICP filing), we plan to add a contributors' wall to acknowledge users. We welcome everyone to report bugs or share interfaces created with StellarX, and we will carefully read and include acknowledgements.

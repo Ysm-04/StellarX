@@ -7,9 +7,28 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v2.3.2] - 2025 - 12 - 20
+
+### ✨ 新增
+
+- **Table 支持运行期重置表头与数据：**新增 `Table::clearHeaders()`、`Table::clearData()`、`Table::resetTable()`，允许同一 `Table` 在运行过程中动态切换表头与数据，并触发必要的单元格尺寸/分页信息重算与重绘。
+- **TextBox 新增密码模式：**`TextBoxmode` 新增 `PASSWORD_MODE`；输入内容内部保存，绘制层面使用掩码字符（如 `*`）替代显示，真实文本可通过 `TextBox::getText()` 获取。
+
+### ⚙️ 变更
+
+- **TabControl 默认激活页语义明确化：**
+  - 首次绘制前调用 `TabControl::setActiveIndex()`：仅记录默认激活索引，不再立即触发页签按钮点击回调；
+  - 首次绘制完成后：若设置了默认激活索引则应用激活状态并绘制激活页（索引越界时默认激活最后一个页）；
+  - 程序运行过程中调用 `TabControl::setActiveIndex()`：索引合法则立即切换激活页并绘制；索引越界则不做处理。
+
+### ✅ 修复
+
+- **TabControl::setActiveIndex 绘制前调用导致程序中断：**修复绘制前设置默认激活索引时触发空指针访问的问题；现在默认激活逻辑延后到首次绘制完成后再生效，避免崩溃并保证首次绘制即可绘制激活页。
+- **TabControl 由不可见设置为可见时绘制错乱：**修复 `setIsVisible(false) -> setIsVisible(true)` 后非激活页被错误绘制导致的多页重叠/残影；现在 TabControl 可见时仅激活页可见/可绘制，无激活页则不绘制任何页。
+
 ## [v2.3.1] - 2025 - 11 - 30
 
-## 🙏 鸣谢
+### 🙏 鸣谢
 
 - 感谢用户 [@To-KongBai](https://github.com/To-KongBai) 提供稳定复现步骤与关键现象对比（容器嵌套孙控件坐标转换问题），帮助我们快速确认多容器嵌套时的控件坐标转换问题并修复。（[Issues#6](https://github.com/Ysm-04/StellarX/issues/6)）
 - 在即将上线的官网中（ICP备案中）我们计划加入一个贡献者鸣谢墙，欢迎各位用户反馈BUG或者分享自己用星垣做的界面，我们将认真阅读并收录鸣谢

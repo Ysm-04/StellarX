@@ -44,9 +44,14 @@ bool StellarX::ControlText::operator!=(const ControlText& text)
 }
 void Control::setIsVisible(bool show)
 {
+	this->show = show;
+	dirty = true;
+
 	if (!show)
 		this->updateBackground();
-	this->show = show;
+	else
+		requestRepaint(parent);
+	
 }
 void Control::onWindowResize()
 {

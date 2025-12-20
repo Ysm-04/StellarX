@@ -1,7 +1,7 @@
 ﻿/*******************************************************************************
  * @文件: StellarX.h
  * @摘要: 星垣(StellarX) GUI框架 - 主包含头文件
- * @版本: v2.3.1
+ * @版本: v2.3.2
  * @描述:
  *     一个为Windows平台打造的轻量级、模块化C++ GUI框架。
  *     基于EasyX图形库，提供简洁易用的API和丰富的控件。
@@ -11,7 +11,7 @@
  *
  * @作者: 我在人间做废物
  * @邮箱: [3150131407@qq.com] | [ysm3150131407@gmail.com]
- * @官网地址：https://stellarx-gui.top
+ * @官网：https://stellarx-gui.top/
  * @仓库: [https://github.com/Ysm-04/StellarX]
  *
  * @许可证: MIT License

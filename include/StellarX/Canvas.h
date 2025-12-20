@@ -23,54 +23,51 @@
 class Canvas : public Control
 {
 protected:
-    std::vector<std::unique_ptr<Control>> controls;
-    
-    StellarX::ControlShape               shape = StellarX::ControlShape::RECTANGLE;   //容器形状
-    StellarX::FillMode          canvasFillMode = StellarX::FillMode::Solid;           //容器填充模式
-    StellarX::LineStyle        canvasLineStyle = StellarX::LineStyle::Solid;          //线型
-    int                        canvaslinewidth = 1;                                   //线宽
-   
-    COLORREF              canvasBorderClor = RGB(0, 0, 0);    //边框颜色
-    COLORREF              canvasBkClor = RGB(255,255,255);    //背景颜色
+	std::vector<std::unique_ptr<Control>> controls;
 
+	StellarX::ControlShape               shape = StellarX::ControlShape::RECTANGLE;   //容器形状
+	StellarX::FillMode          canvasFillMode = StellarX::FillMode::Solid;           //容器填充模式
+	StellarX::LineStyle        canvasLineStyle = StellarX::LineStyle::Solid;          //线型
+	int                        canvaslinewidth = 1;                                   //线宽
 
-    // 清除所有子控件
+	COLORREF              canvasBorderClor = RGB(0, 0, 0);    //边框颜色
+	COLORREF              canvasBkClor = RGB(255, 255, 255);    //背景颜色
+
+	// 清除所有子控件
 	void clearAllControls();
 public:
-    Canvas();
-    Canvas(int x, int y, int width, int height);
-    ~Canvas() {}
+	Canvas();
+	Canvas(int x, int y, int width, int height);
+	~Canvas() {}
 
-    void setX(int x)override;
+	void setX(int x)override;
 	void setY(int y)override;
 
-    //绘制容器及其子控件
-    void draw() override;
-    bool handleEvent(const ExMessage& msg) override;
-    //添加控件
-    void addControl(std::unique_ptr<Control> control);
-    //设置容器样式
-    void setShape(StellarX::ControlShape shape);
-    //设置容器填充模式
-    void setCanvasfillMode(StellarX::FillMode mode);
-    //设置容器边框颜色
-    void setBorderColor(COLORREF color);
-    //设置填充颜色
-    void setCanvasBkColor(COLORREF color);
-    //设置线形
-    void setCanvasLineStyle(StellarX::LineStyle style);
-    //设置线段宽度
-    void setLinewidth(int width);
-    //设置不可见后传递给子控件重写
-    void setIsVisible(bool visible) override;
-    void setDirty(bool dirty) override;
-    void onWindowResize() override;
-    void requestRepaint(Control* parent)override;
-    //获取子控件列表
-    std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
+	//绘制容器及其子控件
+	void draw() override;
+	bool handleEvent(const ExMessage& msg) override;
+	//添加控件
+	void addControl(std::unique_ptr<Control> control);
+	//设置容器样式
+	void setShape(StellarX::ControlShape shape);
+	//设置容器填充模式
+	void setCanvasfillMode(StellarX::FillMode mode);
+	//设置容器边框颜色
+	void setBorderColor(COLORREF color);
+	//设置填充颜色
+	void setCanvasBkColor(COLORREF color);
+	//设置线形
+	void setCanvasLineStyle(StellarX::LineStyle style);
+	//设置线段宽度
+	void setLinewidth(int width);
+	//设置不可见后传递给子控件重写
+	void setIsVisible(bool visible) override;
+	void setDirty(bool dirty) override;
+	void onWindowResize() override;
+	void requestRepaint(Control* parent)override;
+	//获取子控件列表
+	std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
 private:
-    //用来检查对话框是否模态,此控件不做实现
-    bool model() const override { return false; };
-    
+	//用来检查对话框是否模态,此控件不做实现
+	bool model() const override { return false; };
 };
-

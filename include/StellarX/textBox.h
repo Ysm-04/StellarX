@@ -18,42 +18,39 @@
 #pragma once
 #include "Control.h"
 
-
 class TextBox : public Control
 {
 	std::string   text;   //文本
-    StellarX::TextBoxmode   mode;  //模式
-    StellarX::ControlShape  shape; //形状
-    bool          click = false;  //是否点击
-    size_t           maxCharLen = 10;//最大字符长度
-    COLORREF      textBoxBkClor = RGB(255, 255, 255); //背景颜色
-    COLORREF      textBoxBorderClor = RGB(0,0,0);     //边框颜色
+	StellarX::TextBoxmode   mode;  //模式
+	StellarX::ControlShape  shape; //形状
+	bool          click = false;  //是否点击
+	size_t           maxCharLen = 10;//最大字符长度
+	COLORREF      textBoxBkClor = RGB(255, 255, 255); //背景颜色
+	COLORREF      textBoxBorderClor = RGB(0, 0, 0);     //边框颜色
 
 public:
-    StellarX::ControlText textStyle; //文本样式
+	StellarX::ControlText textStyle; //文本样式
 
-    TextBox(int x, int y, int width, int height, std::string text = "", StellarX::TextBoxmode mode = StellarX::TextBoxmode::INPUT_MODE, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
-    void draw() override;
-    bool handleEvent(const ExMessage& msg) override;
-    //设置模式
-    void setMode(StellarX::TextBoxmode mode);
-    //设置可输入最大字符长度
-    void setMaxCharLen(size_t len);
-    //设置形状
-    void setTextBoxshape(StellarX::ControlShape shape);
-    //设置边框颜色
-    void setTextBoxBorder(COLORREF color);
-    //设置背景颜色
-    void setTextBoxBk(COLORREF color);    
-    //设置文本
-    void setText(std::string text);
+	TextBox(int x, int y, int width, int height, std::string text = "", StellarX::TextBoxmode mode = StellarX::TextBoxmode::INPUT_MODE, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
+	void draw() override;
+	bool handleEvent(const ExMessage& msg) override;
+	//设置模式
+	void setMode(StellarX::TextBoxmode mode);
+	//设置可输入最大字符长度
+	void setMaxCharLen(size_t len);
+	//设置形状
+	void setTextBoxshape(StellarX::ControlShape shape);
+	//设置边框颜色
+	void setTextBoxBorder(COLORREF color);
+	//设置背景颜色
+	void setTextBoxBk(COLORREF color);
+	//设置文本
+	void setText(std::string text);
 
-    //获取文本
-    std::string getText() const;  
+	//获取文本
+	std::string getText() const;
 
 private:
-    //用来检查对话框是否模态,此控件不做实现
-    bool model() const override { return false; };
+	//用来检查对话框是否模态,此控件不做实现
+	bool model() const override { return false; };
 };
-
-

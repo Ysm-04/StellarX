@@ -1,13 +1,11 @@
 ﻿#include "Dialog.h"
 
-Dialog::Dialog(Window& h,std::string text,std::string message, StellarX::MessageBoxType type, bool modal)
-	: Canvas(),message(message), type(type), modal(modal), hWnd(h), titleText(text)
+Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::MessageBoxType type, bool modal)
+	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
 	this->id = "Dialog";
 	show = false;
 }
-
-
 
 Dialog::~Dialog()
 {
@@ -15,7 +13,7 @@ Dialog::~Dialog()
 
 void Dialog::draw()
 {
-	if(!show)
+	if (!show)
 	{
 		// 如果对话框不可见且需要清理，执行清理
 		if (pendingCleanup && !isCleaning)
@@ -24,23 +22,23 @@ void Dialog::draw()
 		}
 		return;
 	}
-    // 如果需要初始化，则执行初始化
-    if (needsInitialization && show)
-    {
-        initDialogSize();
-        needsInitialization = false;
-    }
+	// 如果需要初始化，则执行初始化
+	if (needsInitialization && show)
+	{
+		initDialogSize();
+		needsInitialization = false;
+	}
 
-    if (dirty && show)
-    {
-        // 保存当前绘图状态
+	if (dirty && show)
+	{
+		// 保存当前绘图状态
 		saveStyle();
 
 		Canvas::setBorderColor(this->borderColor);
 		Canvas::setLinewidth(BorderWidth);
 		Canvas::setCanvasBkColor(this->backgroundColor);
 		Canvas::setShape(StellarX::ControlShape::ROUND_RECTANGLE);
-		
+
 		Canvas::draw();
 
 		//绘制消息文本
@@ -50,24 +48,21 @@ void Dialog::draw()
 		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
-		
-		
+
 		int ty = y + closeButtonHeight + titleToTextMargin; // 文本起始Y坐标
-		for (auto& line:lines)
+		for (auto& line : lines)
 		{
 			int tx = this->x + ((this->width - textwidth(line.c_str())) / 2); // 文本起始X坐标
 			outtextxy(tx, ty, LPCTSTR(line.c_str()));
 			ty = ty + textheight(LPCTSTR(line.c_str())) + 5; // 每行文本高度加5像素间距
 		}
 
-        // 恢复绘图状态
-        restoreStyle();
+		// 恢复绘图状态
+		restoreStyle();
 
-        dirty = false;
-    }
+		dirty = false;
+	}
 }
-
-
 
 bool Dialog::handleEvent(const ExMessage& msg)
 {
@@ -80,7 +75,7 @@ bool Dialog::handleEvent(const ExMessage& msg)
 		}
 		return false;
 	}
-	
+
 	// 如果正在清理或标记为待清理，则不处理事件
 	if (pendingCleanup || isCleaning)
 		return false;
@@ -94,8 +89,8 @@ bool Dialog::handleEvent(const ExMessage& msg)
 	}
 
 	// 将事件传递给子控件处理
-	 if (!consume)
-		 consume = Canvas::handleEvent(msg);
+	if (!consume)
+		consume = Canvas::handleEvent(msg);
 
 	// 每次事件处理后检查是否需要执行延迟清理
 	if (pendingCleanup && !isCleaning)
@@ -134,7 +129,6 @@ void Dialog::SetModal(bool modal)
 	this->modal = modal;
 }
 
-
 void Dialog::SetResult(StellarX::MessageBoxResult result)
 {
 	this->result = result;
@@ -162,7 +156,7 @@ void Dialog::Show()
 	shouldClose = false;
 
 	if (modal)
-	{	
+	{
 		// 模态对话框需要阻塞当前线程直到对话框关闭
 		if (modal)
 		{
@@ -238,8 +232,6 @@ void Dialog::Show()
 		dirty = true;
 }
 
-
-
 void Dialog::Close()
 {
 	if (!show) return;
@@ -248,13 +240,10 @@ void Dialog::Close()
 	close = true;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
-	
 
 	// 工厂模式下非模态触发回调 返回结果
-	if (resultCallback&& !modal) 
+	if (resultCallback && !modal)
 		resultCallback(this->result);
-	
-	
 }
 
 void Dialog::setInitialization(bool init)
@@ -267,7 +256,6 @@ void Dialog::setInitialization(bool init)
 	}
 }
 
-
 void Dialog::initButtons()
 {
 	controls.clear();
@@ -279,48 +267,48 @@ void Dialog::initButtons()
 		auto okbutton = createDialogButton((this->x + (this->width - (functionButtonWidth * buttonNum + buttonMargin * (buttonNum - 1))) / 2),
 			((this->y + (this->height - buttonAreaHeight)) + (buttonAreaHeight - functionButtonHeight) / 2),
 			"确定"
-			);
+		);
 		okbutton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::OK);
 				this->Close(); });
 
 		okbutton->textStyle = this->textStyle;
-		
+
 		this->addControl(std::move(okbutton));
 	}
-		break;
+	break;
 	case StellarX::MessageBoxType::OKCancel: // 确定和取消按钮
 	{
 		auto okButton = createDialogButton(
 			(this->x + (this->width - (functionButtonWidth * buttonNum + buttonMargin * (buttonNum - 1))) / 2),
-				((this->y + (this->height - buttonAreaHeight)) + (buttonAreaHeight - functionButtonHeight) / 2),
-				"确定"
-			);
+			((this->y + (this->height - buttonAreaHeight)) + (buttonAreaHeight - functionButtonHeight) / 2),
+			"确定"
+		);
 		okButton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::OK);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		auto cancelButton = createDialogButton(
 			(okButton.get()->getX() + okButton.get()->getButtonWidth() + buttonMargin),
-			 okButton.get()->getY(),
+			okButton.get()->getY(),
 			"取消"
 		);
 		cancelButton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Cancel);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
-		
+				this->Close(); });
+
 		okButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
 
 		this->addControl(std::move(okButton));
 		this->addControl(std::move(cancelButton));
 	}
-		break;
+	break;
 	case StellarX::MessageBoxType::YesNo:  // 是和否按钮
 	{
 		auto yesButton = createDialogButton(
@@ -332,7 +320,7 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Yes);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		auto noButton = createDialogButton(
 			(yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin),
@@ -343,7 +331,7 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::No);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		yesButton->textStyle = this->textStyle;
 		noButton->textStyle = this->textStyle;
@@ -351,7 +339,7 @@ void Dialog::initButtons()
 		this->addControl(std::move(yesButton));
 		this->addControl(std::move(noButton));
 	}
-		break;
+	break;
 	case StellarX::MessageBoxType::YesNoCancel: // 是、否和取消按钮
 	{
 		auto yesButton = createDialogButton(
@@ -363,18 +351,18 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Yes);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		auto noButton = createDialogButton(
 			yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin,
-			yesButton.get()->getY(), 
+			yesButton.get()->getY(),
 			"否"
 		);
 		noButton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::No);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		auto cancelButton = createDialogButton(
 			noButton.get()->getX() + noButton.get()->getButtonWidth() + buttonMargin,
@@ -385,18 +373,17 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Cancel);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		yesButton->textStyle = this->textStyle;
 		noButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
 
-		
 		this->addControl(std::move(yesButton));
 		this->addControl(std::move(noButton));
 		this->addControl(std::move(cancelButton));
 	}
-	    break;
+	break;
 	case StellarX::MessageBoxType::RetryCancel: // 重试和取消按钮
 	{
 		auto retryButton = createDialogButton(
@@ -408,18 +395,18 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Retry);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
-		
+				this->Close(); });
+
 		auto cancelButton = createDialogButton(
 			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
-			retryButton.get()->getY(), 
+			retryButton.get()->getY(),
 			"取消"
 		);
 		cancelButton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Cancel);
 				this->hWnd.dialogClose = true;
-				 this->Close(); });
+				this->Close(); });
 
 		retryButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
@@ -427,11 +414,11 @@ void Dialog::initButtons()
 		this->addControl(std::move(retryButton));
 		this->addControl(std::move(cancelButton));
 	}
-	    break;
+	break;
 	case StellarX::MessageBoxType::AbortRetryIgnore: // 中止、重试和忽略按钮
 	{
 		auto abortButton = createDialogButton(
-			(this->x + (this->width - (functionButtonWidth * buttonNum + buttonMargin* (buttonNum-1))) / 2),
+			(this->x + (this->width - (functionButtonWidth * buttonNum + buttonMargin * (buttonNum - 1))) / 2),
 			((this->y + (this->height - buttonAreaHeight)) + (buttonAreaHeight - functionButtonHeight) / 2),
 			"中止"
 		);
@@ -439,18 +426,18 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Abort);
 				this->hWnd.dialogClose = true;
-				 this->Close();
+				this->Close();
 			});
 		auto retryButton = createDialogButton(
 			abortButton.get()->getX() + abortButton.get()->getButtonWidth() + buttonMargin,
-			abortButton.get()->getY(), 
+			abortButton.get()->getY(),
 			"重试"
 		);
 		retryButton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Retry);
 				this->hWnd.dialogClose = true;
-				 this->Close();
+				this->Close();
 			});
 		auto ignoreButton = createDialogButton(
 			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
@@ -461,7 +448,7 @@ void Dialog::initButtons()
 			{
 				this->SetResult(StellarX::MessageBoxResult::Ignore);
 				this->hWnd.dialogClose = true;
-				 this->Close();
+				this->Close();
 			});
 
 		abortButton->textStyle = this->textStyle;
@@ -472,7 +459,7 @@ void Dialog::initButtons()
 		this->addControl(std::move(retryButton));
 		this->addControl(std::move(ignoreButton));
 	}
-		break;
+	break;
 	}
 }
 
@@ -481,7 +468,7 @@ void Dialog::initCloseButton()
 	//初始化关闭按钮
 	auto but = std::make_unique<Button>
 		(
-			(this->x + this->width - closeButtonWidth) - 3, (this->y+3), closeButtonWidth-1, closeButtonHeight,
+			(this->x + this->width - closeButtonWidth) - 3, (this->y + 3), closeButtonWidth - 1, closeButtonHeight,
 			"X",           // 按钮文本
 			RGB(255, 0, 0),      // 按钮被点击颜色
 			this->canvasBkClor, // 按钮背景颜色
@@ -495,14 +482,14 @@ void Dialog::initCloseButton()
 		this->SetResult(StellarX::MessageBoxResult::Cancel);
 		this->hWnd.dialogClose = true;
 		this->Close(); });
-	
+
 	this->closeButton = but.get();
 	this->addControl(std::move(but));
 }
 
 void Dialog::initTitle()
 {
-	this->title = std::make_unique<Label>(this->x+5,this->y+5,titleText,textStyle.color);
+	this->title = std::make_unique<Label>(this->x + 5, this->y + 5, titleText, textStyle.color);
 	title->setTextdisap(true);
 	title->textStyle = this->textStyle;
 
@@ -516,13 +503,13 @@ void Dialog::splitMessageLines()
 	std::string currentLine;
 	for (size_t i = 0; i < message.length(); i++) {
 		// 处理 换行符 \r\n  \n  \r
-		if (i + 1 < message.length() && (message[i] == '\r' || message[i] == '\n')||(message[i] == '\r' && message[i+1] == '\n'))
+		if (i + 1 < message.length() && (message[i] == '\r' || message[i] == '\n') || (message[i] == '\r' && message[i + 1] == '\n'))
 		{
 			if (!currentLine.empty()) {
 				lines.push_back(currentLine);
 				currentLine.clear();
 			}
-			
+
 			if (message[i] == '\r' && message[i + 1] == '\n')
 				i++;
 			continue;
@@ -532,13 +519,13 @@ void Dialog::splitMessageLines()
 	}
 
 	// 添加最后一行（如果有内容）
-	if (!currentLine.empty()) 
+	if (!currentLine.empty())
 	{
 		lines.push_back(currentLine);
 	}
 
 	// 如果消息为空，至少添加一个空行
-	if (lines.empty()) 
+	if (lines.empty())
 	{
 		lines.push_back("");
 	}
@@ -587,10 +574,10 @@ void Dialog::initDialogSize()
 
 	// 计算按钮区域宽度
 	int buttonAreaWidth = buttonNum * functionButtonWidth +
-		(buttonNum > 0 ? (buttonNum +1) * buttonMargin : 0);
+		(buttonNum > 0 ? (buttonNum + 1) * buttonMargin : 0);
 
 	// 计算文本区域宽度（包括边距）
-	int textAreaWidth = textWidth + textToBorderMargin * 2 ;
+	int textAreaWidth = textWidth + textToBorderMargin * 2;
 
 	// 对话框宽度取两者中的较大值，并确保最小宽度
 	this->width = buttonAreaWidth > textAreaWidth ? buttonAreaWidth : textAreaWidth;
@@ -598,7 +585,7 @@ void Dialog::initDialogSize()
 
 	// 计算对话框高度
 	// 高度 = 标题栏高度 + 文本区域高度 + 按钮区域高度 + 间距
-	int textAreaHeight = textHeight * (int)lines.size() + 5*((int)lines.size()-1); // 文本行高+行间距
+	int textAreaHeight = textHeight * (int)lines.size() + 5 * ((int)lines.size() - 1); // 文本行高+行间距
 	this->height = closeButtonHeight +        // 标题栏高度
 		titleToTextMargin +        // 标题到文本的间距
 		textAreaHeight +           // 文本区域高度
@@ -635,7 +622,7 @@ void Dialog::performDelayedCleanup()
 	auto& c = hWnd.getControls();
 	for (auto& control : c)
 		control->setDirty(true);
-	
+
 	controls.clear();
 
 	// 重置指针
@@ -706,7 +693,7 @@ std::unique_ptr<Button> Dialog::createDialogButton(int x, int y, const std::stri
 		StellarX::ButtonMode::NORMAL,
 		StellarX::ControlShape::RECTANGLE
 	);
-	
+
 	return btn;
 }
 
@@ -717,7 +704,6 @@ void Dialog::requestRepaint(Control* parent)
 		for (auto& control : controls)
 			if (control->isDirty() && control->IsVisible())
 				control->draw();
-
 	}
 	else
 		onRequestRepaintAsRoot();

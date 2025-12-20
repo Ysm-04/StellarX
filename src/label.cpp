@@ -5,7 +5,7 @@ Label::Label()
 {
 	this->id = "Label";
 	this->text = "默认标签";
-	textStyle.color = RGB(0,0,0);
+	textStyle.color = RGB(0, 0, 0);
 	textBkColor = RGB(255, 255, 255);; //默认白色背景
 }
 
@@ -40,7 +40,7 @@ void Label::draw()
 			this->height = textheight(text.c_str());
 		}
 		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-			saveBackground(this->x, this->y,this->width,this->height);
+			saveBackground(this->x, this->y, this->width, this->height);
 		// 恢复背景（清除旧内容）
 		restBackground();
 		outtextxy(x, y, LPCTSTR(text.c_str()));
@@ -71,5 +71,4 @@ void Label::setText(std::string text)
 {
 	this->text = text;
 	this->dirty = true;
-	
 }

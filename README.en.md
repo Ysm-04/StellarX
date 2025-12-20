@@ -7,8 +7,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
  [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.3.0-brightgreen.svg)
- ![Download](https://img.shields.io/badge/Download-2.3.0_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-2.3.2-brightgreen.svg)
+ ![Download](https://img.shields.io/badge/Download-2.3.2_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
  ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -22,30 +22,6 @@
 `StellarX` rejects bloat: no hundreds-of-MB dependencies, no marathon builds, and no steep learning curve. Back to the essence—clean code, clear architecture, and high efficiency to solve the core needs of desktop app development.
 
 This is a **teaching-grade and tooling-grade** framework that helps developers understand GUI fundamentals and quickly build lightweight utilities.
-
-------
-
-## 🆕 V2.3.0 - Major Update
-
-**This version represents a significant milestone, introducing a responsive layout system that transitions from static to dynamic layout management, and comprehensively resolves the previously encountered random rendering corruption issues caused by reentrant drawing operations.**
-
-- **Optimized Window Resizing Mechanism**: Refactored `WndProcThunk`, `runEventLoop`, and `pumpResizeIfNeeded` to uniformly record size changes and perform centralized repainting at the end of the event loop, eliminating jitter and sequencing confusion caused by repeated redraws.
-
-- **New Dialog Size Scheduling Interface**: Introduced the combination of `Window::scheduleResizeFromModal()` and `pumpResizeIfNeeded()`, enabling modal dialogs to notify the parent window of size updates even during resizing operations. Underlying controls are relayout during unified finalization while dialogs maintain their original dimensions.
-
-- **Enhanced Adaptive Layout System**: Internally added the `adaptiveLayout()` function to recalculate control positions and sizes based on anchor points, allowing dual-anchored controls (left-right or top-bottom) to adaptively stretch with window resizing.
-
-- **Fixed Modal Dialog Resizing Issues**: Resolved the problem where window resizing while modal dialogs were open prevented underlying controls from updating their positions and sizes according to anchor points; simultaneously eliminated ghosting artifacts caused by repeated dialog redraws.
-
-- **Further Resolved Drawing Sequence Confusion**: Replaced `InvalidateRect` with `ValidateRect` during resizing operations, ensuring the window is marked as valid only after a single unified drawing pass, preventing system-triggered `WM_PAINT` messages from causing reentrancy.
-
-- **Additional Fixes**: Corrected delayed background snapshot updates in tables and dialogs under certain edge cases.
-
-![](image/1.png)
-
-![](image/2.png)
-
-For details, please refer to the [CHANGELOG.en](CHANGELOG.en.md).
 
 ------
 

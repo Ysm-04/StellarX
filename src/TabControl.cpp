@@ -33,7 +33,7 @@ inline void TabControl::initTabBar()
 		for (auto& c : controls)
 		{
 			c.first->setX(this->x + i * butW);
-			c.first->setY(this->y+this->height - tabBarHeight);
+			c.first->setY(this->y + this->height - tabBarHeight);
 			i++;
 		}
 		break;
@@ -41,18 +41,18 @@ inline void TabControl::initTabBar()
 		for (auto& c : controls)
 		{
 			c.first->setX(this->x);
-			c.first->setY(this->y+i* butH);
+			c.first->setY(this->y + i * butH);
 			i++;
 		}
 		break;
 	case StellarX::TabPlacement::Right:
 		for (auto& c : controls)
 		{
-			c.first->setX(this->x+this->width - tabBarHeight);
+			c.first->setX(this->x + this->width - tabBarHeight);
 			c.first->setY(this->y + i * butH);
 			i++;
 		}
-			break;
+		break;
 	default:
 		break;
 	}
@@ -147,7 +147,7 @@ inline void TabControl::initTabPage()
 	}
 }
 
-TabControl::TabControl():Canvas()
+TabControl::TabControl() :Canvas()
 {
 	this->id = "TabControl";
 }
@@ -173,7 +173,6 @@ void TabControl::setX(int x)
 		c.first->onWindowResize();
 		c.second->onWindowResize();
 	}
-
 }
 
 void TabControl::setY(int y)
@@ -192,28 +191,8 @@ void TabControl::setY(int y)
 void TabControl::draw()
 {
 	if (!dirty || !show)return;
- //   // 在绘制 TabControl 之前，先恢复并更新背景快照：
-	//int margin = canvaslinewidth > 1 ? canvaslinewidth : 1;
-	//if (hasSnap)
-	//{
-	//	// 恢复旧快照，清除上一次绘制
-	//	restBackground();
-	//	// 如果位置或尺寸变了，或没有有效缓存，则重新抓取
-	//	if (!saveBkImage || saveBkX != this->x - margin || saveBkY != this->y - margin || saveWidth != this->width + margin * 2 || saveHeight != this->height + margin * 2)
-	//	{
-	//		discardBackground();
-	//		saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
-	//	}
-	//}
-	//else
-	//{
-	//	// 首次绘制或没有快照时直接抓取背景
-	//	saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
-	//}
- //   // 再次恢复最新背景，保证绘制区域干净
- //   restBackground();
-    // 绘制画布背景和基本形状及其子画布控件
-    Canvas::draw();
+	   // 绘制画布背景和基本形状及其子画布控件
+	Canvas::draw();
 	for (auto& c : controls)
 	{
 		c.first->setDirty(true);
@@ -224,8 +203,17 @@ void TabControl::draw()
 		c.second->setDirty(true);
 		c.second->draw();
 	}
-	dirty = false;
 
+	// 首次绘制时处理默认激活页签
+	if (IsFirstDraw)
+	{
+		if (defaultActivation >= 0 && defaultActivation < (int)controls.size())
+			controls[defaultActivation].first->setButtonClick(true);
+		else if (defaultActivation >= (int)controls.size())//索引越界则激活最后一个
+			controls[controls.size() - 1].first->setButtonClick(true);
+		IsFirstDraw = false;//避免重复处理
+	}
+	dirty = false;
 }
 
 bool TabControl::handleEvent(const ExMessage& msg)
@@ -239,7 +227,7 @@ bool TabControl::handleEvent(const ExMessage& msg)
 			break;
 		}
 	for (auto& c : controls)
-		if(c.second->IsVisible())
+		if (c.second->IsVisible())
 			if (c.second->handleEvent(msg))
 			{
 				consume = true;
@@ -260,7 +248,7 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 	controls[idx].first->enableTooltip(true);
 	controls[idx].first->setbuttonMode(StellarX::ButtonMode::TOGGLE);
 
-	controls[idx].first->setOnToggleOnListener([this,idx]()
+	controls[idx].first->setOnToggleOnListener([this, idx]()
 		{
 			controls[idx].second->setIsVisible(true);
 			controls[idx].second->onWindowResize();
@@ -274,10 +262,10 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 			}
 			dirty = true;
 		});
-	controls[idx].first->setOnToggleOffListener([this,idx]()
+	controls[idx].first->setOnToggleOffListener([this, idx]()
 		{
 			controls[idx].second->setIsVisible(false);
-		
+
 			dirty = true;
 		});
 	controls[idx].second->setParent(this);
@@ -293,12 +281,11 @@ void TabControl::add(std::string tabText, std::unique_ptr<Control> control)
 		if (tab.first->getButtonText() == tabText)
 		{
 			control->setParent(tab.second.get());
-			control->setIsVisible( tab.second->IsVisible());
+			control->setIsVisible(tab.second->IsVisible());
 			tab.second->addControl(std::move(control));
 			break;
 		}
 	}
-
 }
 
 void TabControl::setTabPlacement(StellarX::TabPlacement placement)
@@ -307,7 +294,6 @@ void TabControl::setTabPlacement(StellarX::TabPlacement placement)
 	setDirty(true);
 	initTabBar();
 	initTabPage();
-
 }
 
 void TabControl::setTabBarHeight(int height)
@@ -321,33 +307,42 @@ void TabControl::setTabBarHeight(int height)
 void TabControl::setIsVisible(bool visible)
 {
 	// 先让基类 Canvas 处理自己的回贴/丢快照逻辑
-	Canvas::setIsVisible(visible);   // <--- 新增
-
-	this->show = visible;
+	Canvas::setIsVisible(visible);
 	for (auto& tab : controls)
 	{
-		tab.first->setIsVisible(visible);
-		//页也要跟着关/开，否则它们会保留旧的 saveBkImage
-		tab.second->setIsVisible(visible);  
-		tab.second->setDirty(true);
+		if(true == visible)
+		{
+			tab.first->setIsVisible(visible);
+			//页也要跟着关/开，否则它们会保留旧的 saveBkImage
+			if (tab.first->isClicked())
+				tab.second->setIsVisible(true);
+			else
+				tab.second->setIsVisible(false);
+			tab.second->setDirty(true);
+		}
+		else
+		{
+			tab.first->setIsVisible(visible);
+			tab.second->setIsVisible(visible);
+		}
 	}
 }
 
 void TabControl::onWindowResize()
 {
-    // 调用基类的窗口变化处理，丢弃快照并标记脏
-    Control::onWindowResize();
-    // 根据当前 TabControl 的新尺寸重新计算页签栏和页面区域
-    initTabBar();
-    initTabPage();
-    // 转发窗口尺寸变化给所有页签按钮和页面
-    for (auto& c : controls)
-    {
-        c.first->onWindowResize();
-        c.second->onWindowResize();
-    }
-    // 尺寸变化后需要重绘自身
-    dirty = true;
+	// 调用基类的窗口变化处理，丢弃快照并标记脏
+	Control::onWindowResize();
+	// 根据当前 TabControl 的新尺寸重新计算页签栏和页面区域
+	initTabBar();
+	initTabPage();
+	// 转发窗口尺寸变化给所有页签按钮和页面
+	for (auto& c : controls)
+	{
+		c.first->onWindowResize();
+		c.second->onWindowResize();
+	}
+	// 尺寸变化后需要重绘自身
+	dirty = true;
 }
 
 int TabControl::getActiveIndex() const
@@ -364,20 +359,13 @@ int TabControl::getActiveIndex() const
 
 void TabControl::setActiveIndex(int idx)
 {
-	if (idx < 0 || idx > controls.size() - 1) return;
-	if (controls[idx].first->getButtonMode() == StellarX::ButtonMode::DISABLED)return;
-	if (controls[idx].first->isClicked())
-	{
-		if (controls[idx].second->IsVisible())
-			return;
-		else
-			controls[idx].second->setIsVisible(true);
-	}
+	if (IsFirstDraw)
+		defaultActivation = idx;
 	else
 	{
-		controls[idx].first->setButtonClick(true);
+		if (idx >= 0 && idx < controls.size())
+			controls[idx].first->setButtonClick(true);
 	}
-
 }
 
 int TabControl::count() const
@@ -388,13 +376,13 @@ int TabControl::count() const
 int TabControl::indexOf(const std::string& tabText) const
 {
 	int idx = -1;
-	for(auto& c : controls)
+	for (auto& c : controls)
 	{
 		idx++;
 		if (c.first->getButtonText() == tabText)
 			return idx;
 	}
-            			
+
 	return idx;
 }
 
@@ -416,7 +404,7 @@ void TabControl::requestRepaint(Control* parent)
 		{
 			if (control.first->isDirty() && control.first->IsVisible())
 				control.first->draw();
-			else if (control.second->isDirty()&&control.second->IsVisible())
+			else if (control.second->isDirty() && control.second->IsVisible())
 				control.second->draw();
 		}
 	}
