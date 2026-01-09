@@ -12,6 +12,7 @@
  *  - WM_GETMINMAXINFO：按最小“客户区”换算到“窗口矩形”，提供系统层最小轨迹值。
  *  - runEventLoop：只记录 WM_SIZE 的新尺寸；真正绘制放在 needResizeDirty 时集中处理。
  */
+ //fuck windows fuck win32
 #pragma once
 
 #include "Control.h"
@@ -53,7 +54,7 @@ class Window
 	std::vector<std::unique_ptr<Control>> dialogs;
 
 public:
-	bool dialogClose = false;            // 项目内使用的状态位
+	bool dialogClose = false;            // 项目内使用的状态位,对话框关闭标志
 
 	// —— 构造/析构 ——（仅初始化成员；实际样式与子类化在 draw() 中完成）
 	Window(int width, int height, int mode);
@@ -86,21 +87,7 @@ public:
 	std::string getBkImageFile() const;
 	std::vector<std::unique_ptr<Control>>& getControls();
 
-	// —— 配置开关 ——（动态调整最小客户区、合成双缓冲）
-	inline void setMinClientSize(int w, int h)
-	{
-		// 仅更新阈值；实际约束在 WM_GETMINMAXINFO/WM_SIZING 中生效
-		minClientW = w;
-		minClientH = h;
-	}
-
-	inline void setComposited(bool on)
-	{
-		// 更新标志；真正应用在 draw()/样式 SetWindowLongEx + SWP_FRAMECHANGED
-		useComposited = on;
-	}
-
-	void processWindowMessage(const ExMessage& msg); // 处理 EX_WINDOW 中的 WM_SIZE 等
+	// —— 尺寸调整 ——（供内部与外部调用的尺寸变化处理）
 	void pumpResizeIfNeeded();                       // 执行一次统一收口重绘
 	void scheduleResizeFromModal(int w, int h);
 private:

@@ -3,9 +3,45 @@
 StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 格式基于 [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)。
+并且本项目遵循 [语义化版本](https://semver.org/lang/zh-CN/)
 
 [English document](CHANGELOG.en.md)
+
+## [v3.0.0] - 2026 - 01 - 09
+
+### ✨ 新增
+
+- **日志系统使用Demo** 在：examples\SXLog-日志系统使用demo
+
+- **轻量日志系统 SxLog（SxLogger / SxLogLine / SxLogScope / Sink / TagFilter / LanguageSwitch）：**新增统一日志入口与宏封装，支持按级别与 Tag 筛选输出，支持控制台/文件落地与可选滚动（按大小阈值），并提供中英文双语文本选择能力（`SX_T` / `SxT`）。日志宏具备短路机制：未命中级别或 Tag 时不构造日志对象、不拼接字符串；输出侧以行级互斥保证多线程下不交错。该模块不依赖 WinAPI 调试输出通道、不引入第三方库。
+  - 典型用法：`SX_LOGD/SX_LOGI/SX_LOGW/SX_LOGE/SX_LOGF/SX_LOG_TRACE` + 流式拼接；`SX_TRACE_SCOPE` 作用域耗时统计
+  - 核心配置：`setMinLevel(...)`、`setTagFilter(...)`、`enableConsole(true/false)`、`enableFile(path, append, rotateBytes)`、`setLanguage(ZhCN/EnUS)`、`setGBK()`
+
+### ⚙️ 变更
+
+- **TabControl 页签切换时序调整：**修改页签按钮切换逻辑为“先关闭当前已打开页，再打开目标页”，避免“先打开再关闭”在复杂容器/快照链路下引入的时序不确定性；对外 API 不变（涉及 `TabControl::add` 内部切换逻辑）。
+- **控件 Setter 语义收敛：**明确控件 Setter 的职责为“更新状态并标脏”，绘制统一由窗口/容器的重绘收口机制触发，降低生命周期耦合与快照污染风险（见下方相关修复条目）。
+
+### ✅ 修复
+
+- **TextBox::setText 在进入事件循环前调用触发中断：**修复在窗口尚未初始化（未 `initgraph()`、图形上下文未就绪）前调用 `TextBox::setText()` 导致访问冲突崩溃的问题。旧实现将“状态更新”和“立即绘制”耦合，`setText()` 内部直接触发 `draw()`，进而在无图形上下文时进入 `saveBackground()/getimage()` 路径崩溃；现已移除 Setter 内直接绘制，仅保留赋值与置脏，绘制交由统一重绘流程完成。
+- **TabControl 切换/关闭后 Table 新旧内容重叠（重影）：**修复页签切换与表格重置数据后出现的稳定残影问题。根因是“快照未就绪阶段发生局部重绘”导致快照污染；本次回退 `setIsVisible(true)` 的“立即向上 requestRepaint”行为，改为仅置脏，并为 `Canvas::requestRepaint` 与 `TabControl::requestRepaint` 增加护栏：当容器 `dirty` 或 `hasSnap=0` 或快照缓存无效时，禁止 partial fast-path，自动降级为全量重绘以保证快照链路正确性；同时修正 `Table::setData(...)` 列补齐边界问题，降低异常噪声。
+
+### ⚠️ 可能不兼容
+
+- **删除 Button 尺寸别名 API（Breaking）：**移除 `Button::getButtonWidth()` / `Button::getButtonHeight()`，统一使用基类 `Control::getWidth()` / `Control::getHeight()` 获取控件尺寸。该改动会导致旧代码在升级到 v3.0.0 后编译失败，但行为语义保持一致（仍读取同一 `width/height`）。
+- **可见性/文本设置的“即时刷新”副作用移除：**`setIsVisible(true)` 与 `setText()` 等 Setter 不再保证立刻触发绘制；如业务代码此前依赖“调用后立即可见”，需要确保后续存在一次重绘收口（窗口主循环/容器重绘/显式刷新）以完成视觉更新。
+
+### 📌 升级指引
+
+1. **Button 宽高接口迁移：**
+   - `getButtonWidth()` → `getWidth()`
+   - `getButtonHeight()` → `getHeight()`
+2. **Setter 不再“立即绘制”的适配：**
+   - 初始化阶段可先设置属性（如 `TextBox::setText("default")`），由首次 `Window::draw()` / 主事件循环的统一绘制完成可视刷新；
+   - 若在非事件驱动场景下程序化更新后需要立刻刷新，请确保触发一次统一重绘路径（避免在 Setter 内手动调用 `draw()` 造成生命周期耦合）。
+3. **SxLog 接入建议：**
+   - 在程序入口完成基础配置（控制台输出/最低级别/语言），并使用统一 Tag（如 `Dirty/Resize/Table/Canvas/TabControl`）建立可回放的事件链路；高频路径建议通过级别与 Tag 控制噪声与 I/O 成本。
 
 ## [v2.3.2] - 2025 - 12 - 20
 

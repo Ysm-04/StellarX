@@ -1,5 +1,6 @@
 ﻿// TextBox.cpp
 #include "TextBox.h"
+#include "SxLog.h"
 
 TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX::TextBoxmode mode, StellarX::ControlShape shape)
 	:Control(x, y, width, height), text(text), mode(mode), shape(shape)
@@ -76,6 +77,8 @@ void TextBox::draw()
 
 bool TextBox::handleEvent(const ExMessage& msg)
 {
+	if (!show) return false;
+
 	bool hover = false;
 	bool oldClick = click;
 	bool consume = false;
@@ -86,20 +89,25 @@ bool TextBox::handleEvent(const ExMessage& msg)
 	case StellarX::ControlShape::B_RECTANGLE:
 	case StellarX::ControlShape::ROUND_RECTANGLE:
 	case StellarX::ControlShape::B_ROUND_RECTANGLE:
-		hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));//判断鼠标是否在矩形按钮内
-		consume = false;
+		hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));
+		break;
+	default:
 		break;
 	}
+
 	if (hover && msg.message == WM_LBUTTONUP)
 	{
 		click = true;
+
+		const size_t oldLen = text.size();
+		SX_LOGI("TextBox") << SX_T("激活：id=","activate: id=") << id << " mode=" << (int)mode << " oldLen=" << oldLen;
+
 		if (StellarX::TextBoxmode::INPUT_MODE == mode)
 		{
 			char* temp = new char[maxCharLen + 1];
-			dirty = InputBox(temp, (int)maxCharLen+1, "输入框", NULL, text.c_str(), NULL, NULL, false);
-			if (dirty)text = temp;
+			dirty = InputBox(temp, (int)maxCharLen + 1, "输入框", NULL, text.c_str(), NULL, NULL, false);
+			if (dirty) text = temp;
 			delete[] temp;
-			temp = nullptr;
 			consume = true;
 		}
 		else if (StellarX::TextBoxmode::READONLY_MODE == mode)
@@ -111,21 +119,35 @@ bool TextBox::handleEvent(const ExMessage& msg)
 		else if (StellarX::TextBoxmode::PASSWORD_MODE == mode)
 		{
 			char* temp = new char[maxCharLen + 1];
-			dirty = InputBox(temp, (int)maxCharLen+1, "输入框\n不可见输入，覆盖即可", NULL, NULL, NULL, NULL, false);
-			if (dirty)text = temp;
+			// 不记录明文，只记录长度变化
+			dirty = InputBox(temp, (int)maxCharLen + 1, "输入框\n不可见输入，覆盖即可", NULL, NULL, NULL, NULL, false);
+			if (dirty) text = temp;
 			delete[] temp;
-			temp = nullptr;
 			consume = true;
 		}
+
+		if (dirty)
+		{
+			SX_LOGI("TextBox") << SX_T("文本已更改: id=","text changed: id=") << id
+				<< " oldLen=" << oldLen << " newLen=" << text.size();
+		}
+		else
+		{
+			SX_LOGD("TextBox") << SX_T("文本无变化：id=","no change: id=") << id;
+		}
+
 		flushmessage(EX_MOUSE | EX_KEY);
 	}
+
 	if (dirty)
 		requestRepaint(parent);
 
 	if (click)
 		click = false;
+
 	return consume;
 }
+
 
 void TextBox::setMode(StellarX::TextBoxmode mode)
 {
@@ -179,7 +201,6 @@ void TextBox::setText(std::string text)
 		text = text.substr(0, maxCharLen);
 	this->text = text;
 	this->dirty = true;
-	draw();
 }
 
 std::string TextBox::getText() const

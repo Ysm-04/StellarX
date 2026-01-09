@@ -7,6 +7,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v3.0.0] - 2026-01-09
+
+### ✨ New Features
+
+- **Logging System Demo**: Located in: examples\SXLog-LoggingSystemDemo
+- **Lightweight Logging System SxLog (SxLogger / SxLogLine / SxLogScope / Sink / TagFilter / LanguageSwitch):** A unified logging entry and macro encapsulation is introduced, supporting level and tag-based filtering, console/file output, and optional file rolling based on size thresholds. It also provides bilingual text selection capabilities (via `SX_T` / `SxT`). The logging macros have a short-circuit mechanism: logs will not be constructed or string concatenated if the level or tag condition is not met. Output is serialized with mutex to ensure thread safety. The module does not depend on WinAPI debug output channels and does not introduce third-party libraries.
+  - Typical usage: `SX_LOGD/SX_LOGI/SX_LOGW/SX_LOGE/SX_LOGF/SX_LOG_TRACE` with stream concatenation; `SX_TRACE_SCOPE` for scope timing.
+  - Core configuration: `setMinLevel(...)`, `setTagFilter(...)`, `enableConsole(true/false)`, `enableFile(path, append, rotateBytes)`, `setLanguage(ZhCN/EnUS)`, `setGBK()`
+
+### ⚙️ Changes
+
+- **TabControl Tab Switching Logic Adjustment:** The logic for tab button switching has been modified to “first close the currently opened tab, then open the triggered tab,” avoiding potential timing issues caused by the “open first, close later” sequence in complex containers/snapshot chains. The external API remains unchanged (involving the internal switching logic of `TabControl::add`).
+- **Setter Semantics Refined for Controls:** The responsibility of setters is clarified to be “updating state and marking as dirty,” with drawing now uniformly triggered by the window/container's redraw mechanism, reducing lifecycle coupling and snapshot pollution risks (see related fix entries below).
+
+### ✅ Fixes
+
+- **TextBox::setText Causes Interruptions Before Entering Event Loop:** Fixed the issue where calling `TextBox::setText()` before window initialization (before `initgraph()` or when the graphical context is not ready) caused access conflicts and crashes. The previous implementation coupled “state updates” with “immediate drawing,” leading to `setText()` internally triggering `draw()`, which crashed when there was no graphics context (e.g., `saveBackground()/getimage()`). Now, the setter only updates the text and marks the control as dirty, with the drawing handled by the unified redraw flow.
+- **TabControl Switching and Table Content Overlap (Ghosting):** Fixed a stable ghosting issue when switching tabs or resetting the table data. The issue was caused by partial redraws happening before the snapshot was ready, leading to snapshot contamination. This was addressed by rolling back the behavior of `setIsVisible(true)` immediately triggering `requestRepaint`, and instead marking as dirty while adding safeguards to `Canvas::requestRepaint` and `TabControl::requestRepaint`: when the container is `dirty`, `hasSnap=0`, or the snapshot cache is invalid, partial fast-path is disabled and full redraw is triggered to ensure correct snapshot chains.
+
+### ⚠️ Breaking Changes
+
+- **Removal of Button Dimension Alias APIs:** Removed `Button::getButtonWidth()` and `Button::getButtonHeight()`, unifying the control's dimension APIs under the base class `Control::getWidth()` and `Control::getHeight()`. This change will break backward compatibility if the old methods were used, but the behavior (retrieving `width/height`) remains the same.
+- **Removal of Immediate Refresh Side Effects in Setters:** The side effect of immediate drawing in setters like `setIsVisible(true)` and `setText()` has been removed. If previous business code relied on "immediate visibility update after calling," you will now need to ensure a subsequent redraw path (via window's main loop/container redraw or explicit refresh) for visual updates to be completed.
+
+### 📌 Upgrade Instructions
+
+1. **Button Dimension API Migration:**
+   - `getButtonWidth()` → `getWidth()`
+   - `getButtonHeight()` → `getHeight()`
+2. **Adapting to Setters No Longer Triggering Immediate Drawing:**
+   - It is now possible to set properties (like `TextBox::setText("default")`) during initialization, with visual updates being handled by the first `Window::draw()` or the main event loop.
+   - If you need immediate visual updates in non-event-driven scenarios, you must ensure that a redraw path is triggered (avoid manually calling `draw()` inside the setter, as this would cause lifecycle coupling).
+3. **SxLog Integration Suggestions:**
+   - Ensure basic configuration at the program entry (console output/minimum level/language), and use consistent tags (such as `Dirty/Resize/Table/Canvas/TabControl`) to establish traceable event chains; for high-frequency paths, control noise and I/O costs using level and tag filtering.
+
 ## [v2.3.2] - 2025 - 12 - 20
 
 ### ✨ Added

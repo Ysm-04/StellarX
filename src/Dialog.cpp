@@ -1,4 +1,5 @@
 ﻿#include "Dialog.h"
+#include "SxLog.h"
 
 Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::MessageBoxType type, bool modal)
 	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
@@ -148,6 +149,7 @@ void Dialog::Show()
 {
 	if (pendingCleanup)
 		performDelayedCleanup();
+	SX_LOGI("Dialog") << SX_T("对话框弹出：是否模态=","Dialog::Show: modal=") << (modal ? 1 : 0);
 
 	show = true;
 	dirty = true;
@@ -178,6 +180,7 @@ void Dialog::Show()
 				{
 					lastW = cw;
 					lastH = ch;
+					SX_LOGD("Resize") <<SX_T("模态对话框检测到窗口大小变化：（", "Modal dialog detected window size change: (") << cw << "x" << ch << ")";
 
 					// 通知父窗口：有新尺寸 → 标记 needResizeDirty
 					hWnd.scheduleResizeFromModal(cw, ch);

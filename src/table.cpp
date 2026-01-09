@@ -1,4 +1,5 @@
 ﻿#include "Table.h"
+#include "SxLog.h"
 // 绘制表格的当前页
 // 使用双循环绘制行和列，考虑分页偏移
 void Table::drawTable()
@@ -159,18 +160,33 @@ void Table::initButton()
 
 	prevButton->setOnClickListener([this]()
 		{
+			int oldPage = currentPage;
 			if (currentPage > 1)
 			{
 				--currentPage;
+				SX_LOGI("Table")
+					<< SX_T("翻页：id=", "page change: id=") << id
+					<< " " << oldPage << "->" << currentPage
+					<< SX_T(" 总页数=", " total=") << totalPages
+					<< SX_T(" 行数=", " rows=") << (int)data.size();
+
+
 				dirty = true;
 				if (pageNum) pageNum->setDirty(true);
 			}
 		});
 	nextButton->setOnClickListener([this]()
 		{
+			int oldPage = currentPage;
 			if (currentPage < totalPages)
 			{
 				++currentPage;
+				SX_LOGI("Table")
+					<< SX_T("翻页：id=", "page change: id=") << id
+					<< " " << oldPage << "->" << currentPage
+					<< SX_T(" 总页数=", " total=") << totalPages
+					<< SX_T(" 行数=", " rows=") << (int)data.size();
+
 				dirty = true;
 				if (pageNum) pageNum->setDirty(true);
 			}
@@ -394,13 +410,8 @@ void Table::draw()
 		restBackground();
 		// 绘制表头
 
-		//dX = x;
-		//dY = y;
-		if(isNeedDrawHeaders)
-		{
+		//if (!headers.empty())
 			drawHeader();
-			this->isNeedDrawHeaders = false;
-		}
 		// 绘制当前页
 		drawTable();
 		// 绘制页码标签
@@ -438,23 +449,34 @@ void Table::setHeaders(std::initializer_list<std::string> headers)
 	this->headers.clear();
 	for (auto& lis : headers)
 		this->headers.push_back(lis);
+	SX_LOGI("Table") << SX_T("设置表头：id=","setHeaders: id=") << id << SX_T("总数="," count=") << (int)this->headers.size();
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedDrawHeaders = true; // 标记需要重新绘制表头
 	dirty = true;
+
 }
 
 void Table::setData(std::vector<std::string> data)
 {
-	if (data.size() < headers.size())
-		for (int i = 0; data.size() <= headers.size(); i++)
-			data.push_back("");
+	while (data.size() < headers.size())
+		data.push_back("");
+
 	this->data.push_back(data);
+
 	totalPages = ((int)this->data.size() + rowsPerPage - 1) / rowsPerPage;
 	if (totalPages < 1)
 		totalPages = 1;
-	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
+
+	isNeedCellSize = true;
 	dirty = true;
+
+	SX_LOGI("Table")
+		<< SX_T("新增Data：id=", "appendRow: id=") << id
+		<< SX_T(" 本行列数=", " cols=") << (int)data.size()
+		<< SX_T(" 数据总行数=", " totalRows=") << (int)this->data.size()
+		<< SX_T(" 总页数=", " totalPages=") << totalPages;
 }
+
 
 void Table::setData(std::initializer_list<std::vector<std::string>> data)
 {
@@ -473,6 +495,13 @@ void Table::setData(std::initializer_list<std::vector<std::string>> data)
 		totalPages = 1;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	dirty = true;
+	SX_LOGI("Table")
+		<< SX_T("新增Data：id=", "appendRow: id=") << id
+		<< SX_T(" 本行列数=", " cols=") << (int)data.size()
+		<< SX_T(" 数据总行数=", " totalRows=") << (int)this->data.size()
+		<< SX_T(" 总页数=", " totalPages=") << totalPages;
+
+
 }
 
 void Table::setRowsPerPage(int rows)
@@ -542,6 +571,8 @@ void Table::clearHeaders()
 	isNeedDrawHeaders = true; // 标记需要重新绘制表头
 	isNeedButtonAndPageNum = true;// 标记需要重新计算翻页按钮和页码信息
 	dirty = true;
+	SX_LOGI("Table") << SX_T("清除表头：id=","clearHeaders: id=" )<< id;
+
 }
 
 void Table::clearData()
@@ -552,6 +583,7 @@ void Table::clearData()
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedButtonAndPageNum = true;// 标记需要重新计算翻页按钮和页码信息
 	dirty = true;
+	SX_LOGI("Table") << SX_T("清除表格数据：id=","clearData: id=") << id;
 }
 
 void Table::resetTable()

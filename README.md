@@ -14,8 +14,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.3.2-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-2.3.2_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-3.0.0_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -34,24 +34,34 @@
 
 
 
-## 🆕V2.3.2——重要更新
+### 🆕V3.0.0 - 重要更新
 
-### 新增
+完整版建议查看[更新日志](CHANGELOG.md)
 
-- **Table 支持运行期重置表头与数据：**新增 `Table::clearHeaders()`、`Table::clearData()`、`Table::resetTable()`，允许同一 `Table` 在运行过程中动态切换表头与数据，并触发必要的单元格尺寸/分页信息重算与重绘。
-- **TextBox 新增密码模式：**`TextBoxmode` 新增 `PASSWORD_MODE`；输入内容内部保存，绘制层面使用掩码字符（如 `*`）替代显示，真实文本可通过 `TextBox::getText()` 获取。
+### ✨ 新增功能
+
+- **SxLog**: 轻量级日志系统，支持日志级别、标签过滤、中英文输出及控制台/文件日志，支持文件滚动。
+- **TabControl**: 改进页签切换逻辑，确保先关闭当前页再打开目标页。
+- **控件 Setter 改进**: Setter 仅更新状态并标记为脏，绘制由统一重绘流程处理。
 
 ### ⚙️ 变更
 
-- **TabControl 默认激活页语义明确化：**
-  - 首次绘制前调用 `TabControl::setActiveIndex()`：仅记录默认激活索引，不再立即触发页签按钮点击回调；
-  - 首次绘制完成后：若设置了默认激活索引则应用激活状态并绘制激活页（索引越界时默认激活最后一个页）；
-  - 程序运行过程中调用 `TabControl::setActiveIndex()`：索引合法则立即切换激活页并绘制；索引越界则不做处理。
+- **TabControl 默认激活页**: 默认激活页逻辑明确，首次设置激活索引后才绘制。
 
 ### ✅ 修复
 
-- **TabControl::setActiveIndex 绘制前调用导致程序中断：**修复绘制前设置默认激活索引时触发空指针访问的问题；现在默认激活逻辑延后到首次绘制完成后再生效，避免崩溃并保证首次绘制即可绘制激活页。
-- **TabControl 由不可见设置为可见时绘制错乱：**修复 `setIsVisible(false) -> setIsVisible(true)` 后非激活页被错误绘制导致的多页重叠/残影；现在 TabControl 可见时仅激活页可见/可绘制，无激活页则不绘制任何页。
+- **TabControl::setActiveIndex 崩溃**: 修复首次绘制前设置默认激活页时崩溃的问题。
+- **TabControl 渲染错乱**: 修复 `setIsVisible` 切换时，非激活页错误绘制导致的重叠问题。
+
+### ⚠️ 破坏性更改
+
+- **Button 尺寸 API 移除**: 移除了 `getButtonWidth()` / `getButtonHeight()`，请使用 `getWidth()` / `getHeight()`。
+- **Setter 不再即时绘制**: `setText()` 等 Setter 不再触发即时绘制。
+
+### 📌 升级指南
+
+- **Button**: 将 `getButtonWidth()` / `getButtonHeight()` 替换为 `getWidth()` / `getHeight()`。
+- **Setter**: 在调用 Setter 后确保触发重绘机制。
 
 ---
 

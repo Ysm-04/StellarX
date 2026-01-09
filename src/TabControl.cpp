@@ -1,5 +1,5 @@
 ﻿#include "TabControl.h"
-
+#include "SxLog.h"
 inline void TabControl::initTabBar()
 {
 	if (controls.empty())return;
@@ -250,22 +250,36 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 
 	controls[idx].first->setOnToggleOnListener([this, idx]()
 		{
-			controls[idx].second->setIsVisible(true);
-			controls[idx].second->onWindowResize();
-			for (auto& tab : controls)
+			int prevIdx = -1;
+			for (size_t i = 0; i < controls.size(); ++i)
 			{
-				if (tab.first->getButtonText() != controls[idx].first->getButtonText())
+				if (controls[i].second->IsVisible())
 				{
-					tab.first->setButtonClick(false);
-					tab.second->setIsVisible(false);
+					prevIdx = (int)i;
+					break;
 				}
 			}
+			for (auto& tab : controls)
+			{
+				if (tab.first->getButtonText() != controls[idx].first->getButtonText() && tab.first->isClicked())
+					tab.first->setButtonClick(false);
+			}
+			
+		
+			SX_LOGI("Tab") << SX_T("激活选项卡：","activate tab: ") << prevIdx << "->" << (int)idx
+				<< " text=" << controls[idx].first->getButtonText();
+			controls[idx].second->onWindowResize();
+			controls[idx].second->setIsVisible(true);
 			dirty = true;
+			
+			
 		});
 	controls[idx].first->setOnToggleOffListener([this, idx]()
 		{
-			controls[idx].second->setIsVisible(false);
+			SX_LOGI("Tab") << SX_T("关闭选项卡：id=","deactivate tab: idx=") << (int)idx
+				<< " text=" << controls[idx].first->getButtonText();
 
+			controls[idx].second->setIsVisible(false);
 			dirty = true;
 		});
 	controls[idx].second->setParent(this);
@@ -404,7 +418,7 @@ void TabControl::requestRepaint(Control* parent)
 		{
 			if (control.first->isDirty() && control.first->IsVisible())
 				control.first->draw();
-			else if (control.second->isDirty() && control.second->IsVisible())
+			 if (control.second->isDirty() && control.second->IsVisible())
 				control.second->draw();
 		}
 	}

@@ -1,8 +1,29 @@
 ﻿#include "Window.h"
 #include "Dialog.h"
-
+#include"SxLog.h"
 #include <easyx.h>
 #include <algorithm>
+static bool SxIsNoisyMsg(UINT m)
+{
+	return m == WM_MOUSEMOVE;
+}
+
+static const char* SxMsgName(UINT m)
+{
+	switch (m)
+	{
+	case WM_MOUSEMOVE:   return "WM_MOUSEMOVE";
+	case WM_LBUTTONDOWN: return "WM_LBUTTONDOWN";
+	case WM_LBUTTONUP:   return "WM_LBUTTONUP";
+	case WM_RBUTTONDOWN: return "WM_RBUTTONDOWN";
+	case WM_RBUTTONUP:   return "WM_RBUTTONUP";
+	case WM_KEYDOWN:     return "WM_KEYDOWN";
+	case WM_KEYUP:       return "WM_KEYUP";
+	case WM_CHAR:        return "WM_CHAR";
+	case WM_SIZE:        return "WM_SIZE";
+	default:             return "WM_?";
+	}
+}
 
 /**
  * ApplyResizableStyle
@@ -154,6 +175,7 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
 	// 关键点②：拉伸开始 → 冻结重绘（系统调整窗口矩形时不触发即时重绘，防止抖）
 	if (m == WM_ENTERSIZEMOVE)
 	{
+		SX_LOGI("Resize") << SX_T("WM_ENTERSIZEMOVE: 开始测量尺寸","WM_ENTERSIZEMOVE: begin sizing");
 		self->isSizing = true;
 		SendMessage(h, WM_SETREDRAW, FALSE, 0);
 		return 0;
@@ -163,7 +185,6 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
 	if (m == WM_SIZING)
 	{
 		RECT* prc = reinterpret_cast<RECT*>(l);
-
 		// “尺寸异常值”快速过滤：仅保护极端值，不影响正常拖动
 		int currentWidth = prc->right - prc->left;
 		int currentHeight = prc->bottom - prc->top;
@@ -173,6 +194,14 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
 		}
 
 		ApplyMinSizeOnSizing(prc, w, h, self->minClientW, self->minClientH);
+		RECT before = *prc;// 记录调整前矩形以便日志输出
+		if (before.left != prc->left || before.top != prc->top || before.right != prc->right || before.bottom != prc->bottom)
+		{
+			SX_LOGD("Resize")
+				<< SX_T("WM_SIZING 夹具：","WM_SIZING clamp: ")
+				<< SX_T("之前=(","before=(") << (before.right - before.left) << "x" << (before.bottom - before.top) << ") "
+				<< SX_T("之后=（","after=(") << (prc->right - prc->left) << "x" << (prc->bottom - prc->top) << ")";
+		}
 		return TRUE;
 	}
 
@@ -189,6 +218,7 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
 			self->pendingW = aw;
 			self->pendingH = ah;
 			self->needResizeDirty = true;
+			SX_LOGI("Resize") << SX_T("WM_EXITSIZEMOVE: 最终尺寸，待重绘=(","WM_EXITSIZEMOVE: end sizing, pending=(" )<< self->pendingW << "x" << self->pendingH << "), needResizeDirty=1";
 		}
 
 		// 结束拉伸后不立即执行重绘，待事件循环统一收口。
@@ -341,6 +371,7 @@ int Window::runEventLoop()
 	//       不再引入额外 pendingResize 等状态，避免分叉导致状态不一致。
 	while (running)
 	{
+	
 		bool consume = false;
 
 		if (peekmessage(&msg, EX_MOUSE | EX_KEY | EX_WINDOW, true))
@@ -379,6 +410,8 @@ int Window::runEventLoop()
 						pendingH = nh;
 						// 在“非拉伸阶段”的 WM_SIZE（例如最大化/还原/程序化调整）直接触发收口
 						needResizeDirty = true;
+						SX_LOGD("Resize") <<SX_T("WM_SIZE：待处理=(", "WM_SIZE: pending=(") << pendingW << "x" << pendingH << "), isSizing=" << (isSizing ? 1 : 0);
+
 					}
 				}
 				continue;
@@ -392,17 +425,26 @@ int Window::runEventLoop()
 				{
 					consume = d->handleEvent(msg);
 				}
-				if (consume) break;
+				if (consume)
+				{
+					SX_LOGD("Event") << SX_T("事件被非模态对话框处理","Event consumed by non-modal dialog");
+					break;
+				}
 			}
 			if (!consume)
 			{
 				for (auto& c : controls)
 				{
 					consume = c->handleEvent(msg);
-					if (consume) break;
+					if (consume)
+					{
+						SX_LOGD("Event") << SX_T("事件被控件处理 id=","Event consumed by control id=") << c->getId();
+						break;
+					}
 				}
 			}
 		}
+
 		//如果有对话框打开或者关闭强制重绘
 		bool needredraw = false;
 		for (auto& d : dialogs)
@@ -445,6 +487,9 @@ int Window::runEventLoop()
 		// —— 统一收口（needResizeDirty 为真时执行一次性重绘）——
 		if (needResizeDirty)
 		{
+			SX_LOGI("Resize") << SX_T("调整窗口尺寸开始：width=","Resize settle start: width=") << width << " height=" << height;
+			SX_TRACE_SCOPE(SX_T("调整尺寸","Resize"),SX_T("窗口：调整尺寸", "Window::resize_settle"));
+
 			// 以“实际客户区尺寸”为准，防止 pending 与真实尺寸出现偏差
 			RECT clientRect;
 			GetClientRect(hWnd, &clientRect);
@@ -523,6 +568,7 @@ int Window::runEventLoop()
 				SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
 				ValidateRect(hWnd, nullptr);
 			}
+			SX_LOGI("Resize") << SX_T("尺寸调整已完成：width=","Resize settle done: width=") << width << " height=" << height;
 
 			needResizeDirty = false; // 收口完成，清标志
 		}
@@ -608,12 +654,8 @@ bool Window::hasNonModalDialogWithCaption(const std::string& caption, const std:
 	{
 		if (!dptr) continue;
 		if (auto* d = dynamic_cast<Dialog*>(dptr.get()))
-		{
 			if (d->IsVisible() && !d->model() && d->GetCaption() == caption && d->GetText() == message)
-			{
 				return true;
-			}
-		}
 	}
 	return false;
 }
@@ -661,27 +703,15 @@ std::vector<std::unique_ptr<Control>>& Window::getControls()
 	return controls;
 }
 
-void Window::processWindowMessage(const ExMessage& msg)
-{
-	if (msg.message == WM_SIZE && msg.wParam != SIZE_MINIMIZED)
-	{
-		const int nw = LOWORD(msg.lParam);
-		const int nh = HIWORD(msg.lParam);
-		if (nw >= minClientW && nh >= minClientH && nw <= 10000 && nh <= 10000)
-		{
-			if (nw != width || nh != height)
-			{
-				pendingW = nw;
-				pendingH = nh;
-				needResizeDirty = true; // 统一由 pumpResizeIfNeeded 来收口
-			}
-		}
-	}
-}
-
 void Window::pumpResizeIfNeeded()
 {
 	if (!needResizeDirty) return;
+	SX_LOGD("Resize")
+		<< SX_T("执行 pumpResizeIfNeeded：needResizeDirty=",
+			"pumpResizeIfNeeded: needResizeDirty=")
+		<< (needResizeDirty ? 1 : 0)
+		<< SX_T("（需要进行一次缩放收口/重排重绘）", "");
+
 
 	RECT rc; GetClientRect(hWnd, &rc);
 	const int finalW = max(minClientW, rc.right - rc.left);
@@ -743,6 +773,14 @@ void Window::scheduleResizeFromModal(int w, int h)
 		pendingW = w;
 		pendingH = h;
 		needResizeDirty = true;   // 交给 pumpResizeIfNeeded 做统一收口+重绘
+		SX_LOGD("Resize")
+			<< SX_T("模态对话框触发缩放调度：pending=(",
+				"scheduleResizeFromModal: pending=(")
+			<< pendingW << "x" << pendingH
+			<< SX_T(")，needResizeDirty=1（标记需要缩放收口）",
+				"), needResizeDirty=1");
+
+
 	}
 }
 

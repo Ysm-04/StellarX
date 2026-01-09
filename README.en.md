@@ -25,6 +25,35 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
+### 🆕V3.0.0 - Major Update
+
+[CHANGELOG.en.md](CHANGELOG.en.md)
+
+### ✨ New Features
+
+- **SxLog**: A lightweight logging system with support for log levels, tag filtering, bilingual (Chinese/English) output, and console/file logging with optional file rolling.
+- **TabControl**: Improved tab switching logic to ensure the current tab is closed before the target tab is opened.
+- **Improved Setters**: Setters now only update state and mark as dirty, with drawing handled by the unified redraw flow.
+
+### ⚙️ Changes
+
+- **TabControl Default Active Tab**: Default active tab logic clarified. First, set the active index without immediate drawing; after the first draw, the tab is activated.
+
+### ✅ Fixes
+
+- **TabControl::setActiveIndex Crash**: Fixed crash when setting the default active tab before the first draw.
+- **TabControl Rendering Glitch**: Fixed issue where non-active tabs were incorrectly drawn when switching visibility.
+
+### ⚠️ Breaking Changes
+
+- **Button Size APIs Removed**: `getButtonWidth()` and `getButtonHeight()` removed; use `getWidth()` and `getHeight()` instead.
+- **No Immediate Drawing for Setters**: Setters like `setText()` no longer trigger immediate drawing.
+
+### 📌 Upgrade Guide
+
+- **Button**: Replace `getButtonWidth()` / `getButtonHeight()` with `getWidth()` / `getHeight()`.
+- **Setters**: Ensure a redraw mechanism after calling setters like `setText()`.
+
 ## 📦 Project Structure & Design Philosophy
 
 StellarX adopts classic **OOP** and **modular** design with a clear structure:

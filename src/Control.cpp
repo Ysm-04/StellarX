@@ -1,4 +1,5 @@
 ﻿#include "Control.h"
+#include "SxLog.h"
 #include<assert.h>
 
 StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
@@ -44,17 +45,34 @@ bool StellarX::ControlText::operator!=(const ControlText& text)
 }
 void Control::setIsVisible(bool show)
 {
+	SX_LOGD("Control") << SX_T("重置可见状态: id=", "setIsVisible: id=")
+		<< id
+		<< " show=" << (show ? 1 : 0);
+
+	if (this->show == show)
+		return;
+
 	this->show = show;
-	dirty = true;
+	this->dirty = true;
 
 	if (!show)
+	{
+		// 隐藏：擦除自己在屏幕上的内容，并释放快照
 		this->updateBackground();
-	else
-		requestRepaint(parent);
-	
+		return;
+	}
+
+	// 显示：不在这里 requestRepaint（避免父容器快照未就绪时子控件抢跑 draw，污染快照）
+	// 仅向上标脏，让事件收口阶段由容器统一重绘。
+	if (parent)
+		parent->setDirty(true);
 }
+
 void Control::onWindowResize()
 {
+	SX_LOGD("Layout") << SX_T("尺寸变化：id=", "onWindowResize: id=") << id
+		<< SX_T(" -> 丢背景快照 + 标脏", " -> discardSnap + dirty");
+
 	// 自己：丢快照 + 标脏
 	discardBackground();
 	setDirty(true);
@@ -105,12 +123,34 @@ void Control::restoreStyle()
 
 void Control::requestRepaint(Control* parent)
 {
-	if (parent) parent->requestRepaint(parent);   // 向上冒泡
-	else        onRequestRepaintAsRoot();   // 到根控件/窗口兜底
+	// 说明：
+	// - 常规路径：子控件调用 requestRepaint(this->parent)，然后 parent 负责局部重绘（Canvas/TabControl override）
+	// - 兜底路径：如果某个“容器控件”没 override requestRepaint，就会出现 parent==this 的递归风险
+	//   此时我们改为向更上层冒泡，直到根重绘。
+	if (parent == this)
+	{
+		SX_LOGW("Dirty")
+			<< SX_T("requestRepaint（默认容器兜底）：id=", "requestRepaint(default-container-fallback): id=")
+			<< id
+			<< SX_T("，parent==this，向上层 parent 继续冒泡", " parent==this, bubble to upper parent");
+
+		if (this->parent) this->parent->requestRepaint(this->parent);
+		else onRequestRepaintAsRoot();
+		return;
+	}
+
+	SX_LOGD("Dirty") << SX_T("请求重绘：id=","requestRepaint: id=") << id << " parent=" << (parent ? parent->getId() : "null");
+
+	if (parent) parent->requestRepaint(parent);   // 交给容器处理（容器可局部重绘）
+	else        onRequestRepaintAsRoot();         // 根兜底
 }
 
 void Control::onRequestRepaintAsRoot()
 {
+	SX_LOGI("Dirty")
+		<< SX_T("触发根重绘：id=", "onRequestRepaintAsRoot: id=") << id
+		<< SX_T("（从根节点开始重画）", " (root repaint)");
+
 
 	discardBackground();
 	setDirty(true);
@@ -127,9 +167,13 @@ void Control::saveBackground(int x, int y, int w, int h)
 		//尺寸变了才重建，避免反复 new/delete
 		if (saveBkImage->getwidth() != w || saveBkImage->getheight() != h)
 		{
+			SX_LOGD("Snap") <<SX_T("重新保存背景快照：id=", "saveBackground rebuild: id=") << id << " size=(" << w << "x" << h << ")";
+
 			delete saveBkImage; saveBkImage = nullptr;
 		}
 	}
+	else
+		SX_LOGD("Snap") << SX_T("保存背景快照：id=", "saveBackground rebuild: id=") << id << " size=(" << w << "x" << h << ")";
 	if (!saveBkImage) saveBkImage = new IMAGE(w, h);
 
 	SetWorkingImage(nullptr);                 // ★抓屏幕
@@ -150,6 +194,7 @@ void Control::discardBackground()
 	if (saveBkImage)
 	{
 		restBackground();
+		SX_LOGD("Snap") << SX_T("丢弃背景快照：id=","discardBackground: id=") << id << " hasSnap=" << (hasSnap ? 1 : 0);
 		delete saveBkImage;
 		saveBkImage = nullptr;
 	}

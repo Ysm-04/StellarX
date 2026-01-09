@@ -66,7 +66,7 @@ private:
 	int totalPages = 1;                         // 总页数
 
 	bool isShowPageButton = true;			    // 是否显示翻页按钮
-	bool isNeedDrawHeaders = true;              // 是否需要绘制表头
+	bool isNeedDrawHeaders = true;              // 是否需要绘制表头(暂时废弃，单做保留，后期优化可能用到)
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
 	bool isNeedButtonAndPageNum = true;         // 是否需要计算翻页按钮和页码信息
 
