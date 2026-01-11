@@ -620,16 +620,6 @@ StellarX::ControlText Button::getButtonTextStyle() const
 	return this->textStyle;
 }
 
-int Button::getButtonWidth() const
-{
-	return this->width;
-}
-
-int Button::getButtonHeight() const
-{
-	return this->height;
-}
-
 bool Button::isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius)
 {
 	double dis = sqrt(pow(mouseX - x, 2) + pow(mouseY - y, 2));

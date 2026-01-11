@@ -295,7 +295,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		auto cancelButton = createDialogButton(
-			(okButton.get()->getX() + okButton.get()->getButtonWidth() + buttonMargin),
+			(okButton.get()->getX() + okButton.get()->getWidth() + buttonMargin),
 			okButton.get()->getY(),
 			"取消"
 		);
@@ -326,7 +326,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		auto noButton = createDialogButton(
-			(yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin),
+			(yesButton.get()->getX() + yesButton.get()->getWidth() + buttonMargin),
 			yesButton.get()->getY(),
 			"否"
 		);
@@ -357,7 +357,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		auto noButton = createDialogButton(
-			yesButton.get()->getX() + yesButton.get()->getButtonWidth() + buttonMargin,
+			yesButton.get()->getX() + yesButton.get()->getWidth() + buttonMargin,
 			yesButton.get()->getY(),
 			"否"
 		);
@@ -368,7 +368,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		auto cancelButton = createDialogButton(
-			noButton.get()->getX() + noButton.get()->getButtonWidth() + buttonMargin,
+			noButton.get()->getX() + noButton.get()->getWidth() + buttonMargin,
 			noButton.get()->getY(),
 			"取消"
 		);
@@ -401,7 +401,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		auto cancelButton = createDialogButton(
-			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
+			retryButton.get()->getX() + retryButton.get()->getWidth() + buttonMargin,
 			retryButton.get()->getY(),
 			"取消"
 		);
@@ -432,7 +432,7 @@ void Dialog::initButtons()
 				this->Close();
 			});
 		auto retryButton = createDialogButton(
-			abortButton.get()->getX() + abortButton.get()->getButtonWidth() + buttonMargin,
+			abortButton.get()->getX() + abortButton.get()->getWidth() + buttonMargin,
 			abortButton.get()->getY(),
 			"重试"
 		);
@@ -443,7 +443,7 @@ void Dialog::initButtons()
 				this->Close();
 			});
 		auto ignoreButton = createDialogButton(
-			retryButton.get()->getX() + retryButton.get()->getButtonWidth() + buttonMargin,
+			retryButton.get()->getX() + retryButton.get()->getWidth() + buttonMargin,
 			retryButton.get()->getY(),
 			"忽略"
 		);

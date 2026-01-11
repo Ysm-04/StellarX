@@ -154,10 +154,6 @@ public:
 	COLORREF getButtonTextColor() const;
 	//获取按钮文字样式
 	StellarX::ControlText getButtonTextStyle() const;
-	//获取按钮宽度
-	int getButtonWidth() const;
-	//获取按钮高度
-	int getButtonHeight() const;
 public:
 	// === Tooltip API===
 	//设置是否启用提示框
