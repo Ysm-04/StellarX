@@ -1,0 +1,215 @@
+[33mcommit c66cad3423a46ec4ef902965baa4c1816d10148a[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmaster[m[33m)[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Tue Mar 17 20:13:42 2026 +0800
+
+    修复了一些BUG，增强了一些功能，详情查看更新日志
+
+[33mcommit 348cf666f5f1bc345858608a171d222540ad6e45[m[33m ([m[1;31morigin/master[m[33m)[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sun Jan 11 16:14:42 2026 +0800
+
+    更新API文档，增加英文描述以及新增的API和SXLog日志模块
+
+[33mcommit 572802e2ee9561c787309cc995c7804c5faf9c80[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sun Jan 11 13:33:05 2026 +0800
+
+    更正：重新上传删除Button::getButtonWidth/Height接口
+
+[33mcommit 10a91f9a6488c972cc93937d745f7ab2c97a8a42[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Fri Jan 9 22:29:33 2026 +0800
+
+    更新Cmake文件-支持外部依赖集成
+
+[33mcommit eb96e5a64e74bbc8cd8333d09c4a995c3a112c5c[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Fri Jan 9 20:20:38 2026 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 5cb59b36525cde93de83313551296c6458694110[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Fri Jan 9 20:17:47 2026 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 0c1cf2938f0d6c5684eeb318f17a8443e0c8cf5a[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sat Dec 20 17:29:03 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit aa0fa8d3206eea3b31f2efba0c6532c45bd19c39[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Fri Dec 5 20:05:10 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 43564ef6759cd9b67f4f222266fd368276d1b3fb[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Thu Dec 4 14:25:56 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 53dc237e46b006b6d1fbf292611789089e932cdd[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sun Nov 30 20:09:16 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 46febdb973206824d3382fa94fe6697c4c07ee2a[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sun Nov 30 19:05:58 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit f05962954f4a4efca42fe918a6bd5f97637bc2f3[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Thu Nov 20 01:59:53 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 58d4e8ab2f35a3dc98448c229a07518d303a48c4[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Wed Nov 19 15:14:39 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 5420bfd64465e074355c101a980dc1e08e86ddf2[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sat Nov 8 01:06:37 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit cc08187ceda2ddd3a3c0999ac6d09f9f8965c610[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Wed Nov 5 13:33:55 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit c10e72b3feea31db2349654d94930acfcf3c6b04[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Tue Nov 4 21:27:57 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 6218ba54e332ee34c42aa1595aeed80db3b03343[m
+Author: 霜霜 <ysm3150131407@gmail.com>
+Date:   Tue Nov 4 21:15:10 2025 +0800
+
+    Add GitHub Actions workflow to mirror to GitCode
+
+[33mcommit 7b087e296a881d23a7c16782bcb59dc7c3fba56d[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Tue Nov 4 16:48:53 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 8dee285de8ee3d70b7d7cfd1a652846405e8b851[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Mon Nov 3 11:54:01 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit d16b9bc226ae3fcd48096a18969dde993e2de268[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Mon Nov 3 11:35:35 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 270c6f5293880cd2e6f742a3b767ba98ad0a9655[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Mon Nov 3 11:29:09 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 4bb035208813c82fa29215aec2f3fc83da2e3a81[m
+Author: Ysm-04 <ysm3150131407@gmail.com>
+Date:   Sun Nov 2 18:04:55 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit c4852d080fa17b89fdfbcf9c7cdc69f532ec5d05[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Oct 27 16:29:43 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit dcf13895da2741c19e9bfb7d232656e9a7886df5[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Oct 27 14:59:29 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 95149238e221b19a15bfa750bcf937620e23fd47[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Fri Oct 3 16:34:58 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 3509b2bc39c4df2af603d0f858385f8b132277b1[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Wed Oct 1 00:57:41 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 26f30cee39ee6bbcb09eb5e9f81b7cd8ab3b20fc[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Tue Sep 30 19:26:01 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 741987e48b1e62d91c295ee020815ed8ab448d32[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Sep 22 20:39:34 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 9226deaf857e95093b71283887772f6b0ed7e643[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Sep 22 16:51:14 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 9f2b175b17be5c383bae1e9f1b961e5c76c0ab48[m[33m ([m[1;33mtag: [m[1;33mv2.0.0[m[33m)[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Sep 22 15:08:49 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit bd4588731b879ae34ef303804c4b918fcc6ff94c[m[33m ([m[1;33mtag: [m[1;33mv1.0.0[m[33m)[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Mon Sep 8 01:23:02 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 0522bffa1b6e259ab4d671786ca128a53bd6347b[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Sun Sep 7 22:26:23 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 49ecb65514108581799707ede5468a672b26fed1[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Sun Sep 7 10:35:39 2025 +0800
+
+    feat: add a new awesome feature
+
+[33mcommit 0a9e290d42b7f98bc6a7324c68af466d406d97c6[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Sun Sep 7 00:25:30 2025 +0800
+
+    initial commit
+
+[33mcommit a29b4371fbc541fef11f82dbc5721b471815036c[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Sun Sep 7 00:22:33 2025 +0800
+
+    initial commit
+
+[33mcommit d62d8a90d6bec7ffdcdcc0583e6881da83e05255[m
+Author: Ysm-04 <3150131407@qq.com>
+Date:   Sun Sep 7 00:19:40 2025 +0800
+
+    initial commit

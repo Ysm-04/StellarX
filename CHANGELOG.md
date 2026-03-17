@@ -7,6 +7,30 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v3.0.1] - 2026 - 03 - 17
+
+==注意==
+
+此次更新变更了**TextBox::setText语义**之前如果再调用`setText`之后手动调用了`draw`方法现在应当删除，否则旧代码在新版本可能会造成`TextBox`闪烁（概率触发）【配置包含目录与库目录】
+
+### 🙏 鸣谢
+
+感谢用户[Pengfei Zhu](https://github.com/zhupengfeivip)帮StellarX完善文档【配置包含目录与库目录】部分，以及反馈在窗口模式传递参数NULL时会弹出命令行窗口的问题[Issues#9](https://github.com/Ysm-04/StellarX/issues/9)
+
+### ⚙️ 变更
+
+- **TextBox::setText语义变化:**由原来的仅标脏改为更健全的工作原理
+  - 如果文本未发生变化则立即return不做任何操作
+  - 如果文本变化则根据是否已经创建图形上下文/窗口决定是否立即重绘/向上请求，如果图形上下文/窗口还为创建则仅标记为脏
+- **TextBox-文本溢出截断：**如果用户输入或者调用`setText`设置文本，文本不超过`maxCharLen`但是像素长度超过`TextBox`则按字符截断并添加...绘制，内部仍然保存完整的文本不影响get方法获取
+
+### ✅ 修复
+
+- **TabControl::getActiveIndex() const当页签对列表不为空时，如果所有页签都未激活则会返回最后一个页签的索引：**修复再调用`getActiveIndex()`概率获取错误的索引，如果页签对列表为空或者没有页签激活则返回-1，如果有页签激活则返回对应页签索引
+- **对话框打开时持续持续触发全量重绘：**Window新增变量`dialogOpen`，在对话框弹出时设置`dialogOpen`为`true`，只有dialogOpen为真时才判断`needredraw`，在重绘后立即设置`dialogOpen`为`flase`
+- **对话框关闭合成WM_MOUSEMOVE下发更新 可见控件hover 状态，在对话框打开时也会触发：**合成`WM_MOUSEMOVE`下发时判断是否有对话框关闭，只有`dialogClose`为真才合成并下发`WM_MOUSEMOVE`
+- **Window::runEventLoop普通控件事件分发顺序：**将`controls(vector)`的正序遍历`for (auto& c : controls)`改为逆序遍历`for (auto it = controls.rbegin(); it != controls.rend(); ++it)`
+
 ## [v3.0.0] - 2026 - 01 - 09
 
 ### ✨ 新增

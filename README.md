@@ -3,6 +3,9 @@
 [English document](README.en.md)
 
 官网地址：https://stellarx-gui.top
+      博客：https://blog.stellarx-gui.top
+
+> 框架信息以及快速开始可前往官网查看，详细的使用教程可前往个人博客的StellarX星垣页面查看
 
 > 本仓库为 **StellarX** 主仓：开发与 Issue/PR 均在 GitHub 进行。  
 > GitCode 仅为只读镜像：如需反馈请到 GitHub:https://github.com/Ysm-04/StellarX
@@ -34,34 +37,26 @@
 
 
 
-### 🆕V3.0.0 - 重要更新
+### 🆕V3.0.1 - 重要更新
 
 完整版建议查看[更新日志](CHANGELOG.md)
 
-### ✨ 新增功能
+==注意==
 
-- **SxLog**: 轻量级日志系统，支持日志级别、标签过滤、中英文输出及控制台/文件日志，支持文件滚动。
-- **TabControl**: 改进页签切换逻辑，确保先关闭当前页再打开目标页。
-- **控件 Setter 改进**: Setter 仅更新状态并标记为脏，绘制由统一重绘流程处理。
+此次更新变更了**TextBox::setText语义**之前如果再调用`setText`之后手动调用了`draw`方法现在应当删除，否则旧代码在新版本可能会造成`TextBox`闪烁（概率触发）【配置包含目录与库目录】
+
+### 🙏 鸣谢
+
+感谢用户[Pengfei Zhu](https://github.com/zhupengfeivip)帮StellarX完善文档【配置包含目录与库目录】部分，以及反馈在窗口模式传递参数NULL时会弹出命令行窗口的问题[Issues#9](https://github.com/Ysm-04/StellarX/issues/9)
 
 ### ⚙️ 变更
 
-- **TabControl 默认激活页**: 默认激活页逻辑明确，首次设置激活索引后才绘制。
+- **TextBox::setText语义变化:**由原来的仅标脏改为更健全的工作原理
+  - 如果文本未发生变化则立即return不做任何操作
+  - 如果文本变化则根据是否已经创建图形上下文/窗口决定是否立即重绘/向上请求，如果图形上下文/窗口还为创建则仅标记为脏
+- **TextBox-文本溢出截断：**如果用户输入或者调用`setText`设置文本，文本不超过`maxCharLen`但是像素长度超过`TextBox`则按字符截断并添加...绘制，内部仍然保存完整的文本不影响get方法获取
 
-### ✅ 修复
-
-- **TabControl::setActiveIndex 崩溃**: 修复首次绘制前设置默认激活页时崩溃的问题。
-- **TabControl 渲染错乱**: 修复 `setIsVisible` 切换时，非激活页错误绘制导致的重叠问题。
-
-### ⚠️ 破坏性更改
-
-- **Button 尺寸 API 移除**: 移除了 `getButtonWidth()` / `getButtonHeight()`，请使用 `getWidth()` / `getHeight()`。
-- **Setter 不再即时绘制**: `setText()` 等 Setter 不再触发即时绘制。
-
-### 📌 升级指南
-
-- **Button**: 将 `getButtonWidth()` / `getButtonHeight()` 替换为 `getWidth()` / `getHeight()`。
-- **Setter**: 在调用 Setter 后确保触发重绘机制。
+**其余修复及变更请前往[更新日志](CHANGELOG.md)**
 
 ---
 

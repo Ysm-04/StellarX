@@ -2,6 +2,11 @@
 
 [中文README](README.md)
 
+official website:https://stellarx-gui.top
+                    blog: https://blog.stellarx-gui.top
+
+> For framework information and quick start instructions, please visit the official website. For detailed usage tutorials, please refer to the StellarX Xingyuan page on my personal blog.
+
 ------
 
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
@@ -25,34 +30,27 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
-### 🆕V3.0.0 - Major Update
+### 🆕V3.0.1 - Major Update
 
 [CHANGELOG.en.md](CHANGELOG.en.md)
 
-### ✨ New Features
+==Notice==
 
-- **SxLog**: A lightweight logging system with support for log levels, tag filtering, bilingual (Chinese/English) output, and console/file logging with optional file rolling.
-- **TabControl**: Improved tab switching logic to ensure the current tab is closed before the target tab is opened.
-- **Improved Setters**: Setters now only update state and mark as dirty, with drawing handled by the unified redraw flow.
+This update changes the **semantics of `TextBox::setText`**.  
+If your previous code manually called `draw()` after calling `setText()`, that call should now be removed. Otherwise, under the new version, old code may cause `TextBox` flickering in some cases.
+
+### 🙏 Acknowledgements
+
+Special thanks to [Pengfei Zhu](https://github.com/zhupengfeivip) for helping improve the StellarX documentation, especially the **Include Directories and Library Directories Configuration** section, and for reporting the issue where passing `NULL` in window mode would cause a console window to appear ([Issues#9](https://github.com/Ysm-04/StellarX/issues/9)).
 
 ### ⚙️ Changes
 
-- **TabControl Default Active Tab**: Default active tab logic clarified. First, set the active index without immediate drawing; after the first draw, the tab is activated.
+- **Changed semantics of `TextBox::setText`:** from the previous dirty-mark-only behavior to a more robust workflow
+  - If the text has not changed, it returns immediately without doing anything.
+  - If the text has changed, it decides whether to redraw immediately or request an upstream redraw depending on whether the graphics context/window has already been created. If the graphics context/window has not yet been created, it only marks itself as dirty.
+- **TextBox - text overflow truncation:** when the user enters text or calls `setText` to set text, if the text length does not exceed `maxCharLen` but its pixel width exceeds the `TextBox` width, the displayed text will be truncated by character and appended with `...` when rendered. The full original text is still stored internally and is not affected when retrieved through getter methods.
 
-### ✅ Fixes
-
-- **TabControl::setActiveIndex Crash**: Fixed crash when setting the default active tab before the first draw.
-- **TabControl Rendering Glitch**: Fixed issue where non-active tabs were incorrectly drawn when switching visibility.
-
-### ⚠️ Breaking Changes
-
-- **Button Size APIs Removed**: `getButtonWidth()` and `getButtonHeight()` removed; use `getWidth()` and `getHeight()` instead.
-- **No Immediate Drawing for Setters**: Setters like `setText()` no longer trigger immediate drawing.
-
-### 📌 Upgrade Guide
-
-- **Button**: Replace `getButtonWidth()` / `getButtonHeight()` with `getWidth()` / `getHeight()`.
-- **Setters**: Ensure a redraw mechanism after calling setters like `setText()`.
+**For other fixes and changes, please refer to the [Changelog](CHANGELOG.md).**
 
 ## 📦 Project Structure & Design Philosophy
 

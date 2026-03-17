@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v3.0.1] - 2026 - 03 - 17
+
+==Notice==
+
+This update changes the **semantics of `TextBox::setText`**.  
+If your old code manually called `draw()` after calling `setText()`, you should now remove that call. Otherwise, under the new version, old code may cause `TextBox` to flicker in some cases.
+
+### 🙏 Acknowledgements
+
+Special thanks to [Pengfei Zhu](https://github.com/zhupengfeivip) for helping improve the StellarX documentation, especially the **Include Directories and Library Directories Configuration** section, and for reporting the issue where passing `NULL` in window mode would cause a console window to pop up ([Issues#9](https://github.com/Ysm-04/StellarX/issues/9)).
+
+### ⚙️ Changes
+
+- **Changed semantics of `TextBox::setText`:**  
+  The old dirty-mark-only behavior has been replaced with a more robust workflow.
+  - If the text has not changed, the function returns immediately without doing anything.
+  - If the text has changed, it will decide whether to redraw immediately or request an upstream redraw depending on whether the graphics context/window has already been created. If the graphics context/window has not yet been created, it will only mark itself as dirty.
+
+- **TextBox - text overflow truncation:**  
+  If the user types text or calls `setText()` to set text, and the text length does not exceed `maxCharLen` but its pixel width exceeds the `TextBox` width, the displayed text will be truncated by character and appended with `...` for rendering.  
+  The full original text is still stored internally and is not affected when retrieved through getter methods.
+
+### ✅ Fixes
+
+- **`TabControl::getActiveIndex() const` could return the last tab index when the tab list was not empty but no tab was active:**  
+  Fixed the issue where calling `getActiveIndex()` could sometimes return an incorrect index.  
+  Now:
+  - if the tab list is empty, it returns `-1`
+  - if no tab is active, it returns `-1`
+  - if a tab is active, it returns the index of the active tab
+
+- **Continuous full redraw while a dialog is open:**  
+  Added a new variable `dialogOpen` to `Window`.  
+  When a dialog is shown, `dialogOpen` is set to `true`. Only when `dialogOpen` is `true` will `needRedraw` be checked. After redrawing, `dialogOpen` is immediately reset to `false`.
+
+- **Synthetic `WM_MOUSEMOVE` being dispatched when a dialog opens, instead of only when it closes:**  
+  Added a condition when dispatching synthetic `WM_MOUSEMOVE`.  
+  Now it is only synthesized and dispatched when `dialogClose` is `true`, meaning only after a dialog is closed.
+
+- **Normal control event dispatch order in `Window::runEventLoop`:**  
+  Changed the traversal of `controls (vector)` from forward order  
+  `for (auto& c : controls)`  
+  to reverse order  
+  `for (auto it = controls.rbegin(); it != controls.rend(); ++it)`
+
 ## [v3.0.0] - 2026-01-09
 
 ### ✨ New Features
