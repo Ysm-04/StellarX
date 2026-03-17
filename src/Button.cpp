@@ -313,6 +313,7 @@ bool Button::handleEvent(const ExMessage& msg)
 	if (hover != oldHover)
 	{
 		SX_LOGD("Button") << SX_T("悬停变化: ","hover change: ") << "id=" << id
+			<< " text= " << text
 			<< " " << (oldHover ? 1 : 0) << "->" << (hover ? 1 : 0);
 	}
 	// 处理鼠标点击事件
@@ -321,7 +322,7 @@ bool Button::handleEvent(const ExMessage& msg)
 		if (mode == StellarX::ButtonMode::NORMAL)
 		{
 			click = true;
-			SX_LOGD("Button") << SX_T("被点击: ","lbtn - down:")<< "id = " << id << " mode = " << (int)mode;
+			SX_LOGD("Button") << SX_T("被点击: ","lbtn - down:")<< "id = " << id <<"  text = "<<text << " mode = " << (int)mode;
 
 			dirty = true;
 			consume = true;

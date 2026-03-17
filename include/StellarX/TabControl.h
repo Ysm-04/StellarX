@@ -21,13 +21,13 @@
 #include "CoreTypes.h"
 #include "Button.h"
 #include "Canvas.h"
-#define BUTMINHEIGHT 15
-#define BUTMINWIDTH  30
+#define BUTMINHEIGHT 15   //页签按钮最小尺寸，过小会导致显示问题
+#define BUTMINWIDTH  30   //页签按钮最小尺寸，过小会导致显示问题
 class TabControl :public Canvas
 {
-	int tabBarHeight = BUTMINWIDTH;        //页签栏高度
+	int tabBarHeight = BUTMINWIDTH;   //页签栏高度
 	bool IsFirstDraw = true;          //首次绘制标记
-	int defaultActivation = -1;      //默认激活页签索引
+	int defaultActivation = -1;       //默认激活页签索引
 	StellarX::TabPlacement tabPlacement = StellarX::TabPlacement::Top; //页签排列方式
 	std::vector<std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>> controls; //页签/页列表
 
@@ -35,6 +35,7 @@ private:
 	using Canvas::addControl;                 // 禁止外部误用
 	void addControl(std::unique_ptr<Control>) = delete; // 精准禁用该重载
 private:
+	// 初始化页签按钮位置和尺寸
 	inline void initTabBar();
 	inline void initTabPage();
 public:
@@ -42,6 +43,7 @@ public:
 	TabControl(int x, int y, int width, int height);
 	~TabControl();
 
+	//重写位置设置以适应页签和页面布局
 	void setX(int x)override;
 	void setY(int y)override;
 
@@ -67,6 +69,8 @@ public:
 	int count() const;
 	//通过页签文本返回索引
 	int indexOf(const std::string& tabText) const;
+	//设置脏区并请求重绘
 	void setDirty(bool dirty) override;
+	//请求父控件重绘
 	void requestRepaint(Control* parent)override;
 };

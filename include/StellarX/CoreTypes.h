@@ -195,7 +195,7 @@ namespace StellarX
 
 	/**
 	 * @枚举类名称: TextBoxmode
-	 * @功能描述: 定义了文本框的两种模式
+	 * @功能描述: 定义了文本框的三种模式
 	 *
 	 * @详细说明:
 	 * 需要限制文本框是否接受用户输入时使用
@@ -203,12 +203,13 @@ namespace StellarX
 	 * @取值说明:
 	 *   INPUT_MODE,   // 用户可输入模式
 	 *	 READONLY_MODE // 只读模式
+	 *   PASSWORD_MODE // 密码模式
 	 */
 	enum class TextBoxmode
 	{
-		INPUT_MODE,  // 用户可输入模式
+		INPUT_MODE,    // 用户可输入模式
 		READONLY_MODE, // 只读模式
-		PASSWORD_MODE// 密码模式
+		PASSWORD_MODE  // 密码模式
 	};
 
 	/**

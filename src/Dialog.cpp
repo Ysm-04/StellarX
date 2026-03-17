@@ -80,12 +80,12 @@ bool Dialog::handleEvent(const ExMessage& msg)
 	// 如果正在清理或标记为待清理，则不处理事件
 	if (pendingCleanup || isCleaning)
 		return false;
+		// 模态对话框不允许点击外部区域
 	// 模态对话框：点击对话框外部区域时，发出提示音(\a)并吞噬该事件，不允许操作背景内容。
 	if (modal && msg.message == WM_LBUTTONUP &&
 		(msg.x < x || msg.x > x + width || msg.y < y || msg.y > y + height))
 	{
 		std::cout << "\a" << std::endl;
-		// 模态对话框不允许点击外部区域
 		return true;
 	}
 
@@ -157,6 +157,8 @@ void Dialog::Show()
 	close = false;
 	shouldClose = false;
 
+	hWnd.dialogOpen = true;// 通知窗口有对话框打开
+
 	if (modal)
 	{
 		// 模态对话框需要阻塞当前线程直到对话框关闭
@@ -193,7 +195,7 @@ void Dialog::Show()
 					setDirty(true);
 				}
 
-				// ② 处理这只对话框的鼠标/键盘（沿用你原来 EX_MOUSE | EX_KEY）
+				// ② 处理这只对话框的鼠标/键盘（沿用原来 EX_MOUSE | EX_KEY）
 				ExMessage msg;
 				if (peekmessage(&msg, EX_MOUSE | EX_KEY))
 				{
@@ -274,6 +276,7 @@ void Dialog::initButtons()
 		okbutton->setOnClickListener([this]()
 			{
 				this->SetResult(StellarX::MessageBoxResult::OK);
+				this->hWnd.dialogClose = true;
 				this->Close(); });
 
 		okbutton->textStyle = this->textStyle;
@@ -540,6 +543,8 @@ void Dialog::getTextSize()
 	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+	int tempHeight = 0;
+	int tempWidth = 0;
 	for (auto& text : lines)
 	{
 		int w = textwidth(LPCTSTR(text.c_str()));
@@ -549,6 +554,7 @@ void Dialog::getTextSize()
 		if (this->textWidth < w)
 			this->textWidth = w;
 	}
+	
 	restoreStyle();
 }
 // 计算逻辑：对话框宽度取【文本区域最大宽度】和【按钮区域总宽度】中的较大值。
@@ -651,7 +657,6 @@ void Dialog::performDelayedCleanup()
 		// 所有普通控件
 		for (auto& c : hWnd.getControls()) c->draw();
 		// 其他对话框（this 已经 show=false，会早退不绘）
-		// 注意：此处若有容器管理，需要按你的现状遍历 dialogs 再 draw
 		EndBatchDraw();
 		FlushBatchDraw();
 	}

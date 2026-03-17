@@ -368,7 +368,7 @@ int TabControl::getActiveIndex() const
 		if (c.first->isClicked())
 			return idx;
 	}
-	return idx;
+	return -1;
 }
 
 void TabControl::setActiveIndex(int idx)

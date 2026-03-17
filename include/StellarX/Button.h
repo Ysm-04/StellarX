@@ -22,9 +22,9 @@
 #include"label.h"
 
 #define DISABLEDCOLOUR RGB(96, 96, 96) //禁用状态颜色
-#define TEXTMARGINS_X 6
+#define TEXTMARGINS_X 6      
 #define TEXTMARGINS_Y 4
-constexpr int bordWith = 1; //边框宽度，用于快照恢复时的偏移计算
+constexpr int bordWith = 1;   //边框宽度，用于快照恢复时的偏移计算
 constexpr int bordHeight = 1; //边框高度，用于快照恢复时的偏移计算
 
 class Button : public Control
@@ -39,16 +39,16 @@ class Button : public Control
 	int  padX = TEXTMARGINS_X; // 文本最小左右内边距
 	int  padY = TEXTMARGINS_Y; // 文本最小上下内边距
 
-	COLORREF         buttonTrueColor;                    // 按钮被点击后的颜色
-	COLORREF         buttonFalseColor;                   // 按钮未被点击的颜色
-	COLORREF         buttonHoverColor;                   // 按钮被鼠标悬停的颜色
+	COLORREF         buttonTrueColor;                 // 按钮被点击后的颜色
+	COLORREF         buttonFalseColor;                // 按钮未被点击的颜色
+	COLORREF         buttonHoverColor;                // 按钮被鼠标悬停的颜色
 	COLORREF         buttonBorderColor = RGB(0, 0, 0);// 按钮边框颜色
 
-	StellarX::ButtonMode  mode;	    // 按钮模式
+	StellarX::ButtonMode  mode;	      // 按钮模式
 	StellarX::ControlShape shape;     // 按钮形状
 
-	StellarX::FillMode    buttonFillMode = StellarX::FillMode::Solid;   //按钮填充模式
-	StellarX::FillStyle   buttonFillIma = StellarX::FillStyle::BDiagonal;        //按钮填充图案
+	StellarX::FillMode    buttonFillMode = StellarX::FillMode::Solid;     //按钮填充模式
+	StellarX::FillStyle   buttonFillIma = StellarX::FillStyle::BDiagonal; //按钮填充图案
 	IMAGE* buttonFileIMAGE = nullptr;      //按钮填充图像
 
 	std::function<void()> onClickCallback;      //回调函数
@@ -63,20 +63,20 @@ class Button : public Control
 
 	// === Tooltip ===
 	bool        tipEnabled = false;           // 是否启用
-	bool        tipVisible = false;          // 当前是否显示
+	bool        tipVisible = false;           // 当前是否显示
 	bool        tipFollowCursor = false;      // 是否跟随鼠标
-	bool        tipUserOverride = false;     // 是否用户自定义了tip文本
+	bool        tipUserOverride = false;      // 是否用户自定义了tip文本
 	int         tipDelayMs = 1000;            // 延时(毫秒)
-	int         tipOffsetX = 12;             // 相对鼠标偏移
+	int         tipOffsetX = 12;              // 相对鼠标偏移
 	int         tipOffsetY = 18;
-	ULONGLONG   tipHoverTick = 0;            // 开始悬停的时间戳
-	int         lastMouseX = 0;              // 最新鼠标位置(用于定位)
+	ULONGLONG   tipHoverTick = 0;             // 开始悬停的时间戳
+	int         lastMouseX = 0;               // 最新鼠标位置(用于定位)
 	int         lastMouseY = 0;
 
-	std::string tipTextClick;  //NORMAL 模式下用
+	std::string tipTextClick; // NORMAL 模式下用
 	std::string tipTextOn;    // click==true 时用
 	std::string tipTextOff;   // click==false 时用
-	Label       tipLabel;                    // 直接复用Label作为提示
+	Label       tipLabel;     // 直接复用Label作为提示
 
 public:
 	StellarX::ControlText textStyle;  // 按钮文字样式
@@ -178,6 +178,7 @@ private:
 	bool isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, int height);
 	//获取对话框类型
 	bool model() const override { return false; }
+	//文本截断
 	void cutButtonText();
 	// 统一隐藏&恢复背景
 	void hideTooltip();

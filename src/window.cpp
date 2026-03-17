@@ -193,9 +193,10 @@ LRESULT CALLBACK Window::WndProcThunk(HWND h, UINT m, WPARAM w, LPARAM l)
 			return TRUE;
 		}
 
-		ApplyMinSizeOnSizing(prc, w, h, self->minClientW, self->minClientH);
 		RECT before = *prc;// 记录调整前矩形以便日志输出
-		if (before.left != prc->left || before.top != prc->top || before.right != prc->right || before.bottom != prc->bottom)
+		ApplyMinSizeOnSizing(prc, w, h, self->minClientW, self->minClientH);
+		//if (before.left != prc->left || before.top != prc->top || before.right != prc->right || before.bottom != prc->bottom)
+		if (memcmp(&before, prc, sizeof(RECT)) != 0)
 		{
 			SX_LOGD("Resize")
 				<< SX_T("WM_SIZING 夹具：","WM_SIZING clamp: ")
@@ -372,7 +373,8 @@ int Window::runEventLoop()
 	while (running)
 	{
 	
-		bool consume = false;
+		bool consume = false; // 事件是否被消费的标志（用于输入事件分发）
+		bool redrawDialogs = false; // 是否需要重绘对话框（控件事件可能引起对话框状态变化）
 
 		if (peekmessage(&msg, EX_MOUSE | EX_KEY | EX_WINDOW, true))
 		{
@@ -422,9 +424,7 @@ int Window::runEventLoop()
 			{
 				auto& d = *it;
 				if (d->IsVisible() && !d->model())
-				{
 					consume = d->handleEvent(msg);
-				}
 				if (consume)
 				{
 					SX_LOGD("Event") << SX_T("事件被非模态对话框处理","Event consumed by non-modal dialog");
@@ -433,44 +433,66 @@ int Window::runEventLoop()
 			}
 			if (!consume)
 			{
-				for (auto& c : controls)
+				for (auto it = controls.rbegin(); it != controls.rend(); ++it)
 				{
-					consume = c->handleEvent(msg);
+					consume = (*it)->handleEvent(msg);
 					if (consume)
 					{
-						SX_LOGD("Event") << SX_T("事件被控件处理 id=","Event consumed by control id=") << c->getId();
+						SX_LOGD("Event") << SX_T("事件被控件处理 id=", "Event consumed by control id=") << (*it)->getId();
+						redrawDialogs = true; // 控件事件可能引起对话框状态变化，标记需要重绘对话框
 						break;
 					}
 				}
+
 			}
+		}
+		// 关键点⑦：事件处理后，如果对话框状态可能变化（例如控件事件引起的控件重绘可能导致对话框被覆盖），优先重绘对话框以确保界面响应及时；后续再根据 needResizeDirty 进行一次性重绘。
+		if (redrawDialogs)
+		{
+			for (auto& d : dialogs)
+			{
+				if (!d->model() && d->IsVisible())
+					d->setDirty(true);
+				d->draw();
+			}
+			redrawDialogs = false; // 重置标志
 		}
 
 		//如果有对话框打开或者关闭强制重绘
 		bool needredraw = false;
-		for (auto& d : dialogs)
+		if(dialogOpen)
 		{
-			needredraw = d->IsVisible();
-			if (needredraw)break;
+			for (auto& d : dialogs)
+			{
+				needredraw = d->IsVisible();
+				if (needredraw)break;
+			}
 		}
 		if (needredraw || dialogClose)
 		{
-			// 对话框关闭后，需要手动合成一个鼠标移动消息并分发给所有普通控件，
-			// 以便它们能及时更新悬停状态（hover），否则悬停状态可能保持错误状态。
-			// 先把当前鼠标位置转换为客户区坐标，并合成一次 WM_MOUSEMOVE，先分发给控件更新 hover 状态
-			POINT pt;
-			if (GetCursorPos(&pt))
+			if (dialogClose)
 			{
-				ScreenToClient(this->hWnd, &pt);
-				ExMessage mm;
-				mm.message = WM_MOUSEMOVE;
-				mm.x = (short)pt.x;
-				mm.y = (short)pt.y;
-				// 只分发给 window 层控件（因为 dialog 已经关闭或即将关闭）
-				for (auto& c : controls)
-					c->handleEvent(mm);
+				// 对话框关闭后，需要手动合成一个鼠标移动消息并分发给所有普通控件，
+				// 以便它们能及时更新悬停状态（hover），否则悬停状态可能保持错误状态。
+				// 先把当前鼠标位置转换为客户区坐标，并合成一次 WM_MOUSEMOVE，先分发给控件更新 hover 状态
+				SX_LOGD("Event") << SX_T("对话框关闭，合成WM_MOUSEMOVE已下发", "Dialog closed; synthetic WM_MOUSEMOVE dispatched");
+				POINT pt;
+				if (GetCursorPos(&pt))
+				{
+					ScreenToClient(this->hWnd, &pt);
+					ExMessage mm;
+					mm.message = WM_MOUSEMOVE;
+					mm.x = (short)pt.x;
+					mm.y = (short)pt.y;
+					// 只分发给 window 层控件（因为 dialog 已经关闭或即将关闭）
+					for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+						(*it)->handleEvent(mm);
+				}
+				dialogClose = false; // 重置标志
 			}
 
 			BeginBatchDraw();
+			SX_LOGD("Event") << SX_T("对话框打开/关闭，触发全量重绘", "The dialog box opens/closes, triggering a full redraw");
 			// 先绘制普通控件
 			for (auto& c : controls)
 				c->draw();
@@ -483,6 +505,8 @@ int Window::runEventLoop()
 			}
 			EndBatchDraw();
 			needredraw = false;
+			dialogOpen = false;
+			
 		}
 		// —— 统一收口（needResizeDirty 为真时执行一次性重绘）——
 		if (needResizeDirty)
@@ -655,7 +679,10 @@ bool Window::hasNonModalDialogWithCaption(const std::string& caption, const std:
 		if (!dptr) continue;
 		if (auto* d = dynamic_cast<Dialog*>(dptr.get()))
 			if (d->IsVisible() && !d->model() && d->GetCaption() == caption && d->GetText() == message)
+			{
+				dialogOpen = true;
 				return true;
+			}
 	}
 	return false;
 }
@@ -854,3 +881,4 @@ void Window::adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const
 	}
 	c->onWindowResize();
 }
+

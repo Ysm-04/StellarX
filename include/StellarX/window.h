@@ -12,7 +12,9 @@
  *  - WM_GETMINMAXINFO：按最小“客户区”换算到“窗口矩形”，提供系统层最小轨迹值。
  *  - runEventLoop：只记录 WM_SIZE 的新尺寸；真正绘制放在 needResizeDirty 时集中处理。
  */
- //fuck windows fuck win32
+ //fuck windows 
+ //fuck win32
+ //fuck xiaomi
 #pragma once
 
 #include "Control.h"
@@ -55,6 +57,7 @@ class Window
 
 public:
 	bool dialogClose = false;            // 项目内使用的状态位,对话框关闭标志
+	mutable bool dialogOpen = false;             // 项目内使用的状态位,对话框打开标志
 
 	// —— 构造/析构 ——（仅初始化成员；实际样式与子类化在 draw() 中完成）
 	Window(int width, int height, int mode);

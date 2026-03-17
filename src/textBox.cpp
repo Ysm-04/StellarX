@@ -29,18 +29,43 @@ void TextBox::draw()
 		int text_width = 0;
 		int text_height = 0;
 		std::string pwdText;
+		std::string displayText;  // 用于显示的文本（可能被截断）
+		bool isTextTruncated = false;  // 标记文本是否被截断
+		
 		if (StellarX::TextBoxmode::PASSWORD_MODE == mode)
 		{
 			for (size_t i = 0; i < text.size(); ++i)
 				pwdText += '*';
-			text_width = textwidth(LPCTSTR(pwdText.c_str()));
-			text_height = textheight(LPCTSTR(pwdText.c_str()));
+			displayText = pwdText;
 		}
 		else
 		{
-			text_width = textwidth(LPCTSTR(text.c_str()));
-			text_height = textheight(LPCTSTR(text.c_str()));
+			displayText = text;
 		}
+
+		// 计算可用宽度（留出左右边距）
+		int availableWidth = width - 20;  // 左右各10像素边距
+		
+		// 截断文本以适应可用宽度
+		int currentWidth = textwidth(LPCTSTR(displayText.c_str()));
+		if (currentWidth > availableWidth && availableWidth > 0)
+		{
+			// 需要截断文本，预留空间放置省略号
+			int ellipsisWidth = textwidth("...");
+			int truncatedWidth = availableWidth - ellipsisWidth;
+			
+			std::string truncatedText = displayText;
+			while (truncatedText.size() > 0 && textwidth(LPCTSTR(truncatedText.c_str())) > truncatedWidth)
+			{
+				truncatedText.pop_back();
+			}
+			displayText = truncatedText + "...";
+			isTextTruncated = true;
+			currentWidth = textwidth(LPCTSTR(displayText.c_str()));
+		}
+		
+		text_width = currentWidth;
+		text_height = textheight(LPCTSTR(displayText.c_str()));
 
 		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
 			saveBackground(this->x, this->y, this->width, this->height);
@@ -51,23 +76,19 @@ void TextBox::draw()
 		{
 		case StellarX::ControlShape::RECTANGLE:
 			fillrectangle(x, y, x + width, y + height);//有边框填充矩形
-			StellarX::TextBoxmode::PASSWORD_MODE == mode ? outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(pwdText.c_str()))
-				: outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+			outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(displayText.c_str()));
 			break;
 		case StellarX::ControlShape::B_RECTANGLE:
 			solidrectangle(x, y, x + width, y + height);//无边框填充矩形
-			StellarX::TextBoxmode::PASSWORD_MODE == mode ? outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(pwdText.c_str()))
-			: outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+			outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(displayText.c_str()));
 			break;
 		case StellarX::ControlShape::ROUND_RECTANGLE:
 			fillroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//有边框填充圆角矩形
-			StellarX::TextBoxmode::PASSWORD_MODE == mode ? outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(pwdText.c_str()))
-			:outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+			outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(displayText.c_str()));
 			break;
 		case StellarX::ControlShape::B_ROUND_RECTANGLE:
 			solidroundrect(x, y, x + width, y + height, rouRectangleSize.ROUND_RECTANGLEwidth, rouRectangleSize.ROUND_RECTANGLEheight);//无边框填充圆角矩形
-			StellarX::TextBoxmode::PASSWORD_MODE == mode ? outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(pwdText.c_str()))
-			:outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(text.c_str()));
+			outtextxy(x + 10, (y + (height - text_height) / 2), LPCTSTR(displayText.c_str()));
 			break;
 		}
 		restoreStyle();
@@ -197,10 +218,24 @@ void TextBox::setTextBoxBk(COLORREF color)
 
 void TextBox::setText(std::string text)
 {
+	if(text == this->text)
+		return; // 文本未改变，无需更新和重绘
 	if (text.size() > maxCharLen)
 		text = text.substr(0, maxCharLen);
 	this->text = text;
-	this->dirty = true;
+	this->dirty = true; // 标记需要重绘，不论是否窗口图形上下文是否已初始化，等第一次绘制时由窗口真正调用 draw() 来重绘显示文本
+	
+	//有父控件时请求父控件重绘，无父控件时直接重绘，确保文本更新后界面正确刷新显示
+	if (nullptr != parent)
+	{
+		//通过hasSnap是否持有有效快照,判断控件是否已经绘制过，避免在控件未绘制前/窗口图形上下文未初始化调用draw()导致的错误
+		if (hasSnap)
+			requestRepaint(parent);
+	}
+	else
+		if (hasSnap)
+			draw();
+	
 }
 
 std::string TextBox::getText() const

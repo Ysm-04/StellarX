@@ -117,15 +117,12 @@ namespace StellarX
     // - 只影响终端解释输出字节的方式，不影响源码文件编码
     // - 使用 once_flag 避免重复 system 调用造成噪声与性能浪费
     //
-    // 注意:
-    // - 下面原注释写“切到 UTF-8”，但实际命令是 chcp 936（GBK）
-    // - 为避免改动你原注释，这里补充说明事实，保持行为不变
     void SxLogger::setGBK()
     {
 #ifdef _WIN32
         static std::once_flag once;
         std::call_once(once, []() {
-            // 切到 UTF-8，避免中文日志在 CP936 控制台下乱码
+            // 切到chcp 936（GBK），避免中文日志在 CP936 控制台下乱码
             // 说明：这不是 WinAPI；是执行系统命令
             std::system("chcp 936 >nul");
 
