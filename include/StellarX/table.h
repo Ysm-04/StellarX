@@ -70,9 +70,9 @@ private:
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
 	bool isNeedButtonAndPageNum = true;         // 是否需要计算翻页按钮和页码信息
 
-	Button* prevButton = nullptr;               // 上一页按钮
-	Button* nextButton = nullptr;			    // 下一页按钮
-	Label* pageNum = nullptr;                   //页码文本
+	std::unique_ptr<Button> prevButton;        // 上一页按钮
+	std::unique_ptr<Button> nextButton;	    // 下一页按钮
+	std::unique_ptr<Label> pageNum;            //页码文本
 
 	int dX = x, dY = y;							// 单元格的开始坐标
 	int uX = x, uY = y;							// 单元格的结束坐标

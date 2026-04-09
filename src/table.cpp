@@ -1,9 +1,38 @@
 ﻿#include "Table.h"
 #include "SxLog.h"
+
+namespace
+{
+	std::vector<std::string> NormalizeTableRow(std::vector<std::string> row, size_t headerCount)
+	{
+		if (headerCount == 0)
+			return row;
+
+		if (row.size() > headerCount)
+			row.resize(headerCount);
+		else if (row.size() < headerCount)
+			row.resize(headerCount, "");
+
+		return row;
+	}
+
+	int CalculateTotalPages(size_t rowCount, int rowsPerPage)
+	{
+		if (rowsPerPage < 1)
+			rowsPerPage = 1;
+
+		const int total = static_cast<int>((rowCount + static_cast<size_t>(rowsPerPage) - 1) / static_cast<size_t>(rowsPerPage));
+		return total > 0 ? total : 1;
+	}
+}
+
 // 绘制表格的当前页
 // 使用双循环绘制行和列，考虑分页偏移
 void Table::drawTable()
 {
+	if (lineHeights.empty() || colWidths.empty())
+		return;
+
 	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
 
 	// 表体从“表头之下”开始
@@ -31,6 +60,9 @@ void Table::drawTable()
 
 void Table::drawHeader()
 {
+	if (headers.empty() || lineHeights.empty() || colWidths.empty())
+		return;
+
 	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
 	// 内容区原点 = x+border, y+border
 	dX = x + border;
@@ -54,10 +86,14 @@ void Table::initTextWaH()
 	const int padY = TABLE_PAD_Y;        // 上下 padding
 	const int colGap = TABLE_COL_GAP;     // 列间距
 	const int border = tableBorderWidth > 0 ? tableBorderWidth : 0;
+	size_t maxCols = headers.size();
+	for (const auto& row : data)
+		if (row.size() > maxCols)
+			maxCols = row.size();
 
 	// 统计每列最大文本宽 & 每列最大行高（包含数据 + 表头）
-	colWidths.assign(headers.size(), 0);
-	lineHeights.assign(headers.size(), 0);
+	colWidths.assign(maxCols, 0);
+	lineHeights.assign(maxCols, 0);
 
 	// 先看数据
 	for (size_t i = 0; i < data.size(); ++i)
@@ -85,6 +121,10 @@ void Table::initTextWaH()
 	for (int h : lineHeights)
 		if (h > maxLineH)
 			maxLineH = h;
+	if (maxLineH == 0)
+		maxLineH = textheight(LPCTSTR("A"));
+	if (rowsPerPage < 1)
+		rowsPerPage = 1;
 
 	// 列宽包含左右 padding：在计算完最大文本宽度后，加上 2*padX 作为单元格内边距
 	for (size_t j = 0; j < colWidths.size(); ++j) {
@@ -138,7 +178,7 @@ void Table::initButton()
 	int btnY = pY;                  // 和页码同一基线
 
 	if (!prevButton)
-		prevButton = new Button(prevX, btnY, prevW, btnH, TABLE_STR_PREV, RGB(0, 0, 0), RGB(255, 255, 255));
+		prevButton = std::make_unique<Button>(prevX, btnY, prevW, btnH, TABLE_STR_PREV, RGB(0, 0, 0), RGB(255, 255, 255));
 	else
 	{
 		prevButton->setX(prevX);
@@ -146,12 +186,15 @@ void Table::initButton()
 	}
 
 	if (!nextButton)
-		nextButton = new Button(nextX, btnY, nextW, btnH, TABLE_STR_NEXT, RGB(0, 0, 0), RGB(255, 255, 255));
+		nextButton = std::make_unique<Button>(nextX, btnY, nextW, btnH, TABLE_STR_NEXT, RGB(0, 0, 0), RGB(255, 255, 255));
 	else
 	{
 		nextButton->setX(nextX);
 		nextButton->setY(btnY);
 	}
+
+	prevButton->setParent(this);
+	nextButton->setParent(this);
 
 	prevButton->textStyle = this->textStyle;
 	nextButton->textStyle = this->textStyle;
@@ -215,12 +258,14 @@ void Table::initPageNum()
 	pX = x + TABLE_PAGE_TEXT_OFFSET_X + (this->width - textW) / 2;
 
 	if (!pageNum)
-		pageNum = new Label(pX, pY, pageNumtext);
+		pageNum = std::make_unique<Label>(pX, pY, pageNumtext);
 	else
 	{
 		pageNum->setX(pX);
 		pageNum->setY(pY);
 	}
+
+	pageNum->setParent(this);
 
 	pageNum->textStyle = this->textStyle;
 	if (StellarX::FillMode::Null == tableFillMode)
@@ -319,21 +364,7 @@ Table::Table(int x, int y)
 	this->id = "Table";
 }
 
-Table::~Table()
-{
-	if (this->prevButton)
-		delete this->prevButton;
-	if (this->nextButton)
-		delete this->nextButton;
-	if (this->pageNum)
-		delete this->pageNum;
-	if (this->saveBkImage)
-		delete this->saveBkImage;
-	this->prevButton = nullptr;
-	this->nextButton = nullptr;
-	this->pageNum = nullptr;
-	this->saveBkImage = nullptr;
-}
+Table::~Table() = default;
 
 void Table::draw()
 {
@@ -397,7 +428,7 @@ void Table::draw()
 			// 当尺寸变化或缓存图像无效时，需要重新截图
 			if (!saveBkImage || saveWidth != this->width || saveHeight != this->height)
 			{
-				discardBackground();
+				invalidateBackgroundSnapshot();
 				saveBackground(this->x, this->y, this->width, this->height);
 			}
 		}
@@ -449,25 +480,37 @@ void Table::setHeaders(std::initializer_list<std::string> headers)
 	this->headers.clear();
 	for (auto& lis : headers)
 		this->headers.push_back(lis);
+
+	if (!this->headers.empty())
+	{
+		for (auto& row : this->data)
+			row = NormalizeTableRow(std::move(row), this->headers.size());
+	}
+
+	totalPages = CalculateTotalPages(this->data.size(), rowsPerPage);
+	if (currentPage > totalPages)
+		currentPage = totalPages;
+
 	SX_LOGI("Table") << SX_T("设置表头：id=","setHeaders: id=") << id << SX_T("总数="," count=") << (int)this->headers.size();
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedDrawHeaders = true; // 标记需要重新绘制表头
+	isNeedButtonAndPageNum = true;
 	dirty = true;
 
 }
 
 void Table::setData(std::vector<std::string> data)
 {
-	while (data.size() < headers.size())
-		data.push_back("");
+	data = NormalizeTableRow(std::move(data), headers.size());
 
 	this->data.push_back(data);
 
-	totalPages = ((int)this->data.size() + rowsPerPage - 1) / rowsPerPage;
-	if (totalPages < 1)
-		totalPages = 1;
+	totalPages = CalculateTotalPages(this->data.size(), rowsPerPage);
+	if (currentPage > totalPages)
+		currentPage = totalPages;
 
 	isNeedCellSize = true;
+	isNeedButtonAndPageNum = true;
 	dirty = true;
 
 	SX_LOGI("Table")
@@ -480,24 +523,22 @@ void Table::setData(std::vector<std::string> data)
 
 void Table::setData(std::initializer_list<std::vector<std::string>> data)
 {
-	for (auto lis : data)
-		if (lis.size() < headers.size())
-		{
-			for (size_t i = lis.size(); i < headers.size(); i++)
-				lis.push_back("");
-			this->data.push_back(lis);
-		}
-		else
-			this->data.push_back(lis);
+	int addedRows = 0;
+	for (auto row : data)
+	{
+		this->data.push_back(NormalizeTableRow(std::move(row), headers.size()));
+		++addedRows;
+	}
 
-	totalPages = ((int)this->data.size() + rowsPerPage - 1) / rowsPerPage;
-	if (totalPages < 1)
-		totalPages = 1;
+	totalPages = CalculateTotalPages(this->data.size(), rowsPerPage);
+	if (currentPage > totalPages)
+		currentPage = totalPages;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
+	isNeedButtonAndPageNum = true;
 	dirty = true;
 	SX_LOGI("Table")
-		<< SX_T("新增Data：id=", "appendRow: id=") << id
-		<< SX_T(" 本行列数=", " cols=") << (int)data.size()
+		<< SX_T("新增多行Data：id=", "appendRows: id=") << id
+		<< SX_T(" 新增行数=", " addedRows=") << addedRows
 		<< SX_T(" 数据总行数=", " totalRows=") << (int)this->data.size()
 		<< SX_T(" 总页数=", " totalPages=") << totalPages;
 
@@ -507,10 +548,13 @@ void Table::setData(std::initializer_list<std::vector<std::string>> data)
 void Table::setRowsPerPage(int rows)
 {
 	this->rowsPerPage = rows;
-	totalPages = ((int)data.size() + rowsPerPage - 1) / rowsPerPage;
-	if (totalPages < 1)
-		totalPages = 1;
+	if (this->rowsPerPage < 1)
+		this->rowsPerPage = 1;
+	totalPages = CalculateTotalPages(data.size(), rowsPerPage);
+	if (currentPage > totalPages)
+		currentPage = totalPages;
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
+	isNeedButtonAndPageNum = true;
 	dirty = true;
 }
 
@@ -579,7 +623,7 @@ void Table::clearData()
 {
 	this->data.clear();
 	this->currentPage = 1;
-	this->totalPages = 1;
+	this->totalPages = CalculateTotalPages(this->data.size(), rowsPerPage);
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedButtonAndPageNum = true;// 标记需要重新计算翻页按钮和页码信息
 	dirty = true;
@@ -668,5 +712,5 @@ int Table::getTableWidth() const
 
 int Table::getTableHeight() const
 {
-	return 0;
+	return this->height;
 }

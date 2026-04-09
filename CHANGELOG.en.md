@@ -7,6 +7,70 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+# [v3.0.2] - 2026-04-09
+
+## ⚙️ Changes
+
+* **Further Clarified Dialog Behavior During Window Resize:**
+    Dialogs will now only recalculate their position and remain centered during window resize, maximize, or restore scenarios. They will no longer stretch their own dimensions to track the window size. Dialog dimensions are strictly determined by the title, message content, and button area, resulting in a more stable and predictable behavior.
+* **Dialog Title Rendering Adjustment:**
+    The dialog title is now directly rendered by the `Dialog` itself, rather than relying on a separate `Label` child control. This eliminates an extra layer of background snapshots and redraw timing issues, significantly improving the stability of the title area in complex scenarios.
+* **Window Dimension Interface Semantic Adjustment:**
+    `Window::getWidth()` / `Window::getHeight()` now return the currently effective client area dimensions.
+    If you need to retrieve the pending dimensions recorded before the resize consolidation (resize resolution), please use:
+    * `Window::getPendingWidth()`
+    * `Window::getPendingHeight()`
+* **Stricter Interaction Semantics Under Dialog Occlusion:**
+    Underlying controls within the area covered by a modeless dialog will no longer respond to mouse events. This prevents occluded buttons or input boxes from triggering false hovers, false clicks, or rendering hierarchy anomalies.
+
+## ✅ Fixes
+
+* **Fixed Potential Black Backgrounds and Control Ghosting on Window Maximize:**
+    Fixed an issue where directly maximizing the window from certain initial dimensions would cause newly exposed areas to appear black and existing controls to leave ghosting artifacts. Large-span but legal window size changes will now properly complete the resize consolidation and full-scene redraw without being incorrectly skipped.
+* **Fixed Dialog Background Artifacts During Resize, Repositioning, and Closing:**
+    Fixed occasional ghosting artifacts around the title, close button, and functional buttons of modal and modeless dialogs following a window resize. Fixed an issue where the old background was incompletely restored after a dialog closed, leaving dirty edges or residual content.
+* **Fixed False Interactions with Underlying Controls in Occlusion Scenarios:**
+    Fixed an issue where underlying buttons completely or partially covered by an open modeless dialog could still receive mouse events. Fixed the failure to promptly clear the hover state of underlying buttons after being occluded by a dialog, as well as delayed hover state restoration after the dialog closed.
+* **Fixed Background Snapshot Anomalies in the Dialog Title Area:**
+    Fixed an abnormal phenomenon where the title area would capture the underlying background under specific redraw timings, preventing layer misalignment or background bleed-through.
+* **Fixed Various Edge Cases for Basic Controls and Containers:**
+    * Fixed an issue where `Canvas` / `TabControl` would continue to dispatch events even after they had been consumed.
+    * Fixed boundary risks for `Table` when handling empty data, empty headers, or inconsistent column counts.
+    * Fixed the desynchronization between component size and drawing area after calling `Label::setText()`.
+    * Fixed excessive logging and high input processing overhead in some high-frequency hover scenarios.
+* **Fixed Historical State Legacy Issues in the Dialog Lifecycle:**
+    Consolidated the internal state management between `Dialog::Show()` and `Dialog::Close()`. Cleaned up redundant closing states and duplicate cleanup branches, making the execution paths for modal and modeless dialogs more consistent.
+
+## ⚠️ Breaking Changes / Potential Incompatibilities
+
+* **Deprecated Dialog Initialization Interface Removed:**
+    `Dialog::setInitialization(bool)` has been removed.
+    If legacy code still calls this interface directly, please remove the call and drive dialog updates through the standard path:
+    `SetTitle(...)` -> `SetMessage(...)` -> `SetType(...)` -> `Show()`
+* **Changed Semantics for Window Dimension Getters:**
+    If legacy code relied on `Window::getWidth()` / `getHeight()` to get "pending/unresolved dimensions," it must be updated to use:
+    * `getPendingWidth()`
+    * `getPendingHeight()`
+
+## 📌 Upgrade Guide
+
+* **Dialog Initialization Call Migration:**
+    Remove direct calls to `Dialog::setInitialization(...)`. Unify content updates through `SetTitle(...)`, `SetMessage(...)`, `SetType(...)`, and finally call `Show()` to trigger layout and display updates.
+* **Window Dimension Interface Migration:**
+    * To get the actual client area dimensions of the current window, continue using `getWidth()` and `getHeight()`.
+    * To get the pending dimensions recorded before resize consolidation, switch to `getPendingWidth()` and `getPendingHeight()`.
+* **Interaction Adjustments for Dialog Occlusion Areas:**
+    Underlying controls covered by modeless dialogs no longer respond to mouse events. If older business logic relied on "click-through" or "hover-through" behaviors on dialogs, it must be updated to accommodate the new strict occlusion semantics.
+
+## Notes
+This round of updates primarily focuses on:
+* `Dialog` / `MessageBox` stability.
+* Window resize consolidation logic.
+* Interaction and redraw consistency under dialog occlusion.
+* Fixing background snapshots and ghosting artifacts.
+
+*Note: The major overhaul plan for the anchor and layout system is not included in this release and will be advanced separately in future versions.*
+
 ## [v3.0.1] - 2026 - 03 - 17
 
 ==Notice==

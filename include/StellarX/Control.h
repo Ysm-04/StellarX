@@ -4,6 +4,7 @@
  * @描述:
  *     提供控件的基本属性和方法，包括位置、尺寸、重绘标记等。
  *     实现绘图状态保存和恢复机制，确保控件绘制不影响全局状态。
+ *     同时提供“事件阶段登记、收口阶段统一提交”的托管重绘基础接口。
  *
  * @特性:
  *     - 定义控件基本属性（坐标、尺寸、脏标记）
@@ -32,6 +33,8 @@
 #include <functional>
 #include "CoreTypes.h"
 
+class Window;
+
 class Control
 {
 protected:
@@ -39,8 +42,10 @@ protected:
 	int localx, x, localy, y;           // 左上角坐标
 	int localWidth, width, localHeight, height;  // 控件尺寸
 	Control* parent = nullptr;    // 父控件
+	Window* hostWindow = nullptr; // 宿主窗口（顶层由 Window 注入，子控件可沿 parent 回溯）
 	bool dirty = true; // 是否重绘
 	bool show = true; // 是否显示
+	bool eventVisualChanged = false; // 最近一次 handleEvent 是否真的引发了视觉变化（用于上层判断是否需要登记重绘）
 
 	/* == 布局模式 == */
 	StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
@@ -48,18 +53,18 @@ protected:
 	StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 锚点
 
 	/* == 背景快照 ==  */
-	IMAGE* saveBkImage = nullptr;
+	std::unique_ptr<IMAGE> saveBkImage;
 	int saveBkX = 0, saveBkY = 0;      // 快照保存起始坐标
 	int saveWidth = 0, saveHeight = 0; // 快照保存尺寸
 	bool hasSnap = false;     //  当前是否持有有效快照
 
 	StellarX::RouRectangle rouRectangleSize; // 圆角矩形椭圆宽度和高度
 
-	LOGFONT* currentFont = new LOGFONT();       // 保存当前字体样式和颜色
-	COLORREF* currentColor = new COLORREF();
-	COLORREF* currentBkColor = new COLORREF();  // 保存当前填充色
-	COLORREF* currentBorderColor = new COLORREF(); // 边框颜色
-	LINESTYLE* currentLineStyle = new LINESTYLE(); // 保存当前线型
+	LOGFONT currentFont{};       // 保存当前字体样式和颜色
+	COLORREF currentColor{};
+	COLORREF currentBkColor{};  // 保存当前填充色
+	COLORREF currentBorderColor{}; // 边框颜色
+	LINESTYLE currentLineStyle{}; // 保存当前线型
 
 	Control(const Control&) = delete;
 	Control& operator=(const Control&) = delete;
@@ -74,35 +79,26 @@ public:
 
 	virtual ~Control()
 	{
-		delete currentFont;
-		delete currentColor;
-		delete currentBkColor;
-		delete currentBorderColor;
-		delete currentLineStyle;
-
-		currentFont = nullptr;
-		currentColor = nullptr;
-		currentBkColor = nullptr;
-		currentBorderColor = nullptr;
-		currentLineStyle = nullptr;
 		discardBackground();
 	}
 protected:
-	//向上请求重绘
+	// 向上请求重绘：普通路径交给父容器，托管路径则登记到 Window
 	virtual void requestRepaint(Control* parent);
-	//根控件/无父时触发重绘
+	// 根控件/无父时触发重绘
 	virtual void onRequestRepaintAsRoot();
+	// 当前是否处于 Window 托管分发阶段；若为真，则不应立即画
+	bool shouldDeferManagedRepaint() const;
 protected:
 	//保存背景快照
 	virtual void saveBackground(int x, int y, int w, int h);
 	// putimage 回屏
 	virtual void restBackground();
-	// 释放快照（窗口重绘/尺寸变化后必须作废）
+	// 回贴旧背景并释放快照
 	void discardBackground();
 public:
-	//释放快照重新保存，在尺寸变化时更新背景快照避免尺寸变化导致显示错位
-	void updateBackground();
-	//窗口变化丢快照
+	// 仅作废快照，不回贴旧背景
+	void invalidateBackgroundSnapshot();
+	//“纯作废快照 + 标脏”，不再在 resize 路径里回贴旧背景
 	virtual void onWindowResize();
 	// 获取位置和尺寸
 	int getX() const { return x; }
@@ -131,6 +127,14 @@ public:
 	virtual void setIsVisible(bool show);
 	//设置父容器指针
 	void setParent(Control* parent) { this->parent = parent; }
+	//设置宿主窗口（通常仅由顶层 Window/对话框注入）
+	virtual void setHostWindow(Window* host) { this->hostWindow = host; }
+	Window* getHostWindow() const;                         // 获取宿主 Window；子控件可沿 parent 向上回溯
+	RECT getBoundsRect() const;                           // 获取当前控件外接矩形，用于覆盖/相交判断
+	Control* getManagedRepaintRoot();                     // 找到本控件对应的托管重绘 root
+	bool hasValidBackgroundSnapshot() const { return hasSnap && saveBkImage != nullptr; } // 当前是否持有可用于局部恢复的快照
+	virtual bool canCommitManagedPartialRepaint() const; // 当前 root 是否可安全做“局部提交”而非整 root 重画
+	virtual void commitManagedRepaint();                  // 托管收口阶段真正执行绘制的入口
 	//设置是否重绘
 	virtual void setDirty(bool dirty) { this->dirty = dirty; }
 	//检查控件是否可见
@@ -139,6 +143,8 @@ public:
 	std::string getId() const { return id; }
 	//检查是否为脏
 	bool isDirty() { return dirty; }
+	//获取控件最近一次事件处理是否引发了视觉变化
+	bool didEventAffectVisual() const { return eventVisualChanged; }
 	//用来检查对话框是否模态，其他控件不用实现
 	virtual bool model()const = 0;
 	//布局
@@ -150,4 +156,6 @@ public:
 protected:
 	void saveStyle();
 	void restoreStyle();
+	void resetEventVisualChanged() { eventVisualChanged = false; }
+	void markEventVisualChanged(bool changed = true) { eventVisualChanged = changed; }
 };

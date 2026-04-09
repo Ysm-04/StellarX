@@ -9,7 +9,6 @@ namespace StellarX
 		SX_LOGI("MessageBox") << "show: Message=" << dlg.GetText()
 			<< " modal=" << (dlg.model() ? 1 : 0);
 
-		dlg.setInitialization(true);
 		dlg.Show();
 		return dlg.GetResult();
 	}
@@ -28,7 +27,6 @@ namespace StellarX
 		SX_LOGI("MessageBox") << "show: Message=" << dlg->GetText()
 			<< " modal=" << (dlg->model() ? 1 : 0);
 		Dialog* dlgPtr = dlg.get();
-		dlgPtr->setInitialization(true);
 		// 设置回调
 		if (onResult)
 			dlgPtr->SetResultCallback(std::move(onResult));

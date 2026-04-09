@@ -4,6 +4,7 @@
  * @描述:
  *     实现完整的对话框功能，支持多种按钮组合和异步结果回调。
  *     自动处理布局、背景保存恢复和生命周期管理。
+ *     在窗口托管重绘模式下，Dialog 自身也是一个独立的重绘 root。
  *
  * @特性:
  *     - 支持六种标准消息框类型（OK、YesNo、YesNoCancel等）
@@ -40,13 +41,11 @@ class Dialog : public Canvas
 
 	StellarX::MessageBoxType type = StellarX::MessageBoxType::OK;   //对话框类型
 	std::string titleText = "提示";				     //标题文本
-	std::unique_ptr<Label> title = nullptr;  //标题标签
 
 	std::string message;                  //提示信息
 	std::vector<std::string> lines;       //消息内容按行分割
 
-	bool needsInitialization = true;      //是否需要初始化
-	bool close = false;					  //是否关闭
+	bool needsInitialization = true;      // 是否需要根据当前内容重新初始化布局和内部按钮
 	bool modal = true;                    //是否模态
 
 	COLORREF backgroundColor = RGB(240, 240, 240);   //背景颜色
@@ -60,7 +59,6 @@ class Dialog : public Canvas
 
 	StellarX::MessageBoxResult result = StellarX::MessageBoxResult::Cancel; // 对话框结果
 
-	bool shouldClose = false;              //是否应该关闭
 	bool isCleaning = false;               //是否正在清理
 	bool pendingCleanup = false;           //延迟清理
 public:
@@ -103,27 +101,31 @@ public:
 	void Show();
 	// 关闭对话框
 	void Close();
-	//初始化
-	void setInitialization(bool init);
+	// 宿主窗口变化时仅重新居中，不拉伸 Dialog 自身
+	void recenterInHostWindow();
 
 private:
 	// 初始化按钮
 	void initButtons();
 	// 初始化关闭按钮
 	void initCloseButton();
-	// 初始化标题
-	void initTitle();
 	// 按行分割消息内容
 	void splitMessageLines();
 	// 获取文本大小
 	void getTextSize();
+	// 标记需要重新布局并按需清空旧控件
+	void invalidateLayout(bool clearChildren);
 	//初始化对话框尺寸
 	void initDialogSize();
+	// 依据当前 Dialog 的 x/y/width/height 重新创建标题和按钮
+	void rebuildChrome();
 	void addControl(std::unique_ptr<Control> control);
+	bool canCommitManagedPartialRepaint() const override; // 判断当前 Dialog 是否可安全做局部提交
+	void commitManagedRepaint() override;                 // 托管收口阶段执行 Dialog 的真正重绘
 
 	// 清除所有控件
 	void clearControls();
 	//创建对话框按钮
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
-	void requestRepaint(Control* parent) override;
+	void requestRepaint(Control* parent) override;        // 托管模式下登记为 Dialog root；非托管模式下立即更新内部按钮
 };

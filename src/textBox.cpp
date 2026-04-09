@@ -99,21 +99,29 @@ void TextBox::draw()
 bool TextBox::handleEvent(const ExMessage& msg)
 {
 	if (!show) return false;
+	resetEventVisualChanged();
 
 	bool hover = false;
 	bool oldClick = click;
 	bool consume = false;
+	const bool isMouseMessage =
+		msg.message == WM_MOUSEMOVE ||
+		msg.message == WM_LBUTTONDOWN ||
+		msg.message == WM_LBUTTONUP;
 
-	switch (shape)
+	if (isMouseMessage)
 	{
-	case StellarX::ControlShape::RECTANGLE:
-	case StellarX::ControlShape::B_RECTANGLE:
-	case StellarX::ControlShape::ROUND_RECTANGLE:
-	case StellarX::ControlShape::B_ROUND_RECTANGLE:
-		hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));
-		break;
-	default:
-		break;
+		switch (shape)
+		{
+		case StellarX::ControlShape::RECTANGLE:
+		case StellarX::ControlShape::B_RECTANGLE:
+		case StellarX::ControlShape::ROUND_RECTANGLE:
+		case StellarX::ControlShape::B_ROUND_RECTANGLE:
+			hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));
+			break;
+		default:
+			break;
+		}
 	}
 
 	if (hover && msg.message == WM_LBUTTONUP)
@@ -125,10 +133,9 @@ bool TextBox::handleEvent(const ExMessage& msg)
 
 		if (StellarX::TextBoxmode::INPUT_MODE == mode)
 		{
-			char* temp = new char[maxCharLen + 1];
-			dirty = InputBox(temp, (int)maxCharLen + 1, "输入框", NULL, text.c_str(), NULL, NULL, false);
-			if (dirty) text = temp;
-			delete[] temp;
+			std::vector<char> temp(maxCharLen + 1, '\0');
+			dirty = InputBox(temp.data(), (int)maxCharLen + 1, "输入框", NULL, text.c_str(), NULL, NULL, false);
+			if (dirty) text = temp.data();
 			consume = true;
 		}
 		else if (StellarX::TextBoxmode::READONLY_MODE == mode)
@@ -139,11 +146,10 @@ bool TextBox::handleEvent(const ExMessage& msg)
 		}
 		else if (StellarX::TextBoxmode::PASSWORD_MODE == mode)
 		{
-			char* temp = new char[maxCharLen + 1];
+			std::vector<char> temp(maxCharLen + 1, '\0');
 			// 不记录明文，只记录长度变化
-			dirty = InputBox(temp, (int)maxCharLen + 1, "输入框\n不可见输入，覆盖即可", NULL, NULL, NULL, NULL, false);
-			if (dirty) text = temp;
-			delete[] temp;
+			dirty = InputBox(temp.data(), (int)maxCharLen + 1, "输入框\n不可见输入，覆盖即可", NULL, NULL, NULL, NULL, false);
+			if (dirty) text = temp.data();
 			consume = true;
 		}
 
@@ -156,12 +162,11 @@ bool TextBox::handleEvent(const ExMessage& msg)
 		{
 			SX_LOGD("TextBox") << SX_T("文本无变化：id=","no change: id=") << id;
 		}
-
-		flushmessage(EX_MOUSE | EX_KEY);
 	}
 
 	if (dirty)
 		requestRepaint(parent);
+	markEventVisualChanged(dirty);
 
 	if (click)
 		click = false;

@@ -1,5 +1,6 @@
 ﻿#include "Button.h"
 #include "SxLog.h"
+#include "Window.h"
 
 Button::Button(int x, int y, int width, int height, const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape)
 	: Control(x, y, width, height)
@@ -164,12 +165,7 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 	tipLabel.textStyle = this->textStyle;  // 复用按钮字体样式
 }
 
-Button::~Button()
-{
-	if (buttonFileIMAGE)
-		delete buttonFileIMAGE;
-	buttonFileIMAGE = nullptr;
-}
+Button::~Button() = default;
 
 void Button::draw()
 {
@@ -222,7 +218,7 @@ void Button::draw()
 	}
 
 	//设置按钮填充模式
-	setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE);
+	setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE.get());
 	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
 		saveBackground(this->x, this->y, (this->width + bordWith), (this->height + bordHeight));
 	// 恢复背景（清除旧内容）
@@ -274,6 +270,9 @@ void Button::draw()
 
 	restoreStyle();//恢复默认字体样式和颜色
 	dirty = false;     //标记按钮不需要重绘
+
+	if (tipEnabled && tipVisible)
+		tipLabel.draw();
 }
 // 处理鼠标事件，检测点击和悬停状态
 // 根据按钮模式和形状进行不同的处理
@@ -281,40 +280,43 @@ bool Button::handleEvent(const ExMessage& msg)
 {
 	if (!show)
 		return false;
+	resetEventVisualChanged();
 
 	bool oldHover = hover;// 注意：只在状态变化时记录，避免 WM_MOUSEMOVE 刷屏
 	bool oldClick = click;
+	const bool oldTipVisible = tipVisible;
 	
 	bool consume = false;//是否消耗事件
+	const bool isMouseMessage =
+		msg.message == WM_MOUSEMOVE ||
+		msg.message == WM_LBUTTONDOWN ||
+		msg.message == WM_LBUTTONUP;
 	// 记录鼠标位置（用于tip定位）
-	if (msg.message == WM_MOUSEMOVE)
+	if (isMouseMessage)
 	{
 		lastMouseX = msg.x;
 		lastMouseY = msg.y;
 	}
 	// 检测悬停状态（根据不同形状）
-	switch (shape)
+	if (isMouseMessage)
 	{
-	case StellarX::ControlShape::RECTANGLE:
-	case StellarX::ControlShape::B_RECTANGLE:
-	case StellarX::ControlShape::ROUND_RECTANGLE:
-	case StellarX::ControlShape::B_ROUND_RECTANGLE:
-		hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));
-		break;
-	case StellarX::ControlShape::CIRCLE:
-	case StellarX::ControlShape::B_CIRCLE:
-		hover = isMouseInCircle(msg.x, msg.y, x + width / 2, y + height / 2, min(width, height) / 2);
-		break;
-	case StellarX::ControlShape::ELLIPSE:
-	case StellarX::ControlShape::B_ELLIPSE:
-		hover = isMouseInEllipse(msg.x, msg.y, x, y, x + width, y + height);
-		break;
-	}
-	if (hover != oldHover)
-	{
-		SX_LOGD("Button") << SX_T("悬停变化: ","hover change: ") << "id=" << id
-			<< " text= " << text
-			<< " " << (oldHover ? 1 : 0) << "->" << (hover ? 1 : 0);
+		switch (shape)
+		{
+		case StellarX::ControlShape::RECTANGLE:
+		case StellarX::ControlShape::B_RECTANGLE:
+		case StellarX::ControlShape::ROUND_RECTANGLE:
+		case StellarX::ControlShape::B_ROUND_RECTANGLE:
+			hover = (msg.x > x && msg.x < (x + width) && msg.y > y && msg.y < (y + height));
+			break;
+		case StellarX::ControlShape::CIRCLE:
+		case StellarX::ControlShape::B_CIRCLE:
+			hover = isMouseInCircle(msg.x, msg.y, x + width / 2, y + height / 2, min(width, height) / 2);
+			break;
+		case StellarX::ControlShape::ELLIPSE:
+		case StellarX::ControlShape::B_ELLIPSE:
+			hover = isMouseInEllipse(msg.x, msg.y, x, y, x + width, y + height);
+			break;
+		}
 	}
 	// 处理鼠标点击事件
 	if (msg.message == WM_LBUTTONDOWN && hover && mode != StellarX::ButtonMode::DISABLED)
@@ -346,8 +348,6 @@ bool Button::handleEvent(const ExMessage& msg)
 			dirty = true;
 			consume = true;
 			hideTooltip();
-			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
-			flushmessage(EX_MOUSE | EX_KEY);
 		}
 		else if (mode == StellarX::ButtonMode::TOGGLE)
 		{
@@ -363,8 +363,6 @@ bool Button::handleEvent(const ExMessage& msg)
 			consume = true;
 			refreshTooltipTextForState();
 			hideTooltip();
-			// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
-			flushmessage(EX_MOUSE | EX_KEY);
 		}
 	}
 	// 处理鼠标移出区域的情况
@@ -398,8 +396,6 @@ bool Button::handleEvent(const ExMessage& msg)
 			// 到点就显示
 			if (GetTickCount64() - tipHoverTick >= (ULONGLONG)tipDelayMs)
 			{
-				SX_LOGD("Button") << SX_T("提示信息显示: ","tooltip show:")<<" id = " << id <<SX_T("延时时间: ", " delayMs = ") << tipDelayMs;
-
 				tipVisible = true;
 
 				// 定位（跟随鼠标 or 相对按钮）
@@ -426,31 +422,47 @@ bool Button::handleEvent(const ExMessage& msg)
 	}
 
 	// 如果状态发生变化，标记需要重绘
-	if (hover != oldHover || click != oldClick)
+	const bool stateChanged = (hover != oldHover || click != oldClick);
+	if (stateChanged)
 		dirty = true;
+	const bool tipVisibilityChanged = (tipVisible != oldTipVisible);
+	if (tipVisibilityChanged)
+		dirty = true;
+
+	// 事件吞噬规则：
+	// - 鼠标移动：只有“当前命中按钮”时才吞掉，避免前一个按钮在清 hover 时截断消息，
+	//   导致后一个真正命中的按钮收不到 WM_MOUSEMOVE。
+	// - 鼠标按下/抬起：命中按钮区域时吞掉，避免点击穿透到底层控件。
+	if (msg.message == WM_MOUSEMOVE)
+	{
+		if (hover)
+			consume = true;
+	}
+	else if ((msg.message == WM_LBUTTONDOWN || msg.message == WM_LBUTTONUP) && hover)
+	{
+		consume = true;
+	}
+	markEventVisualChanged(stateChanged || tipVisibilityChanged);
 
 	// 如果需要重绘，立即执行
 	if (dirty)
 		requestRepaint(parent);
 
-	if (tipEnabled && tipVisible)
-		tipLabel.draw();
-
 	return consume;
 }
 
-void Button::setOnClickListener(const std::function<void()>&& callback)
+void Button::setOnClickListener(std::function<void()> callback)
 {
-	this->onClickCallback = callback;
+	this->onClickCallback = std::move(callback);
 }
 
-void Button::setOnToggleOnListener(const std::function<void()>&& callback)
+void Button::setOnToggleOnListener(std::function<void()> callback)
 {
-	this->onToggleOnCallback = callback;
+	this->onToggleOnCallback = std::move(callback);
 }
-void Button::setOnToggleOffListener(const std::function<void()>&& callback)
+void Button::setOnToggleOffListener(std::function<void()> callback)
 {
-	this->onToggleOffCallback = callback;
+	this->onToggleOffCallback = std::move(callback);
 }
 
 void Button::setbuttonMode(StellarX::ButtonMode mode)
@@ -495,11 +507,10 @@ void Button::setFillIma(std::string imaNAme)
 {
 	if (buttonFileIMAGE)
 	{
-		delete buttonFileIMAGE;
-		buttonFileIMAGE = nullptr;
+		buttonFileIMAGE.reset();
 	}
-	buttonFileIMAGE = new IMAGE;
-	loadimage(buttonFileIMAGE, imaNAme.c_str(), width, height);
+	buttonFileIMAGE = std::make_unique<IMAGE>();
+	loadimage(buttonFileIMAGE.get(), imaNAme.c_str(), width, height);
 	this->dirty = true;
 }
 
@@ -554,8 +565,6 @@ void Button::setButtonClick(BOOL click)
 		if (onClickCallback) onClickCallback();
 		dirty = true;
 		hideTooltip();
-		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
-		flushmessage(EX_MOUSE | EX_KEY);
 	}
 	else if (mode == StellarX::ButtonMode::TOGGLE)
 	{
@@ -564,8 +573,6 @@ void Button::setButtonClick(BOOL click)
 		dirty = true;
 		refreshTooltipTextForState();
 		hideTooltip();
-		// 清除消息队列中积压的鼠标和键盘消息，防止本次点击事件被重复处理
-		flushmessage(EX_MOUSE | EX_KEY);
 	}
 	if (dirty)
 		requestRepaint(parent);
@@ -603,7 +610,7 @@ StellarX::FillStyle Button::getFillIma() const
 
 IMAGE* Button::getFillImaImage() const
 {
-	return this->buttonFileIMAGE;
+	return this->buttonFileIMAGE.get();
 }
 
 COLORREF Button::getButtonBorder() const
@@ -676,7 +683,10 @@ void Button::hideTooltip()
 	if (tipVisible)
 	{
 		tipVisible = false;
-		tipLabel.hide(); // 还原快照+作废，防止残影
+		if (auto* host = getHostWindow(); host && host->isManagedDispatchActive())
+			tipLabel.invalidateBackgroundSnapshot();
+		else
+			tipLabel.hide(); // 还原快照+作废，防止残影
 		tipHoverTick = GetTickCount64(); // 重置计时基线
 	}
 }

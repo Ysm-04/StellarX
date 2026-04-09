@@ -17,8 +17,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-3.0.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-3.0.0_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-3.0.2-brightgreen.svg)
+![Download](https://img.shields.io/badge/Download-3.0.2_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -37,26 +37,14 @@
 
 
 
-### 🆕V3.0.1 - 重要更新
+- ### 最新版本: v3.0.2 (2026-04-09)
+  本次更新大幅提升了底层渲染的稳定性与交互正确性，重点针对 `Dialog` 与 `Window` 组件进行了深度优化。
 
-完整版建议查看[更新日志](CHANGELOG.md)
+  * **Dialog 渲染与遮挡重构:** 对话框标题改为原生直接绘制，彻底消除了在窗口尺寸变化或拖拽时产生的背景残影与错层。同时，非模态对话框现已严格拦截底层被遮挡控件的鼠标事件，解决了历史遗留的误触与 hover 穿透问题。
+  * **窗口调整 (Resize) 稳定性:** 修复了直接最大化窗口时可能导致的黑屏与重绘遗漏。明确了窗口尺寸的接口语义：`getWidth()` 现严格返回已生效的客户区尺寸，如有收口前的尺寸需求请改用 `getPendingWidth()`。
+  * **⚠️ API 废弃与不兼容:** 移除了底层的 `Dialog::setInitialization(bool)` 接口。请统一通过 `SetTitle()`, `SetMessage()` 配合 `Show()` 来驱动对话框的布局与显示更新。
 
-==注意==
-
-此次更新变更了**TextBox::setText语义**之前如果再调用`setText`之后手动调用了`draw`方法现在应当删除，否则旧代码在新版本可能会造成`TextBox`闪烁（概率触发）【配置包含目录与库目录】
-
-### 🙏 鸣谢
-
-感谢用户[Pengfei Zhu](https://github.com/zhupengfeivip)帮StellarX完善文档【配置包含目录与库目录】部分，以及反馈在窗口模式传递参数NULL时会弹出命令行窗口的问题[Issues#9](https://github.com/Ysm-04/StellarX/issues/9)
-
-### ⚙️ 变更
-
-- **TextBox::setText语义变化:**由原来的仅标脏改为更健全的工作原理
-  - 如果文本未发生变化则立即return不做任何操作
-  - 如果文本变化则根据是否已经创建图形上下文/窗口决定是否立即重绘/向上请求，如果图形上下文/窗口还为创建则仅标记为脏
-- **TextBox-文本溢出截断：**如果用户输入或者调用`setText`设置文本，文本不超过`maxCharLen`但是像素长度超过`TextBox`则按字符截断并添加...绘制，内部仍然保存完整的文本不影响get方法获取
-
-**其余修复及变更请前往[更新日志](CHANGELOG.md)**
+  *[点击此处查看 v3.0.2 完整更新日志...](CHANGELOG.md)*
 
 ---
 

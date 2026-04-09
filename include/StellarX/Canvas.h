@@ -4,6 +4,7 @@
  * @描述:
  *      作为其他控件的父容器，提供统一的背景和边框样式。
  *      负责将事件传递给子控件并管理它们的绘制顺序。
+ *      在托管重绘模式下，Canvas 通常作为一组子控件的安全重绘 root。
  *
  * @特性:
  *     - 支持四种矩形形状（普通、圆角，各有边框和无边框版本）
@@ -64,7 +65,12 @@ public:
 	void setIsVisible(bool visible) override;
 	void setDirty(bool dirty) override;
 	void onWindowResize() override;
-	void requestRepaint(Control* parent)override;
+	// 托管模式下登记为 root；非托管模式下走局部或根级重绘
+	void requestRepaint(Control* parent)override;    
+	// 判断当前 Canvas 是否可安全做局部提交
+	bool canCommitManagedPartialRepaint() const override; 
+	// 托管收口阶段执行 Canvas 的真正重绘
+	void commitManagedRepaint() override;                 
 	//获取子控件列表
 	std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
 private:

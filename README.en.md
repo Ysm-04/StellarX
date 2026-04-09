@@ -12,8 +12,8 @@ official website:https://stellarx-gui.top
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
  [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-2.3.2-brightgreen.svg)
- ![Download](https://img.shields.io/badge/Download-2.3.2_Release-blue.svg)
+![Version](https://img.shields.io/badge/Version-3.0.2-brightgreen.svg)
+ ![Download](https://img.shields.io/badge/Download-3.0.2_Release-blue.svg)
 
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
  ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
@@ -30,27 +30,14 @@ This is a **teaching-grade and tooling-grade** framework that helps developers u
 
 ------
 
-### 🆕V3.0.1 - Major Update
+### Latest Release: v3.0.2 (2026-04-09)
+This release significantly improves rendering stability and interaction correctness, focusing heavily on `Dialog` and `Window` components.
 
-[CHANGELOG.en.md](CHANGELOG.en.md)
+* **Dialog Rendering & Occlusion Refactor:** Dialog titles are now natively rendered (eliminating ghosting and visual artifacts during resize or repositioning). Furthermore, modeless dialogs now strictly block mouse events for underlying occluded controls, preventing false hover/click issues.
+* **Window Resize Stability:** Fixed black screens and visual tearing during sudden window maximizations. We've also clarified dimension semantics: `getWidth()` now strictly returns the effective client area, while `getPendingWidth()` handles unresolved resize dimensions.
+* **⚠️ Breaking API Changes:** The `Dialog::setInitialization(bool)` method has been removed. Please drive dialog updates via standard setters (`SetTitle`, `SetMessage`) followed by `Show()`.
 
-==Notice==
-
-This update changes the **semantics of `TextBox::setText`**.  
-If your previous code manually called `draw()` after calling `setText()`, that call should now be removed. Otherwise, under the new version, old code may cause `TextBox` flickering in some cases.
-
-### 🙏 Acknowledgements
-
-Special thanks to [Pengfei Zhu](https://github.com/zhupengfeivip) for helping improve the StellarX documentation, especially the **Include Directories and Library Directories Configuration** section, and for reporting the issue where passing `NULL` in window mode would cause a console window to appear ([Issues#9](https://github.com/Ysm-04/StellarX/issues/9)).
-
-### ⚙️ Changes
-
-- **Changed semantics of `TextBox::setText`:** from the previous dirty-mark-only behavior to a more robust workflow
-  - If the text has not changed, it returns immediately without doing anything.
-  - If the text has changed, it decides whether to redraw immediately or request an upstream redraw depending on whether the graphics context/window has already been created. If the graphics context/window has not yet been created, it only marks itself as dirty.
-- **TextBox - text overflow truncation:** when the user enters text or calls `setText` to set text, if the text length does not exceed `maxCharLen` but its pixel width exceeds the `TextBox` width, the displayed text will be truncated by character and appended with `...` when rendered. The full original text is still stored internally and is not affected when retrieved through getter methods.
-
-**For other fixes and changes, please refer to the [Changelog](CHANGELOG.md).**
+*[See the full changelog for v3.0.2 here...](CHANGELOG.en.md)*
 
 ## 📦 Project Structure & Design Philosophy
 

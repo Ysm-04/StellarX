@@ -1,9 +1,23 @@
 ﻿#include "Canvas.h"
 #include "SxLog.h"
+#include "Window.h"
 
 static bool SxIsNoisyMsg(UINT m)
 {
 	return m == WM_MOUSEMOVE;
+}
+
+static const char* SxCanvasMsgName(UINT m)
+{
+	switch (m)
+	{
+	case WM_MOUSEMOVE:   return "WM_MOUSEMOVE";
+	case WM_LBUTTONDOWN: return "WM_LBUTTONDOWN";
+	case WM_LBUTTONUP:   return "WM_LBUTTONUP";
+	case WM_KEYDOWN:     return "WM_KEYDOWN";
+	case WM_KEYUP:       return "WM_KEYUP";
+	default:             return "WM_UNKNOWN";
+	}
 }
 
 Canvas::Canvas()
@@ -72,7 +86,7 @@ void Canvas::draw()
 		// 如果位置或尺寸变了，或没有有效缓存，则重新抓取
 		if (!saveBkImage || saveBkX != this->x - margin || saveBkY != this->y - margin || saveWidth != this->width + margin * 2 || saveHeight != this->height + margin * 2)
 		{
-			discardBackground();
+			invalidateBackgroundSnapshot();
 			saveBackground(this->x - margin, this->y - margin, this->width + margin * 2, this->height + margin * 2);
 		}
 	}
@@ -113,9 +127,11 @@ void Canvas::draw()
 bool Canvas::handleEvent(const ExMessage& msg)
 {
 	if (!show) return false;
+	resetEventVisualChanged();
 
 	bool consumed = false;
 	bool anyDirty = false;
+	bool anyVisualChanged = false;
 	Control* firstConsumer = nullptr;
 
 	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
@@ -123,24 +139,33 @@ bool Canvas::handleEvent(const ExMessage& msg)
 		Control* c = it->get();
 		bool cConsumed = c->handleEvent(msg);
 
-		if (cConsumed && !firstConsumer) firstConsumer = c;
-		consumed |= cConsumed;
-
 		if (c->isDirty()) anyDirty = true;
+		if (c->didEventAffectVisual()) anyVisualChanged = true;
+
+		if (cConsumed)
+		{
+			firstConsumer = c;
+			consumed = true;
+			break;
+		}
 	}
 
 	if (firstConsumer && !SxIsNoisyMsg(msg.message))
 	{
-		SX_LOGD("Event") << SX_T("Canvas 消耗消息: ","Canvas consumed: msg=") << msg.message
-			<< SX_T("子控件"," by child")<<" id=" << firstConsumer->getId();
+		SX_LOGD("Event") << SX_T("Canvas 消耗消息: ","Canvas consumed: ")
+			<< SxCanvasMsgName(msg.message)
+			<< SX_T(" 子控件 id=", " childId=") << firstConsumer->getId();
 	}
 
 	if (anyDirty)
 	{
+		// 只要任一子控件因本次事件进入 dirty，就把这笔重绘继续向上汇报。
+		// 在托管模式下，这不会立即绘制，而是登记为 Canvas 对应的重绘 root。
 		if (!SxIsNoisyMsg(msg.message))
 			SX_LOGD("Dirty") << SX_T("Canvas检测有控件为脏状态 -> 请求重绘, ","Canvas anyDirty -> requestRepaint, ")<<"id = " << id;
 		requestRepaint(parent);
 	}
+	markEventVisualChanged(anyVisualChanged);
 
 	return consumed;
 }
@@ -227,7 +252,7 @@ void Canvas::setIsVisible(bool visible)
 		control->setIsVisible(visible);
 	}
 	if (!visible)
-		this->updateBackground();
+		discardBackground();
 }
 
 void Canvas::setDirty(bool dirty)
@@ -410,6 +435,14 @@ void Canvas::onWindowResize()
 
 void Canvas::requestRepaint(Control* parent)
 {
+	if (shouldDeferManagedRepaint())
+	{
+		// 托管路径：由 Window 统一决定这次是否只重画本 Canvas，还是升级为补画 Dialog / 整体场景。
+		if (auto* host = getHostWindow())
+			host->requestManagedRepaint(this);
+		return;
+	}
+
 	if (this == parent)
 	{
 		if (!show)
@@ -420,7 +453,7 @@ void Canvas::requestRepaint(Control* parent)
 		//   => 禁止局部重绘，直接升级为一次完整 draw（先把 dirty 置真，避免 draw() 早退）
 		if (dirty || !hasSnap || !saveBkImage)
 		{
-			SX_LOGD("Dirty")
+			SX_LOG_TRACE("Dirty")
 				<< SX_T("Canvas 局部重绘降级为全量重绘: id=", "Canvas partial->full draw: id=")
 				<< id
 				<< " dirty=" << (dirty ? 1 : 0)
@@ -431,7 +464,7 @@ void Canvas::requestRepaint(Control* parent)
 			return;
 		}
 
-		SX_LOGD("Dirty") << SX_T("Canvas 请求局部重绘：id=", "Canvas::requestRepaint(partial): id=") << id;
+		SX_LOG_TRACE("Dirty") << SX_T("Canvas 请求局部重绘：id=", "Canvas::requestRepaint(partial): id=") << id;
 
 		for (auto& control : controls)
 			if (control->isDirty() && control->IsVisible())
@@ -440,7 +473,31 @@ void Canvas::requestRepaint(Control* parent)
 		return;
 	}
 
-	SX_LOGD("Dirty") << SX_T("Canvas 请求根级重绘：id=", "Canvas::requestRepaint(root): id=") << id;
+	SX_LOG_TRACE("Dirty") << SX_T("Canvas 请求根级重绘：id=", "Canvas::requestRepaint(root): id=") << id;
+	onRequestRepaintAsRoot();
+}
+
+bool Canvas::canCommitManagedPartialRepaint() const
+{
+	// Canvas 只有在“自己本体不脏 + 仍持有有效背景快照”时，
+	// 才能安全地做局部提交（即只更新内部脏子控件）。
+	return show && !dirty && hasValidBackgroundSnapshot();
+}
+
+void Canvas::commitManagedRepaint()
+{
+	if (!show)
+		return;
+
+	if (canCommitManagedPartialRepaint())
+	{
+		// 快照完好：沿用 Canvas 自己已有的局部重绘逻辑。
+		requestRepaint(this);
+		return;
+	}
+
+	// 自身已经脏了，或快照失效：必须升级为整 Canvas 重画。
+	this->dirty = true;
 	onRequestRepaintAsRoot();
 }
 

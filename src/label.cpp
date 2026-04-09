@@ -34,10 +34,15 @@ void Label::draw()
 		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
-		if (0 == this->width || 0 == this->height)
+
+		const int newWidth = textwidth(text.c_str());
+		const int newHeight = textheight(text.c_str());
+		if (newWidth != this->width || newHeight != this->height)
 		{
-			this->width = textwidth(text.c_str());
-			this->height = textheight(text.c_str());
+			if (hasSnap)
+				discardBackground();
+			this->width = newWidth;
+			this->height = newHeight;
 		}
 		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
 			saveBackground(this->x, this->y, this->width, this->height);
@@ -51,8 +56,7 @@ void Label::draw()
 //用于“隐藏提示框”时调用（还原并释放快照）
 void Label::hide()
 {
-	restBackground();    // 还原屏幕像素
-	discardBackground(); // 作废快照，防止错贴旧图
+	discardBackground(); // 还原并释放快照
 	dirty = false;
 }
 void Label::setTextdisap(bool key)

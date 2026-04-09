@@ -3,6 +3,8 @@
 #include"SxLog.h"
 #include <easyx.h>
 #include <algorithm>
+// 可能频繁出现且对调试信息干扰较大的消息（例如鼠标移动），
+// 可以在日志输出时特殊处理以减少干扰。
 static bool SxIsNoisyMsg(UINT m)
 {
 	return m == WM_MOUSEMOVE;
@@ -22,6 +24,193 @@ static const char* SxMsgName(UINT m)
 	case WM_CHAR:        return "WM_CHAR";
 	case WM_SIZE:        return "WM_SIZE";
 	default:             return "WM_?";
+	}
+}
+
+static bool SxRectsIntersect(const RECT& a, const RECT& b)
+{
+	return a.left < b.right && a.right > b.left &&
+		a.top < b.bottom && a.bottom > b.top;
+}
+
+bool Window::isManagedDispatchActive() const
+{
+	return managedDispatchActive;
+}
+
+/**
+ * requestManagedRepaint(source)
+ * 作用：在“事件分发期”登记一笔托管重绘请求，而不是立即绘制。
+ * 关键点：
+ *  - source 是真正发生视觉变化的控件；
+ *  - root 是后续真正安全重绘的最小层级（通常是顶层控件/容器，或 Dialog 自身）；
+ *  - coverage 记录这次变化影响的范围，用于判断哪些上层 Dialog 需要补画。
+ */
+void Window::requestManagedRepaint(Control* source)
+{
+	if (!source)
+		return;
+
+	managedSceneDirty = true;
+	Control* root = source->getManagedRepaintRoot();
+	if (!root)
+		return;
+
+	RECT coverage = root->getBoundsRect();
+	if (root->canCommitManagedPartialRepaint())
+		coverage = source->getBoundsRect();
+
+	for (auto& item : managedRepaintItems)
+	{
+		if (item.root == root)
+		{
+			item.coverage.left = (std::min)(item.coverage.left, coverage.left);
+			item.coverage.top = (std::min)(item.coverage.top, coverage.top);
+			item.coverage.right = (std::max)(item.coverage.right, coverage.right);
+			item.coverage.bottom = (std::max)(item.coverage.bottom, coverage.bottom);
+			return;
+		}
+	}
+
+	ManagedRepaintItem item;
+	item.root = root;
+	item.coverage = coverage;
+	managedRepaintItems.push_back(item);
+}
+
+// 清空本轮托管重绘状态；通常在 flush/全场景重绘/resize 收口后调用
+void Window::clearManagedRepaintState()
+{
+	managedSceneDirty = false;
+	managedRepaintItems.clear();
+}
+
+void Window::drawWindowBackground()
+{
+	if (!bkImageFile.empty())
+	{
+		if (!background || background->getwidth() != width || background->getheight() != height)
+		{
+			background = std::make_unique<IMAGE>();
+			loadimage(background.get(), bkImageFile.c_str(), width, height, true);
+		}
+		putimage(0, 0, background.get());
+	}
+	else
+	{
+		setbkcolor(wBkcolor);
+		cleardevice();
+	}
+}
+
+void Window::redrawScene(bool forceControlsDirty, bool forceDialogsDirty)
+{
+	drawWindowBackground();
+
+	for (auto& c : controls)
+	{
+		if (forceControlsDirty)
+			c->setDirty(true);
+		c->draw();
+	}
+	for (auto& d : dialogs)
+	{
+		if (forceDialogsDirty && d->IsVisible())
+			d->setDirty(true);
+		d->draw();
+	}
+}
+
+/**
+ * flushManagedRepaint()
+ * 作用：提交当前事件分发阶段累计的托管重绘请求。
+ * 提交顺序：
+ *  1）先根据 coverage 找出需要补画的非模态 Dialog；
+ *  2）再按 Window::controls 的层级顺序提交受影响的普通 root；
+ *  3）最后把相交的 Dialog 补画回最上层。
+ * 说明：
+ *  - 这里不做整场景重画，而是只画本轮登记的 root；
+ *  - 之所以按 controls 顺序提交，而不是按登记顺序，是为了保持顶层控件原有的 z-order。
+ */
+void Window::flushManagedRepaint()
+{
+	if (!managedSceneDirty || !hWnd)
+		return;
+
+	BeginBatchDraw();
+	std::vector<Control*> overlayDialogs;
+
+	for (auto& item : managedRepaintItems)
+		collectManagedDialogOverlays(item.root, item.coverage, overlayDialogs);
+
+	for (auto& control : controls)
+	{
+		for (auto& item : managedRepaintItems)
+		{
+			if (item.root == control.get() && item.root && item.root->IsVisible())
+			{
+				item.root->commitManagedRepaint();
+				break;
+			}
+		}
+	}
+
+	for (auto& dialog : overlayDialogs)
+	{
+		if (!dialog || !dialog->IsVisible())
+			continue;
+		dialog->setDirty(true);
+		dialog->draw();
+	}
+
+	EndBatchDraw();
+	clearManagedRepaintState();
+}
+
+// 合成一条 WM_MOUSEMOVE 并直接分发给 Window 顶层控件；常用于同步 hover 状态
+void Window::dispatchSyntheticMouseMoveToControls(short x, short y)
+{
+	ExMessage mm{};
+	mm.message = WM_MOUSEMOVE;
+	mm.x = x;
+	mm.y = y;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		(*it)->handleEvent(mm);
+}
+
+/**
+ * collectManagedDialogOverlays(repaintRoot, coverage, overlays)
+ * 作用：找出在本轮提交后需要重新盖到最上层的非模态 Dialog。
+ * 规则：
+ *  - 如果 repaintRoot 本身就是 Dialog，则从它自己开始往上层 Dialog 收集；
+ *  - 如果 repaintRoot 是普通控件，则收集所有与 coverage 相交的可见 Dialog。
+ */
+void Window::collectManagedDialogOverlays(Control* repaintRoot, const RECT& coverage, std::vector<Control*>& overlays)
+{
+	size_t startIdx = 0;
+	if (auto* dialogRoot = dynamic_cast<Dialog*>(repaintRoot))
+	{
+		for (size_t i = 0; i < dialogs.size(); ++i)
+		{
+			if (dialogs[i].get() == dialogRoot)
+			{
+				startIdx = i;
+				break;
+			}
+		}
+	}
+
+	for (size_t i = startIdx; i < dialogs.size(); ++i)
+	{
+		Control* dialog = dialogs[i].get();
+		if (!dialog || !dialog->IsVisible())
+			continue;
+
+		if (dialog == repaintRoot || SxRectsIntersect(dialog->getBoundsRect(), coverage))
+		{
+			if (std::find(overlays.begin(), overlays.end(), dialog) == overlays.end())
+				overlays.push_back(dialog);
+		}
 	}
 }
 
@@ -140,10 +329,17 @@ Window::Window(int w, int h, int mode, COLORREF bk, std::string title)
 
 Window::~Window()
 {
-	// 析构：释放背景图对象并关闭 EasyX 图形环境
-	if (background) delete background;
-	background = nullptr;
-	closegraph();
+	// 先销毁控件树，再关闭图形环境，避免控件析构时访问已关闭的 EasyX 上下文。
+	dialogs.clear();
+	controls.clear();
+	background.reset();
+	if (hWnd && procHooked && oldWndProc)
+	{
+		SetWindowLongPtr(hWnd, GWLP_WNDPROC, (LONG_PTR)oldWndProc);
+		SetWindowLongPtr(hWnd, GWLP_USERDATA, 0);
+	}
+	if (hWnd)
+		closegraph();
 }
 
 // ---------------- 原生消息钩子----------------
@@ -266,7 +462,7 @@ void Window::draw()
 	{
 		hWnd = initgraph(width, height, windowMode);
 	}
-
+	
 	// 子类化：让我们的 WndProcThunk 接管窗口消息（仅执行一次）
 	if (!procHooked)
 	{
@@ -285,19 +481,10 @@ void Window::draw()
 	cls &= ~(CS_HREDRAW | CS_VREDRAW);
 	SetClassLongPtr(hWnd, GCL_STYLE, cls);
 
-	setbkcolor(wBkcolor);
-	cleardevice();
-
 	BeginBatchDraw();
-	for (auto& c : controls)
-	{
-		c->draw();
-	}
-	for (auto& d : dialogs)
-	{
-		d->draw();
-	}
+	redrawScene(true, true);
 	EndBatchDraw();
+	clearManagedRepaintState();
 }
 
 /**
@@ -333,24 +520,14 @@ void Window::draw(std::string imagePath)
 
 	if (background)
 	{
-		delete background;
-		background = nullptr;
+		background.reset();
 	}
-	background = new IMAGE;
-	loadimage(background, bkImageFile.c_str(), width, height, true);
-	putimage(0, 0, background);
+	background = std::make_unique<IMAGE>();
 
 	BeginBatchDraw();
-	for (auto& c : controls)
-	{
-		c->setDirty(true);
-		c->draw();
-	}
-	for (auto& d : dialogs)
-	{
-		d->draw();
-	}
+	redrawScene(true, true);
 	EndBatchDraw();
+	clearManagedRepaintState();
 }
 
 // ---------------- 事件循环 ----------------
@@ -361,7 +538,9 @@ void Window::draw(std::string imagePath)
  * 关键策略：
  *  - WM_SIZE：始终更新 pendingW/H（即使在拉伸中也只记录不立即绘制）；
  *  - needResizeDirty：当尺寸确实变化时置位，随后在循环尾进行一次性重绘；
- *  - 非模态对话框优先消费事件（顶层从后往前）；再交给普通控件。
+ *  - 非模态对话框优先消费事件（顶层从后往前）；再交给普通控件；
+ *  - managedDispatchActive=true 期间，控件 requestRepaint 不会立即画，而是登记到 managedRepaintItems；
+ *  - 事件尾通过 flushManagedRepaint 提交本轮 root 重绘，再按需补画 Dialog。
  */
 int Window::runEventLoop()
 {
@@ -374,7 +553,6 @@ int Window::runEventLoop()
 	{
 	
 		bool consume = false; // 事件是否被消费的标志（用于输入事件分发）
-		bool redrawDialogs = false; // 是否需要重绘对话框（控件事件可能引起对话框状态变化）
 
 		if (peekmessage(&msg, EX_MOUSE | EX_KEY | EX_WINDOW, true))
 		{
@@ -419,7 +597,9 @@ int Window::runEventLoop()
 				continue;
 			}
 
-			// 输入优先：先给顶层“非模态对话框”，再传给普通控件
+			// 输入优先：先给顶层“非模态对话框”，再传给普通控件。
+			// 在 managedDispatchActive 期间，控件只改状态并登记重绘 root，不直接画。
+			managedDispatchActive = true;
 			for (auto it = dialogs.rbegin(); it != dialogs.rend(); ++it)
 			{
 				auto& d = *it;
@@ -427,7 +607,15 @@ int Window::runEventLoop()
 					consume = d->handleEvent(msg);
 				if (consume)
 				{
-					SX_LOGD("Event") << SX_T("事件被非模态对话框处理","Event consumed by non-modal dialog");
+					if (!SxIsNoisyMsg(msg.message))
+						SX_LOGD("Event") << SX_T("事件被非模态对话框处理：", "Event consumed by non-modal dialog: ")
+						<< SxMsgName(msg.message);
+
+					// 非模态对话框吞掉自己的区域内鼠标移动后，底层普通控件收不到“离开”消息，
+					// 会残留 hover。这里补一条落在窗口外的合成移动，只用于清理底层 hover，
+					// 不会让底层控件重新命中。
+					if (msg.message == WM_MOUSEMOVE)
+						dispatchSyntheticMouseMoveToControls(-32768, -32768);
 					break;
 				}
 			}
@@ -435,30 +623,23 @@ int Window::runEventLoop()
 			{
 				for (auto it = controls.rbegin(); it != controls.rend(); ++it)
 				{
-					consume = (*it)->handleEvent(msg);
+					Control* current = it->get();
+					consume = current->handleEvent(msg);
 					if (consume)
 					{
-						SX_LOGD("Event") << SX_T("事件被控件处理 id=", "Event consumed by control id=") << (*it)->getId();
-						redrawDialogs = true; // 控件事件可能引起对话框状态变化，标记需要重绘对话框
+						if (!SxIsNoisyMsg(msg.message))
+							SX_LOGD("Event") << SX_T("事件被控件处理：", "Event consumed by control: ")
+							<< SxMsgName(msg.message)
+							<< SX_T(" id=", " id=") << current->getId();
 						break;
 					}
 				}
-
 			}
-		}
-		// 关键点⑦：事件处理后，如果对话框状态可能变化（例如控件事件引起的控件重绘可能导致对话框被覆盖），优先重绘对话框以确保界面响应及时；后续再根据 needResizeDirty 进行一次性重绘。
-		if (redrawDialogs)
-		{
-			for (auto& d : dialogs)
-			{
-				if (!d->model() && d->IsVisible())
-					d->setDirty(true);
-				d->draw();
-			}
-			redrawDialogs = false; // 重置标志
+			managedDispatchActive = false;
 		}
 
-		//如果有对话框打开或者关闭强制重绘
+		// 对话框打开/关闭属于全局层级变化：这里仍然使用整场景重绘兜底，
+		// 并在结束后清空本轮托管重绘登记，避免旧的 root 请求延后提交。
 		bool needredraw = false;
 		if(dialogOpen)
 		{
@@ -480,35 +661,25 @@ int Window::runEventLoop()
 				if (GetCursorPos(&pt))
 				{
 					ScreenToClient(this->hWnd, &pt);
-					ExMessage mm;
-					mm.message = WM_MOUSEMOVE;
-					mm.x = (short)pt.x;
-					mm.y = (short)pt.y;
 					// 只分发给 window 层控件（因为 dialog 已经关闭或即将关闭）
-					for (auto it = controls.rbegin(); it != controls.rend(); ++it)
-						(*it)->handleEvent(mm);
+					managedDispatchActive = true;
+					dispatchSyntheticMouseMoveToControls((short)pt.x, (short)pt.y);
+					managedDispatchActive = false;
 				}
 				dialogClose = false; // 重置标志
 			}
 
 			BeginBatchDraw();
 			SX_LOGD("Event") << SX_T("对话框打开/关闭，触发全量重绘", "The dialog box opens/closes, triggering a full redraw");
-			// 先绘制普通控件
-			for (auto& c : controls)
-				c->draw();
-			// 然后绘制对话框（确保对话框在最上层）
-			for (auto& d : dialogs)
-			{
-				if (!d->model() && d->IsVisible())
-					d->setDirty(true);
-				d->draw();
-			}
+			redrawScene(true, true);
 			EndBatchDraw();
 			needredraw = false;
 			dialogOpen = false;
+			clearManagedRepaintState();
 			
 		}
 		// —— 统一收口（needResizeDirty 为真时执行一次性重绘）——
+		// resize 会改变布局和背景基线，因此仍然走整场景重绘，而不是局部 root 提交。
 		if (needResizeDirty)
 		{
 			SX_LOGI("Resize") << SX_T("调整窗口尺寸开始：width=","Resize settle start: width=") << width << " height=" << height;
@@ -520,17 +691,52 @@ int Window::runEventLoop()
 			int actualWidth = clientRect.right - clientRect.left;
 			int actualHeight = clientRect.bottom - clientRect.top;
 
+			const int virtualScreenWidth = (std::max)(1, GetSystemMetrics(SM_CXVIRTUALSCREEN));
+			const int virtualScreenHeight = (std::max)(1, GetSystemMetrics(SM_CYVIRTUALSCREEN));
+			const int maxReasonableWidth = (std::max)(10000, virtualScreenWidth * 2);
+			const int maxReasonableHeight = (std::max)(10000, virtualScreenHeight * 2);
+
+			// 仅拦截“明显非法”的客户区尺寸，不再按“变化跨度”误杀正常最大化。
+			if (actualWidth <= 0 || actualHeight <= 0
+				|| actualWidth > maxReasonableWidth || actualHeight > maxReasonableHeight)
+			{
+				SX_LOGD("Resize")
+					<< SX_T("尺寸调整被非法尺寸保护跳过：old=(", "Resize settle skipped by invalid-size guard: old=(")
+					<< width << "x" << height
+					<< SX_T(") pending=(", ") pending=(")
+					<< pendingW << "x" << pendingH
+					<< SX_T(") actual=(", ") actual=(")
+					<< actualWidth << "x" << actualHeight
+					<< SX_T(") virtual=(", ") virtual=(")
+					<< virtualScreenWidth << "x" << virtualScreenHeight
+					<< SX_T(") maxAllowed=(", ") maxAllowed=(")
+					<< maxReasonableWidth << "x" << maxReasonableHeight
+					<< SX_T(")", ")");
+				needResizeDirty = false;
+				continue;
+			}
+
 			const int finalW = (std::max)(minClientW, actualWidth);
 			const int finalH = (std::max)(minClientH, actualHeight);
 
-			// 变化过大/异常场景保护
 			if (finalW != width || finalH != height)
 			{
-				if (abs(finalW - width) > 1000 || abs(finalH - height) > 1000)
+				const int diffW = abs(finalW - width);
+				const int diffH = abs(finalH - height);
+				if (diffW > 1000 || diffH > 1000)
 				{
-					// 认为是异常帧，跳过本次（不改变任何状态）
-					needResizeDirty = false;
-					continue;
+					SX_LOGD("Resize")
+						<< SX_T("检测到大跨度尺寸调整，继续执行收口：old=(", "Large-span resize detected; continue settle: old=(")
+						<< width << "x" << height
+						<< SX_T(") new=(", ") new=(")
+						<< finalW << "x" << finalH
+						<< SX_T(") diff=(", ") diff=(")
+						<< diffW << "x" << diffH
+						<< SX_T(") actual=(", ") actual=(")
+						<< actualWidth << "x" << actualHeight
+						<< SX_T(") virtual=(", ") virtual=(")
+						<< virtualScreenWidth << "x" << virtualScreenHeight
+						<< SX_T(")", ")");
 				}
 
 				// 再次冻结窗口更新，保证批量绘制的原子性
@@ -544,14 +750,6 @@ int Window::runEventLoop()
 					// 批量通知控件“窗口尺寸变化”，并标记重绘
 					for (auto& c : controls)
 						adaptiveLayout(c, finalH, finalW);
-					for (auto& d : dialogs)
-					{
-						if (auto dd = dynamic_cast<Dialog*>(d.get()))
-						{
-							dd->setDirty(true);
-							dd->setInitialization(true);
-						}
-					}
 					//重绘窗口
 					Resize(nullptr, finalW, finalH);
 
@@ -560,31 +758,21 @@ int Window::runEventLoop()
 					int confirmedWidth = clientRect.right - clientRect.left;
 					int confirmedHeight = clientRect.bottom - clientRect.top;
 
-					int renderWidth = confirmedWidth;
-					int renderHeight = confirmedHeight;
-
-					// 背景：若设置了背景图则重载并铺满；否则清屏为纯色
-					if (background && !bkImageFile.empty())
-					{
-						delete background;
-						background = new IMAGE;
-						loadimage(background, bkImageFile.c_str(), renderWidth, renderHeight, true);
-						putimage(0, 0, background);
-					}
-					else
-					{
-						setbkcolor(wBkcolor);
-						cleardevice();
-					}
-
 					// 最终提交“当前已应用尺寸”（用于外部查询/下次比较）
-					width = renderWidth;
-					height = renderHeight;
+					width = confirmedWidth;
+					height = confirmedHeight;
+
+					for (auto& d : dialogs)
+					{
+						if (auto dd = dynamic_cast<Dialog*>(d.get()))
+						{
+							dd->recenterInHostWindow();
+						}
+					}
 				}
 
 				// 统一批量绘制
-				for (auto& c : controls) c->draw();
-				for (auto& d : dialogs) d->draw();
+				redrawScene(true, true);
 
 				EndBatchDraw();
 
@@ -595,7 +783,12 @@ int Window::runEventLoop()
 			SX_LOGI("Resize") << SX_T("尺寸调整已完成：width=","Resize settle done: width=") << width << " height=" << height;
 
 			needResizeDirty = false; // 收口完成，清标志
+			clearManagedRepaintState();
 		}
+
+		// 普通输入事件收口：只在没有 resize / 对话框开关这种全局变化时，才提交本轮托管重绘。
+		if (!needResizeDirty && !dialogOpen && !dialogClose)
+			flushManagedRepaint();
 
 		// 轻微睡眠，削峰填谷（不阻塞拖拽体验）
 		Sleep(10);
@@ -609,24 +802,11 @@ int Window::runEventLoop()
 void Window::setBkImage(std::string pImgFile)
 {
 	// 更换背景图：立即加载并绘制一次；同时将所有控件标 dirty 并重绘
-	if (background) delete background;
-	background = new IMAGE;
+	background = std::make_unique<IMAGE>();
 	bkImageFile = std::move(pImgFile);
 
-	loadimage(background, bkImageFile.c_str(), width, height, true);
-	putimage(0, 0, background);
-
 	BeginBatchDraw();
-	for (auto& c : controls)
-	{
-		c->setDirty(true);
-		c->draw();
-	}
-	for (auto& d : dialogs)
-	{
-		d->setDirty(true);
-		d->draw();
-	}
+	redrawScene(true, true);
 	EndBatchDraw();
 }
 
@@ -634,20 +814,11 @@ void Window::setBkcolor(COLORREF c)
 {
 	// 更换纯色背景：立即清屏并批量重绘控件/对话框
 	wBkcolor = c;
-	setbkcolor(wBkcolor);
-	cleardevice();
+	background.reset();
+	bkImageFile.clear();
 
 	BeginBatchDraw();
-	for (auto& c : controls)
-	{
-		c->setDirty(true);
-		c->draw();
-	}
-	for (auto& d : dialogs)
-	{
-		d->setDirty(true);
-		d->draw();
-	}
+	redrawScene(true, true);
 	EndBatchDraw();
 }
 
@@ -662,12 +833,14 @@ void Window::setHeadline(std::string title)
 void Window::addControl(std::unique_ptr<Control> control)
 {
 	// 新增控件：仅加入管理容器，具体绘制在 draw()/收口时统一进行
+	control->setHostWindow(this);
 	controls.push_back(std::move(control));
 }
 
 void Window::addDialog(std::unique_ptr<Control> dlg)
 {
 	// 新增非模态对话框：管理顺序决定事件优先级（顶层从后往前）
+	dlg->setHostWindow(this);
 	dialogs.push_back(std::move(dlg));
 }
 
@@ -694,14 +867,21 @@ HWND Window::getHwnd() const
 
 int Window::getWidth() const
 {
-	// 注意：这里返回 pendingW
-	// 表示“最近一次收到的尺寸”（可能尚未应用到画布，最终以收口时的 width 为准）
-	return pendingW;
+	return width;
 }
 
 int Window::getHeight() const
 {
-	// 同上，返回 pendingH（与 getWidth 对应）
+	return height;
+}
+
+int Window::getPendingWidth() const
+{
+	return pendingW;
+}
+
+int Window::getPendingHeight() const
+{
 	return pendingH;
 }
 
@@ -717,7 +897,7 @@ COLORREF Window::getBkcolor() const
 
 IMAGE* Window::getBkImage() const
 {
-	return background;
+	return background.get();
 }
 
 std::string Window::getBkImageFile() const
@@ -751,32 +931,19 @@ void Window::pumpResizeIfNeeded()
 	// Resize + 背景
 	Resize(nullptr, finalW, finalH);
 	GetClientRect(hWnd, &rc);
-	if (background && !bkImageFile.empty())
-	{
-		delete background; background = new IMAGE;
-		loadimage(background, bkImageFile.c_str(), rc.right - rc.left, rc.bottom - rc.top, true);
-		putimage(0, 0, background);
-	}
-	else
-	{
-		setbkcolor(wBkcolor);
-		cleardevice();
-	}
 	width = rc.right - rc.left; height = rc.bottom - rc.top;
 
 	// 通知控件/对话框
 	for (auto& c : controls)
 	{
 		adaptiveLayout(c, finalH, finalW);
-		c->onWindowResize();
 	}
 	for (auto& d : dialogs)
 		if (auto* dd = dynamic_cast<Dialog*>(d.get()))
-			dd->setInitialization(true); // 强制对话框在新尺寸下重建布局/快照
+			dd->recenterInHostWindow(); // 窗口变化时仅重新居中，不拉伸 Dialog 自身
 
 	// 重绘
-	for (auto& c : controls) c->draw();
-	for (auto& d : dialogs) d->draw();
+	redrawScene(true, true);
 
 	EndBatchDraw();
 	SendMessage(hWnd, WM_SETREDRAW, TRUE, 0);
@@ -787,6 +954,7 @@ void Window::pumpResizeIfNeeded()
 	ValidateRect(hWnd, nullptr);
 
 	needResizeDirty = false;
+	clearManagedRepaintState();
 }
 void Window::scheduleResizeFromModal(int w, int h)
 {

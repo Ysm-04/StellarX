@@ -5,6 +5,7 @@ Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::Messa
 	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
 	this->id = "Dialog";
+	setHostWindow(&hWnd);
 	show = false;
 }
 
@@ -44,11 +45,14 @@ void Dialog::draw()
 
 		//绘制消息文本
 		settextcolor(textStyle.color);
+		setbkmode(TRANSPARENT);
 
 		//设置字体样式
 		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+
+		outtextxy(x + 5, y + 5, LPCTSTR(titleText.c_str()));
 
 		int ty = y + closeButtonHeight + titleToTextMargin; // 文本起始Y坐标
 		for (auto& line : lines)
@@ -68,6 +72,7 @@ void Dialog::draw()
 bool Dialog::handleEvent(const ExMessage& msg)
 {
 	bool consume = false;
+	resetEventVisualChanged();
 	if (!show)
 	{
 		if (pendingCleanup && !isCleaning)
@@ -80,18 +85,30 @@ bool Dialog::handleEvent(const ExMessage& msg)
 	// 如果正在清理或标记为待清理，则不处理事件
 	if (pendingCleanup || isCleaning)
 		return false;
-		// 模态对话框不允许点击外部区域
-	// 模态对话框：点击对话框外部区域时，发出提示音(\a)并吞噬该事件，不允许操作背景内容。
-	if (modal && msg.message == WM_LBUTTONUP &&
-		(msg.x < x || msg.x > x + width || msg.y < y || msg.y > y + height))
+
+	const bool isMouseMessage =
+		msg.message == WM_MOUSEMOVE ||
+		msg.message == WM_LBUTTONDOWN ||
+		msg.message == WM_LBUTTONUP;
+	const bool insideDialog =
+		msg.x >= x && msg.x <= x + width &&
+		msg.y >= y && msg.y <= y + height;
+
+	// 模态对话框区域外鼠标事件不允许落到底层背景。
+	if (modal && isMouseMessage && !insideDialog)
 	{
-		std::cout << "\a" << std::endl;
+		if (msg.message == WM_LBUTTONUP)
+			std::cout << "\a" << std::endl;
 		return true;
 	}
 
 	// 将事件传递给子控件处理
 	if (!consume)
 		consume = Canvas::handleEvent(msg);
+
+	// 对话框矩形范围内的鼠标事件一律由对话框吞掉，避免穿透到底层控件。
+	if (isMouseMessage && insideDialog)
+		consume = true;
 
 	// 每次事件处理后检查是否需要执行延迟清理
 	if (pendingCleanup && !isCleaning)
@@ -102,27 +119,19 @@ bool Dialog::handleEvent(const ExMessage& msg)
 void Dialog::SetTitle(const std::string& title)
 {
 	this->titleText = title;
-	if (this->title)
-	{
-		this->title->setText(title);
-	}
-	dirty = true;
+	invalidateLayout(true);
 }
 
 void Dialog::SetMessage(const std::string& message)
 {
 	this->message = message;
-	splitMessageLines();
-	getTextSize();
-	dirty = true;
+	invalidateLayout(true);
 }
 
 void Dialog::SetType(StellarX::MessageBoxType type)
 {
 	this->type = type;
-	// 重新初始化按钮
-	initButtons();
-	dirty = true;
+	invalidateLayout(true);
 }
 
 void Dialog::SetModal(bool modal)
@@ -154,81 +163,63 @@ void Dialog::Show()
 	show = true;
 	dirty = true;
 	needsInitialization = true;
-	close = false;
-	shouldClose = false;
 
 	hWnd.dialogOpen = true;// 通知窗口有对话框打开
 
 	if (modal)
 	{
 		// 模态对话框需要阻塞当前线程直到对话框关闭
-		if (modal)
+		// 记录当前窗口客户区尺寸，供轮询对比
+		RECT rc0;
+		GetClientRect(hWnd.getHwnd(), &rc0);
+		int lastW = rc0.right - rc0.left;
+		int lastH = rc0.bottom - rc0.top;
+
+		while (show)
 		{
-			// 记录当前窗口客户区尺寸，供轮询对比
-			RECT rc0;
-			GetClientRect(hWnd.getHwnd(), &rc0);
-			int lastW = rc0.right - rc0.left;
-			int lastH = rc0.bottom - rc0.top;
+			// ① 轮询窗口尺寸（不依赖 WM_SIZE）
+			RECT rc;
+			GetClientRect(hWnd.getHwnd(), &rc);
+			const int cw = rc.right - rc.left;
+			const int ch = rc.bottom - rc.top;
 
-			while (show && !close)
+			if (cw != lastW || ch != lastH)
 			{
-				// ① 轮询窗口尺寸（不依赖 WM_SIZE）
-				RECT rc;
-				GetClientRect(hWnd.getHwnd(), &rc);
-				const int cw = rc.right - rc.left;
-				const int ch = rc.bottom - rc.top;
+				lastW = cw;
+				lastH = ch;
+				SX_LOGD("Resize") <<SX_T("模态对话框检测到窗口大小变化：（", "Modal dialog detected window size change: (") << cw << "x" << ch << ")";
 
-				if (cw != lastW || ch != lastH)
-				{
-					lastW = cw;
-					lastH = ch;
-					SX_LOGD("Resize") <<SX_T("模态对话框检测到窗口大小变化：（", "Modal dialog detected window size change: (") << cw << "x" << ch << ")";
+				// 通知父窗口：有新尺寸 → 标记 needResizeDirty
+				hWnd.scheduleResizeFromModal(cw, ch);
 
-					// 通知父窗口：有新尺寸 → 标记 needResizeDirty
-					hWnd.scheduleResizeFromModal(cw, ch);
+				// 立即统一收口：父窗重绘 背景+普通控件（不会画到这只模态）
+				hWnd.pumpResizeIfNeeded();
 
-					// 立即统一收口：父窗重绘 背景+普通控件（不会画到这只模态）
-					hWnd.pumpResizeIfNeeded();
-
-					// 这只模态在新尺寸下重建布局 / 重抓背景 → 本帧要画自己
-					setInitialization(true);
-					setDirty(true);
-				}
-
-				// ② 处理这只对话框的鼠标/键盘（沿用原来 EX_MOUSE | EX_KEY）
-				ExMessage msg;
-				if (peekmessage(&msg, EX_MOUSE | EX_KEY))
-				{
-					handleEvent(msg);
-					if (shouldClose)
-					{
-						Close();
-						break;
-					}
-				}
-
-				// ③ 最后一笔：只画这只模态，保证永远在最上层
-				if (dirty)
-				{
-					BeginBatchDraw();
-					this->draw();   // 注意：不要 requestRepaint(parent)，只画自己
-					EndBatchDraw();
-					dirty = false;
-				}
-
-				Sleep(10);
+				// 这只模态只重新居中，不参与拉伸；背景快照需要在新位置重抓。
+				recenterInHostWindow();
 			}
 
-			if (pendingCleanup && !isCleaning)
-				performDelayedCleanup();
-		}
-		else
-		{
-			// 非模态仍由主循环托管
-			dirty = true;
+			// ② 处理这只对话框的鼠标/键盘（沿用原来 EX_MOUSE | EX_KEY）
+			ExMessage msg;
+			if (peekmessage(&msg, EX_MOUSE | EX_KEY))
+			{
+				handleEvent(msg);
+				if (!show)
+					break;
+			}
+
+			// ③ 最后一笔：只画这只模态，保证永远在最上层
+			if (dirty)
+			{
+				BeginBatchDraw();
+				this->draw();   // 注意：不要 requestRepaint(parent)，只画自己
+				EndBatchDraw();
+				dirty = false;
+			}
+
+			Sleep(10);
 		}
 
-		// 模态对话框关闭后执行清理
 		if (pendingCleanup && !isCleaning)
 			performDelayedCleanup();
 	}
@@ -242,7 +233,6 @@ void Dialog::Close()
 	if (!show) return;
 
 	show = false;
-	close = true;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
 
@@ -251,20 +241,30 @@ void Dialog::Close()
 		resultCallback(this->result);
 }
 
-void Dialog::setInitialization(bool init)
+void Dialog::recenterInHostWindow()
 {
-	if (init)
+	if (!show)
+		return;
+
+	// 尚未完成首次初始化时，保持“延迟初始化”语义，由首次 draw 统一创建子控件。
+	if (needsInitialization || width <= 0 || height <= 0)
 	{
-		initDialogSize();
-		saveBackground((x - BorderWidth), (y - BorderWidth), (width + 2 * BorderWidth), (height + 2 * BorderWidth));
-		this->dirty = true;
+		dirty = true;
+		return;
 	}
+
+	const int newX = (hWnd.getWidth() - width) / 2;
+	const int newY = (hWnd.getHeight() - height) / 2;
+	invalidateBackgroundSnapshot();
+
+	x = newX;
+	y = newY;
+	rebuildChrome();
+	dirty = true;
 }
 
 void Dialog::initButtons()
 {
-	controls.clear();
-
 	switch (this->type)
 	{
 	case StellarX::MessageBoxType::OK:  // 只有确定按钮
@@ -493,15 +493,6 @@ void Dialog::initCloseButton()
 	this->addControl(std::move(but));
 }
 
-void Dialog::initTitle()
-{
-	this->title = std::make_unique<Label>(this->x + 5, this->y + 5, titleText, textStyle.color);
-	title->setTextdisap(true);
-	title->textStyle = this->textStyle;
-
-	this->addControl(std::move(title));
-}
-
 void Dialog::splitMessageLines()
 {
 	lines.clear(); // 先清空现有的行
@@ -509,14 +500,17 @@ void Dialog::splitMessageLines()
 	std::string currentLine;
 	for (size_t i = 0; i < message.length(); i++) {
 		// 处理 换行符 \r\n  \n  \r
-		if (i + 1 < message.length() && (message[i] == '\r' || message[i] == '\n') || (message[i] == '\r' && message[i + 1] == '\n'))
+		const bool hasNext = (i + 1 < message.length());
+		const bool isLineBreak = (message[i] == '\r' || message[i] == '\n');
+		const bool isCrLf = hasNext && message[i] == '\r' && message[i + 1] == '\n';
+		if (isLineBreak || isCrLf)
 		{
 			if (!currentLine.empty()) {
 				lines.push_back(currentLine);
 				currentLine.clear();
 			}
 
-			if (message[i] == '\r' && message[i + 1] == '\n')
+			if (isCrLf)
 				i++;
 			continue;
 		}
@@ -543,8 +537,8 @@ void Dialog::getTextSize()
 	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
-	int tempHeight = 0;
-	int tempWidth = 0;
+	this->textHeight = 0;
+	this->textWidth = 0;
 	for (auto& text : lines)
 	{
 		int w = textwidth(LPCTSTR(text.c_str()));
@@ -554,13 +548,34 @@ void Dialog::getTextSize()
 		if (this->textWidth < w)
 			this->textWidth = w;
 	}
-	
+
 	restoreStyle();
 }
+
+void Dialog::invalidateLayout(bool clearChildren)
+{
+	if (clearChildren)
+		clearControls();
+
+	this->textWidth = 0;
+	this->textHeight = 0;
+	this->buttonNum = 0;
+	this->needsInitialization = true;
+	this->dirty = true;
+}
+
+void Dialog::rebuildChrome()
+{
+	clearControls();
+	initButtons();
+	initCloseButton();
+}
+
 // 计算逻辑：对话框宽度取【文本区域最大宽度】和【按钮区域总宽度】中的较大值。
 // 对话框高度 = 标题栏 + 文本区 + 按钮区 + 各种间距。
 void Dialog::initDialogSize()
 {
+	this->textStyle.nHeight = 20;
 	splitMessageLines();  // 分割消息行
 	getTextSize();       // 获取文本最大尺寸
 
@@ -587,9 +602,17 @@ void Dialog::initDialogSize()
 
 	// 计算文本区域宽度（包括边距）
 	int textAreaWidth = textWidth + textToBorderMargin * 2;
+	saveStyle();
+	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
+		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+	int titleAreaWidth = textwidth(LPCTSTR(titleText.c_str())) + textToBorderMargin * 2 + closeButtonWidth + buttonMargin;
+	restoreStyle();
 
-	// 对话框宽度取两者中的较大值，并确保最小宽度
+	// 对话框宽度取文本、标题和按钮区域中的较大值，并确保最小宽度
 	this->width = buttonAreaWidth > textAreaWidth ? buttonAreaWidth : textAreaWidth;
+	if (titleAreaWidth > this->width)
+		this->width = titleAreaWidth;
 	this->width = this->width > 200 ? this->width : 200;
 
 	// 计算对话框高度
@@ -604,12 +627,7 @@ void Dialog::initDialogSize()
 	this->x = (hWnd.getWidth() - this->width) / 2;
 	this->y = (hWnd.getHeight() - this->height) / 2;
 
-	//this->textStyle.nWidth = 10;
-	this->textStyle.nHeight = 20;
-
-	initButtons();     // 初始化按钮
-	initTitle();       // 初始化标题标签
-	initCloseButton(); // 初始化关闭按钮
+	rebuildChrome();
 }
 
 void Dialog::addControl(std::unique_ptr<Control> control)
@@ -636,13 +654,12 @@ void Dialog::performDelayedCleanup()
 
 	// 重置指针
 	closeButton = nullptr;
-	title.reset();
 	// 释放背景图像资源
 	if (saveBkImage && hasSnap)
 	{
 		restBackground();
 		FlushBatchDraw();
-		discardBackground();
+		invalidateBackgroundSnapshot();
 	}
 	if (!(saveBkImage && hasSnap))
 	{
@@ -664,7 +681,6 @@ void Dialog::performDelayedCleanup()
 	needsInitialization = true;
 	pendingCleanup = false;
 	isCleaning = false;
-	shouldClose = false;
 }
 
 void Dialog::SetResultCallback(std::function<void(StellarX::MessageBoxResult)> cb)
@@ -684,10 +700,12 @@ std::string Dialog::GetText() const
 
 void Dialog::clearControls()
 {
+	for (auto& control : controls)
+		control->invalidateBackgroundSnapshot();
+
 	controls.clear();
 	// 重置按钮指针
 	closeButton = nullptr;
-	title.reset(); // 释放标题资源
 }
 
 std::unique_ptr<Button> Dialog::createDialogButton(int x, int y, const std::string& text)
@@ -707,6 +725,15 @@ std::unique_ptr<Button> Dialog::createDialogButton(int x, int y, const std::stri
 
 void Dialog::requestRepaint(Control* parent)
 {
+	if (shouldDeferManagedRepaint())
+	{
+		// 非模态 Dialog 在 Window 主循环中也走托管提交；
+		// 这样底层控件和对话框的绘制顺序由 Window 统一收口控制。
+		if (auto* host = getHostWindow())
+			host->requestManagedRepaint(this);
+		return;
+	}
+
 	if (this == parent)
 	{
 		for (auto& control : controls)
@@ -715,4 +742,28 @@ void Dialog::requestRepaint(Control* parent)
 	}
 	else
 		onRequestRepaintAsRoot();
+}
+
+bool Dialog::canCommitManagedPartialRepaint() const
+{
+	// Dialog 只有在“自身底板不脏 + 仍持有有效背景快照”时，
+	// 才能安全地只更新内部按钮，而不重画整个对话框底板。
+	return show && !dirty && hasValidBackgroundSnapshot();
+}
+
+void Dialog::commitManagedRepaint()
+{
+	if (!show)
+		return;
+
+	if (canCommitManagedPartialRepaint())
+	{
+		// 背景快照完好：沿用 Dialog 自己已有的局部重绘路径。
+		requestRepaint(this);
+		return;
+	}
+
+	// 对话框底板本身已脏，或快照失效：必须整 Dialog 重画。
+	this->dirty = true;
+	onRequestRepaintAsRoot();
 }

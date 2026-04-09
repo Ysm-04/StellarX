@@ -1,5 +1,6 @@
 ﻿#include "TabControl.h"
 #include "SxLog.h"
+#include "Window.h"
 inline void TabControl::initTabBar()
 {
 	if (controls.empty())return;
@@ -226,13 +227,16 @@ bool TabControl::handleEvent(const ExMessage& msg)
 			consume = true;
 			break;
 		}
-	for (auto& c : controls)
-		if (c.second->IsVisible())
-			if (c.second->handleEvent(msg))
-			{
-				consume = true;
-				break;
-			}
+	if (!consume)
+	{
+		for (auto& c : controls)
+			if (c.second->IsVisible())
+				if (c.second->handleEvent(msg))
+				{
+					consume = true;
+					break;
+				}
+	}
 	if (dirty)
 		requestRepaint(parent);
 	return consume;
@@ -412,6 +416,14 @@ void TabControl::setDirty(bool dirty)
 
 void TabControl::requestRepaint(Control* parent)
 {
+	if (shouldDeferManagedRepaint())
+	{
+		// 托管路径：TabControl 作为“页签栏 + 当前页面”的统一重绘 root 登记到 Window。
+		if (auto* host = getHostWindow())
+			host->requestManagedRepaint(this);
+		return;
+	}
+
 	if (this == parent)
 	{
 		for (auto& control : controls)
@@ -425,4 +437,27 @@ void TabControl::requestRepaint(Control* parent)
 
 	else
 		onRequestRepaintAsRoot();
+}
+
+bool TabControl::canCommitManagedPartialRepaint() const
+{
+	// TabControl 只有在自己本体不脏且背景快照有效时，才允许只更新脏页签/脏页面。
+	return show && !dirty && hasValidBackgroundSnapshot();
+}
+
+void TabControl::commitManagedRepaint()
+{
+	if (!show)
+		return;
+
+	if (canCommitManagedPartialRepaint())
+	{
+		// 页签栏和页面基线都还有效：沿用原有局部重绘逻辑。
+		requestRepaint(this);
+		return;
+	}
+
+	// 自身布局或背景已经变化：升级为整 TabControl 重画。
+	this->dirty = true;
+	onRequestRepaintAsRoot();
 }

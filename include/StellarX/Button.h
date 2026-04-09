@@ -49,7 +49,7 @@ class Button : public Control
 
 	StellarX::FillMode    buttonFillMode = StellarX::FillMode::Solid;     //按钮填充模式
 	StellarX::FillStyle   buttonFillIma = StellarX::FillStyle::BDiagonal; //按钮填充图案
-	IMAGE* buttonFileIMAGE = nullptr;      //按钮填充图像
+	std::unique_ptr<IMAGE> buttonFileIMAGE;      //按钮填充图像
 
 	std::function<void()> onClickCallback;      //回调函数
 	std::function<void()> onToggleOnCallback;   //TOGGLE模式下的回调函数
@@ -103,11 +103,11 @@ public:
 	bool handleEvent(const ExMessage& msg) override;
 
 	//设置回调函数
-	void setOnClickListener(const std::function<void()>&& callback);
+	void setOnClickListener(std::function<void()> callback);
 	//设置TOGGLE模式下被点击的回调函数
-	void setOnToggleOnListener(const std::function<void()>&& callback);
+	void setOnToggleOnListener(std::function<void()> callback);
 	//设置TOGGLE模式下取消点击的回调函数
-	void setOnToggleOffListener(const std::function<void()>&& callback);
+	void setOnToggleOffListener(std::function<void()> callback);
 	//设置按钮模式
 	void setbuttonMode(StellarX::ButtonMode mode);
 	//设置圆角矩形椭圆宽度

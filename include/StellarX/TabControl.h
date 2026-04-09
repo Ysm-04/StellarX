@@ -4,6 +4,7 @@
  * @描述:
  *     提供页签栏布局（上/下/左/右）、选中切换、页内容区域定位；
  *     与 Button 一起工作，支持窗口大小变化、可见性联动与脏区重绘。
+ *     在托管重绘模式下，TabControl 作为“页签栏 + 当前页面”的统一重绘 root。
  *
  * @特性:
  *     - 页签栏四向排列（Top / Bottom / Left / Right）
@@ -72,5 +73,7 @@ public:
 	//设置脏区并请求重绘
 	void setDirty(bool dirty) override;
 	//请求父控件重绘
-	void requestRepaint(Control* parent)override;
+	void requestRepaint(Control* parent)override;          // 托管模式下登记为 root；非托管模式下局部更新脏按钮/脏页面
+	bool canCommitManagedPartialRepaint() const override;  // 判断当前 TabControl 是否可安全做局部提交
+	void commitManagedRepaint() override;                  // 托管收口阶段执行 TabControl 的真正重绘
 };

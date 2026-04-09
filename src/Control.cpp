@@ -1,6 +1,7 @@
 ﻿#include "Control.h"
 #include "SxLog.h"
 #include<assert.h>
+#include "Window.h"
 
 StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
 {
@@ -58,7 +59,7 @@ void Control::setIsVisible(bool show)
 	if (!show)
 	{
 		// 隐藏：擦除自己在屏幕上的内容，并释放快照
-		this->updateBackground();
+		discardBackground();
 		return;
 	}
 
@@ -74,7 +75,7 @@ void Control::onWindowResize()
 		<< SX_T(" -> 丢背景快照 + 标脏", " -> discardSnap + dirty");
 
 	// 自己：丢快照 + 标脏
-	discardBackground();
+	invalidateBackgroundSnapshot();
 	setDirty(true);
 }
 void Control::setLayoutMode(StellarX::LayoutMode layoutMode_)
@@ -103,26 +104,35 @@ StellarX::LayoutMode Control::getLayoutMode() const
 void Control::saveStyle()
 {
 
-	gettextstyle(currentFont); // 获取当前字体样式
-	*currentColor = gettextcolor(); // 获取当前字体颜色
-	*currentBorderColor = getlinecolor(); //保存当前边框颜色
-	getlinestyle(currentLineStyle); //保存当前线型
-	*currentBkColor = getfillcolor(); //保存当前填充色
+	gettextstyle(&currentFont); // 获取当前字体样式
+	currentColor = gettextcolor(); // 获取当前字体颜色
+	currentBorderColor = getlinecolor(); //保存当前边框颜色
+	getlinestyle(&currentLineStyle); //保存当前线型
+	currentBkColor = getfillcolor(); //保存当前填充色
 }
 // 恢复之前保存的绘图状态
 // 在控件绘制完成后调用，恢复全局绘图状态
 void Control::restoreStyle()
 {
-	settextstyle(currentFont); // 恢复默认字体样式
-	settextcolor(*currentColor); // 恢复默认字体颜色
-	setfillcolor(*currentBkColor);
-	setlinestyle(currentLineStyle);
-	setlinecolor(*currentBorderColor);
+	settextstyle(&currentFont); // 恢复默认字体样式
+	settextcolor(currentColor); // 恢复默认字体颜色
+	setfillcolor(currentBkColor);
+	setlinestyle(&currentLineStyle);
+	setlinecolor(currentBorderColor);
 	setfillstyle(BS_SOLID);//恢复填充
 }
 
 void Control::requestRepaint(Control* parent)
 {
+	if (shouldDeferManagedRepaint())
+	{
+		// 托管路径：当前正在 Window 的事件分发阶段，不能立即绘制；
+		// 这里只登记 source，真正的 root 选择由 Window 在 requestManagedRepaint 中完成。
+		if (auto* host = getHostWindow())
+			host->requestManagedRepaint(this);
+		return;
+	}
+
 	// 说明：
 	// - 常规路径：子控件调用 requestRepaint(this->parent)，然后 parent 负责局部重绘（Canvas/TabControl override）
 	// - 兜底路径：如果某个“容器控件”没 override requestRepaint，就会出现 parent==this 的递归风险
@@ -139,7 +149,7 @@ void Control::requestRepaint(Control* parent)
 		return;
 	}
 
-	SX_LOGD("Dirty") << SX_T("请求重绘：id=","requestRepaint: id=") << id << " parent=" << (parent ? parent->getId() : "null");
+	SX_LOG_TRACE("Dirty") << SX_T("请求重绘：id=","requestRepaint: id=") << id << " parent=" << (parent ? parent->getId() : "null");
 
 	if (parent) parent->requestRepaint(parent);   // 交给容器处理（容器可局部重绘）
 	else        onRequestRepaintAsRoot();         // 根兜底
@@ -147,7 +157,16 @@ void Control::requestRepaint(Control* parent)
 
 void Control::onRequestRepaintAsRoot()
 {
-	SX_LOGI("Dirty")
+	if (shouldDeferManagedRepaint())
+	{
+		// 即使已经冒泡到 root，只要还在托管分发期，也不能直接绘制；
+		// 仍然回到 Window 做统一提交。
+		if (auto* host = getHostWindow())
+			host->requestManagedRepaint(this);
+		return;
+	}
+
+	SX_LOG_TRACE("Dirty")
 		<< SX_T("触发根重绘：id=", "onRequestRepaintAsRoot: id=") << id
 		<< SX_T("（从根节点开始重画）", " (root repaint)");
 
@@ -155,6 +174,60 @@ void Control::onRequestRepaintAsRoot()
 	discardBackground();
 	setDirty(true);
 	draw();    // 只有“无父”时才允许立即画，不会被谁覆盖
+}
+
+bool Control::shouldDeferManagedRepaint() const
+{
+	Window* host = getHostWindow();
+	return host && host->isManagedDispatchActive();
+}
+
+// 获取宿主 Window：
+// - 顶层控件由 Window/addDialog 直接注入；
+// - 子控件没有直接注入时，沿 parent 链向上回溯即可。
+Window* Control::getHostWindow() const
+{
+	if (hostWindow)
+		return hostWindow;
+	return parent ? parent->getHostWindow() : nullptr;
+}
+
+// 托管重绘 root 选择规则：
+// - 对于直接挂在 Window 下的控件，root 就是它自己；
+// - 对于嵌套在 Canvas/TabControl/Dialog 内的子控件，沿 parent 向上找到与宿主 Window 同属一棵树的最上层控件。
+Control* Control::getManagedRepaintRoot()
+{
+	Control* root = this;
+	Window* host = getHostWindow();
+	while (root->parent && root->parent->getHostWindow() == host)
+		root = root->parent;
+	return root;
+}
+
+RECT Control::getBoundsRect() const
+{
+	RECT rc{};
+	rc.left = x;
+	rc.top = y;
+	rc.right = x + width;
+	rc.bottom = y + height;
+	return rc;
+}
+
+bool Control::canCommitManagedPartialRepaint() const
+{
+	// 基类默认不承诺自己能安全做局部提交；
+	// 只有 Canvas / TabControl / Dialog 这类“拥有完整背景语义”的 root 才会 override 为 true。
+	return false;
+}
+
+void Control::commitManagedRepaint()
+{
+	if (!show)
+		return;
+	// 基类兜底：如果没有更具体的容器实现，就按根级重绘处理。
+	if (dirty)
+		onRequestRepaintAsRoot();
 }
 
 void Control::saveBackground(int x, int y, int w, int h)
@@ -169,15 +242,15 @@ void Control::saveBackground(int x, int y, int w, int h)
 		{
 			SX_LOGD("Snap") <<SX_T("重新保存背景快照：id=", "saveBackground rebuild: id=") << id << " size=(" << w << "x" << h << ")";
 
-			delete saveBkImage; saveBkImage = nullptr;
+			saveBkImage.reset();
 		}
 	}
 	else
 		SX_LOGD("Snap") << SX_T("保存背景快照：id=", "saveBackground rebuild: id=") << id << " size=(" << w << "x" << h << ")";
-	if (!saveBkImage) saveBkImage = new IMAGE(w, h);
+	if (!saveBkImage) saveBkImage = std::make_unique<IMAGE>(w, h);
 
 	SetWorkingImage(nullptr);                 // ★抓屏幕
-	getimage(saveBkImage, x, y, w, h);
+	getimage(saveBkImage.get(), x, y, w, h);
 	hasSnap = true;
 }
 
@@ -186,7 +259,7 @@ void Control::restBackground()
 	if (!hasSnap || !saveBkImage) return;
 	// 直接回贴屏幕（与抓取一致）
 	SetWorkingImage(nullptr);
-	putimage(saveBkX, saveBkY, saveBkImage);
+	putimage(saveBkX, saveBkY, saveBkImage.get());
 }
 
 void Control::discardBackground()
@@ -195,14 +268,21 @@ void Control::discardBackground()
 	{
 		restBackground();
 		SX_LOGD("Snap") << SX_T("丢弃背景快照：id=","discardBackground: id=") << id << " hasSnap=" << (hasSnap ? 1 : 0);
-		delete saveBkImage;
-		saveBkImage = nullptr;
+		saveBkImage.reset();
 	}
 	hasSnap = false; saveWidth = saveHeight = 0;
 }
 
-void Control::updateBackground()
+void Control::invalidateBackgroundSnapshot()
 {
-	restBackground();
-	discardBackground();
+	if (saveBkImage)
+	{
+		SX_LOGD("Snap") << SX_T("作废背景快照：id=", "invalidateBackgroundSnapshot: id=") << id
+			<< " hasSnap=" << (hasSnap ? 1 : 0);
+		saveBkImage.reset();
+	}
+	hasSnap = false;
+	saveBkX = saveBkY = 0;
+	saveWidth = saveHeight = 0;
 }
+
