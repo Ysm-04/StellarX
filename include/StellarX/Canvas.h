@@ -37,17 +37,27 @@ protected:
 	// 清除所有子控件
 	void clearAllControls();
 public:
+	// 默认构造：创建一个基础矩形容器
 	Canvas();
+	// 指定初始位置和尺寸构造容器
 	Canvas(int x, int y, int width, int height);
 	~Canvas() {}
 
+	// 修改容器运行态 X，并同步重算全部受管理子控件的世界坐标
 	void setX(int x)override;
+	// 修改容器运行态 Y，并同步重算全部受管理子控件的世界坐标
 	void setY(int y)override;
+	// 修改容器运行态宽度，并同步重算全部受管理子控件的世界坐标
+	void setWidth(int width) override;
+	// 修改容器运行态高度，并同步重算全部受管理子控件的世界坐标
+	void setHeight(int height) override;
 
 	//绘制容器及其子控件
 	void draw() override;
 	bool handleEvent(const ExMessage& msg) override;
-	//添加控件
+	// 递归清理子树中的 hover / tooltip / 临时按下态，不把 Canvas 自己升级为整块重绘源。
+	bool clearTransientMouseState() override;
+	// 添加一个由 Canvas 托管的子控件
 	void addControl(std::unique_ptr<Control> control);
 	//设置容器样式
 	void setShape(StellarX::ControlShape shape);
@@ -67,13 +77,21 @@ public:
 	void onWindowResize() override;
 	// 托管模式下登记为 root；非托管模式下走局部或根级重绘
 	void requestRepaint(Control* parent)override;    
+	bool hasManagedDirtySubtree() const override;
+	RECT getManagedRepaintCoverageRect() const override;
+	RECT getManagedRepaintPersistentCoverageRect() const override;
 	// 判断当前 Canvas 是否可安全做局部提交
 	bool canCommitManagedPartialRepaint() const override; 
 	// 托管收口阶段执行 Canvas 的真正重绘
 	void commitManagedRepaint() override;                 
-	//获取子控件列表
+	// 获取直接子控件列表
 	std::vector<std::unique_ptr<Control>>& getControls() { return controls; }
+protected:
+	// 统一解算后，按当前运行态矩形把所有受管理子控件重新映射到新的世界坐标。
+	void applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect) override;
 private:
+	// 容器自己的几何变化后，需要统一刷新所有子控件的运行态矩形。
+	void relayoutManagedChildren();
 	//用来检查对话框是否模态,此控件不做实现
 	bool model() const override { return false; };
 };

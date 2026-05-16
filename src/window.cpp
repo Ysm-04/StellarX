@@ -33,6 +33,19 @@ static bool SxRectsIntersect(const RECT& a, const RECT& b)
 		a.top < b.bottom && a.bottom > b.top;
 }
 
+static RECT SxUnionRect(const RECT& a, const RECT& b)
+{
+	RECT out{};
+	out.left = (std::min)(a.left, b.left);
+	out.top = (std::min)(a.top, b.top);
+	out.right = (std::max)(a.right, b.right);
+	out.bottom = (std::max)(a.bottom, b.bottom);
+	return out;
+}
+
+static void collectManagedControlOverlays(const std::vector<std::unique_ptr<Control>>& controls,
+	Control* repaintRoot, const RECT& coverage, std::vector<Control*>& overlays);
+
 bool Window::isManagedDispatchActive() const
 {
 	return managedDispatchActive;
@@ -50,24 +63,40 @@ void Window::requestManagedRepaint(Control* source)
 {
 	if (!source)
 		return;
+	requestManagedRepaint(source, source->getManagedRepaintCoverageRect());
+}
+
+void Window::requestManagedRepaint(Control* source, const RECT& previousCoverage)
+{
+	if (!source)
+		return;
 
 	managedSceneDirty = true;
 	Control* root = source->getManagedRepaintRoot();
 	if (!root)
 		return;
 
-	RECT coverage = root->getBoundsRect();
+	RECT coverage = previousCoverage;
 	if (root->canCommitManagedPartialRepaint())
-		coverage = source->getBoundsRect();
+	{
+		// 对支持局部提交的 root，coverage 不能再盯着最深处的 source；
+		// 否则像“三层 Canvas 里的按钮变色”这种情况，只会登记成一个很小的叶子矩形，
+		// 顶层 root 提交时既容易漏掉那条直接脏分支，也会低估后续 overlay 补画范围。
+		Control* branch = source->getManagedRepaintDirectBranch(root);
+		coverage = SxUnionRect(coverage, branch ? branch->getManagedRepaintCoverageRect() : source->getManagedRepaintCoverageRect());
+		const RECT sourceCoverage = source->getManagedRepaintCoverageRect();
+		coverage = SxUnionRect(coverage, sourceCoverage);
+	}
+	else
+	{
+		coverage = SxUnionRect(coverage, root->getManagedRepaintCoverageRect());
+	}
 
 	for (auto& item : managedRepaintItems)
 	{
 		if (item.root == root)
 		{
-			item.coverage.left = (std::min)(item.coverage.left, coverage.left);
-			item.coverage.top = (std::min)(item.coverage.top, coverage.top);
-			item.coverage.right = (std::max)(item.coverage.right, coverage.right);
-			item.coverage.bottom = (std::max)(item.coverage.bottom, coverage.bottom);
+			item.coverage = SxUnionRect(item.coverage, coverage);
 			return;
 		}
 	}
@@ -76,6 +105,43 @@ void Window::requestManagedRepaint(Control* source)
 	item.root = root;
 	item.coverage = coverage;
 	managedRepaintItems.push_back(item);
+}
+
+void Window::collectDirtyRootsForManagedRepaint()
+{
+	auto isAlreadyTracked = [this](Control* root)
+		{
+			for (const auto& item : managedRepaintItems)
+			{
+				if (item.root == root)
+					return true;
+			}
+			return false;
+		};
+
+	auto collectRoot = [this, &isAlreadyTracked](Control* root)
+		{
+			if (!root || !root->IsVisible())
+				return;
+			if (!root->hasManagedDirtySubtree())
+				return;
+			if (isAlreadyTracked(root))
+				return;
+
+			// 事件回调可以修改另一个顶层 root 的控件，例如右侧页签按钮更新左侧状态 Label。
+			// 这种跨 root 改脏不会经过当前事件分发链的 requestManagedRepaint()，
+			// 因此在 flush 前补登记为 root 级重绘，保证本轮事件尾统一提交。
+			ManagedRepaintItem item;
+			item.root = root;
+			item.coverage = root->getManagedRepaintCoverageRect();
+			managedRepaintItems.push_back(item);
+			managedSceneDirty = true;
+		};
+
+	for (auto& control : controls)
+		collectRoot(control.get());
+	for (auto& dialog : dialogs)
+		collectRoot(dialog.get());
 }
 
 // 清空本轮托管重绘状态；通常在 flush/全场景重绘/resize 收口后调用
@@ -138,29 +204,118 @@ void Window::flushManagedRepaint()
 		return;
 
 	BeginBatchDraw();
-	std::vector<Control*> overlayDialogs;
+	auto unionCoverage = [](RECT& lhs, const RECT& rhs)
+		{
+			lhs.left = (std::min)(lhs.left, rhs.left);
+			lhs.top = (std::min)(lhs.top, rhs.top);
+			lhs.right = (std::max)(lhs.right, rhs.right);
+			lhs.bottom = (std::max)(lhs.bottom, rhs.bottom);
+		};
 
-	for (auto& item : managedRepaintItems)
-		collectManagedDialogOverlays(item.root, item.coverage, overlayDialogs);
+	auto redrawOverlayUnit = [](Control* unit)
+		{
+			if (!unit || !unit->IsVisible())
+				return;
+			// overlay 补画不是“沿用旧快照再贴回去”，而是重新站到当前顶层场景上合成一遍。
+			unit->invalidateBackgroundSnapshot();
+			unit->setDirty(true);
+			unit->draw();
+		};
+
+	auto processManagedRoot = [&](Control* root, const RECT& initialCoverage)
+		{
+			if (!root || !root->IsVisible())
+				return;
+
+			root->commitManagedRepaint();
+			RECT workingCoverage = initialCoverage;
+
+			if (root->canCommitManagedPartialRepaint())
+			{
+				// 当前 Canvas / TabControl 的局部提交会在内部按兄弟覆盖关系继续扩张实际写屏区域，
+				// 但 commitManagedRepaint() 还没有返回“本轮实际 coverage”的接口。
+				// 为避免 Window 仍按初始叶子区域判断，漏补上层普通控件或 Dialog，
+				// 这里对可局部提交的 root 使用 root 当前覆盖范围做保守兜底。
+				// 这只扩大“上层是否需要补画”的判断，不改变 root 本身的局部提交策略。
+				unionCoverage(workingCoverage, root->getManagedRepaintCoverageRect());
+			}
+
+			size_t controlStartIdx = controls.size();
+			for (size_t i = 0; i < controls.size(); ++i)
+			{
+				if (controls[i].get() == root)
+				{
+					controlStartIdx = i + 1;
+					break;
+				}
+			}
+
+			// 顶层普通控件的 overlay 补画必须是“传递式”的：
+			// 如果 A 重画后把上层按钮 B 也重画出来，而 B 自己又伸进更上层的 C，
+			// 那么 C 也必须继续补画回来，而不能只看最初 root 的 coverage 一跳收集。
+			if (controlStartIdx < controls.size())
+			{
+				for (size_t i = controlStartIdx; i < controls.size(); ++i)
+				{
+					Control* current = controls[i].get();
+					if (!current || !current->IsVisible())
+						continue;
+					const RECT currentCoverage = current->getManagedRepaintCoverageRect();
+					if (!SxRectsIntersect(currentCoverage, workingCoverage))
+						continue;
+
+					redrawOverlayUnit(current);
+					unionCoverage(workingCoverage, current->getManagedRepaintCoverageRect());
+				}
+			}
+
+			size_t dialogStartIdx = 0;
+			for (size_t i = 0; i < dialogs.size(); ++i)
+			{
+				if (dialogs[i].get() == root)
+				{
+					dialogStartIdx = i + 1;
+					break;
+				}
+			}
+
+			// Dialog 永远位于普通顶层控件之上，也要使用扩张后的 coverage 做传递式补画。
+			for (size_t i = dialogStartIdx; i < dialogs.size(); ++i)
+			{
+				Control* dialog = dialogs[i].get();
+				if (!dialog || !dialog->IsVisible())
+					continue;
+				const RECT dialogCoverage = dialog->getManagedRepaintCoverageRect();
+				if (!SxRectsIntersect(dialogCoverage, workingCoverage))
+					continue;
+
+				redrawOverlayUnit(dialog);
+				unionCoverage(workingCoverage, dialog->getManagedRepaintCoverageRect());
+			}
+		};
 
 	for (auto& control : controls)
 	{
 		for (auto& item : managedRepaintItems)
 		{
-			if (item.root == control.get() && item.root && item.root->IsVisible())
+			if (item.root == control.get())
 			{
-				item.root->commitManagedRepaint();
+				processManagedRoot(item.root, item.coverage);
 				break;
 			}
 		}
 	}
 
-	for (auto& dialog : overlayDialogs)
+	for (auto& dialog : dialogs)
 	{
-		if (!dialog || !dialog->IsVisible())
-			continue;
-		dialog->setDirty(true);
-		dialog->draw();
+		for (auto& item : managedRepaintItems)
+		{
+			if (item.root == dialog.get())
+			{
+				processManagedRoot(item.root, item.coverage);
+				break;
+			}
+		}
 	}
 
 	EndBatchDraw();
@@ -176,6 +331,54 @@ void Window::dispatchSyntheticMouseMoveToControls(short x, short y)
 	mm.y = y;
 	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
 		(*it)->handleEvent(mm);
+}
+
+void Window::syncMouseStateAfterOverlayChanged(OverlayMouseSyncMode mode)
+{
+	short syncX = -32768;
+	short syncY = -32768;
+
+	if (mode == OverlayMouseSyncMode::RestoreAtCursor)
+	{
+		POINT pt{};
+		if (!GetCursorPos(&pt))
+			return;
+		if (!ScreenToClient(this->hWnd, &pt))
+			return;
+		syncX = static_cast<short>(pt.x);
+		syncY = static_cast<short>(pt.y);
+	}
+
+	// synthetic move 仍走既有事件路径，但必须临时进入托管分发模式：
+	// 控件只更新 hover / tooltip / click 等瞬时状态并登记重绘，真正绘制留到事件尾统一收口。
+	const bool oldManagedDispatchActive = managedDispatchActive;
+	managedDispatchActive = true;
+	dispatchSyntheticMouseMoveToControls(syncX, syncY);
+	managedDispatchActive = oldManagedDispatchActive;
+}
+
+void Window::sweepClosedDialogs()
+{
+	for (auto it = dialogs.begin(); it != dialogs.end();)
+	{
+		Dialog* dialog = dynamic_cast<Dialog*>(it->get());
+		if (!dialog || dialog->IsVisible())
+		{
+			++it;
+			continue;
+		}
+
+		// Dialog::Close() 只负责关闭语义和结果回调；
+		// 真正的快照回贴、子控件清理和对象移除必须放到事件安全点完成，
+		// 避免在 dialogs 正被倒序分发或绘制遍历时 erase 导致迭代器失效。
+		if (dialog->pendingCleanup && !dialog->isCleaning)
+			dialog->performDelayedCleanup();
+
+		if (!dialog->pendingCleanup && !dialog->isCleaning)
+			it = dialogs.erase(it);
+		else
+			++it;
+	}
 }
 
 /**
@@ -210,6 +413,44 @@ void Window::collectManagedDialogOverlays(Control* repaintRoot, const RECT& cove
 		{
 			if (std::find(overlays.begin(), overlays.end(), dialog) == overlays.end())
 				overlays.push_back(dialog);
+		}
+	}
+}
+
+/**
+ * collectManagedControlOverlays(repaintRoot, coverage, overlays)
+ * 作用：找出在本轮 root 提交后，需要重新补画回上层的普通顶层控件。
+ * 规则：
+ *  - 只处理 Window::controls 这一层的直接兄弟；
+ *  - 从 repaintRoot 在 controls 中的位置之后开始收集；
+ *  - 仅收集可见且与 coverage 相交的控件。
+ */
+static void collectManagedControlOverlays(const std::vector<std::unique_ptr<Control>>& controls,
+	Control* repaintRoot, const RECT& coverage, std::vector<Control*>& overlays)
+{
+	size_t startIdx = controls.size();
+	for (size_t i = 0; i < controls.size(); ++i)
+	{
+		if (controls[i].get() == repaintRoot)
+		{
+			startIdx = i + 1;
+			break;
+		}
+	}
+
+	if (startIdx > controls.size())
+		return;
+
+	for (size_t i = startIdx; i < controls.size(); ++i)
+	{
+		Control* control = controls[i].get();
+		if (!control || !control->IsVisible())
+			continue;
+
+		if (SxRectsIntersect(control->getBoundsRect(), coverage))
+		{
+			if (std::find(overlays.begin(), overlays.end(), control) == overlays.end())
+				overlays.push_back(control);
 		}
 	}
 }
@@ -615,25 +856,56 @@ int Window::runEventLoop()
 					// 会残留 hover。这里补一条落在窗口外的合成移动，只用于清理底层 hover，
 					// 不会让底层控件重新命中。
 					if (msg.message == WM_MOUSEMOVE)
-						dispatchSyntheticMouseMoveToControls(-32768, -32768);
+						syncMouseStateAfterOverlayChanged(OverlayMouseSyncMode::ClearBehindOverlay);
 					break;
 				}
 			}
 			if (!consume)
 			{
-				for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+				Control* firstConsumer = nullptr;
+				if (msg.message == WM_MOUSEMOVE)
 				{
-					Control* current = it->get();
-					consume = current->handleEvent(msg);
-					if (consume)
+					// 顶层普通控件的 hover/tooltip 清理规则：
+					// - 第一个命中的兄弟分支收到真实 WM_MOUSEMOVE；
+					// - 后续兄弟不再重新命中，只清理旧 hover / tooltip 等瞬时鼠标状态。
+					for (auto it = controls.rbegin(); it != controls.rend(); ++it)
 					{
-						if (!SxIsNoisyMsg(msg.message))
-							SX_LOGD("Event") << SX_T("事件被控件处理：", "Event consumed by control: ")
-							<< SxMsgName(msg.message)
-							<< SX_T(" id=", " id=") << current->getId();
-						break;
+						Control* current = it->get();
+						if (!consume)
+						{
+							consume = current->handleEvent(msg);
+							if (consume)
+								firstConsumer = current;
+						}
+						else
+						{
+							// 后续兄弟只清理 hover / press / tooltip 等临时鼠标状态；
+							// 这条路径不会再走控件自己的 handleEvent()，所以必须在顶层补登记重绘。
+							// 先记录旧 coverage，避免 Tooltip 隐藏后丢失原悬浮层范围。
+							const RECT previousCoverage = current->getManagedRepaintCoverageRect();
+							if (current->clearTransientMouseState())
+								requestManagedRepaint(current, previousCoverage);
+						}
 					}
 				}
+				else
+				{
+					for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+					{
+						Control* current = it->get();
+						consume = current->handleEvent(msg);
+						if (consume)
+						{
+							firstConsumer = current;
+							break;
+						}
+					}
+				}
+
+				if (firstConsumer && !SxIsNoisyMsg(msg.message))
+					SX_LOGD("Event") << SX_T("事件被控件处理：", "Event consumed by control: ")
+					<< SxMsgName(msg.message)
+					<< SX_T(" id=", " id=") << firstConsumer->getId();
 			}
 			managedDispatchActive = false;
 		}
@@ -655,17 +927,9 @@ int Window::runEventLoop()
 			{
 				// 对话框关闭后，需要手动合成一个鼠标移动消息并分发给所有普通控件，
 				// 以便它们能及时更新悬停状态（hover），否则悬停状态可能保持错误状态。
-				// 先把当前鼠标位置转换为客户区坐标，并合成一次 WM_MOUSEMOVE，先分发给控件更新 hover 状态
+				// 先按当前鼠标位置刷新底层控件状态，真正绘制仍由后续全场景重绘兜底。
 				SX_LOGD("Event") << SX_T("对话框关闭，合成WM_MOUSEMOVE已下发", "Dialog closed; synthetic WM_MOUSEMOVE dispatched");
-				POINT pt;
-				if (GetCursorPos(&pt))
-				{
-					ScreenToClient(this->hWnd, &pt);
-					// 只分发给 window 层控件（因为 dialog 已经关闭或即将关闭）
-					managedDispatchActive = true;
-					dispatchSyntheticMouseMoveToControls((short)pt.x, (short)pt.y);
-					managedDispatchActive = false;
-				}
+				syncMouseStateAfterOverlayChanged(OverlayMouseSyncMode::RestoreAtCursor);
 				dialogClose = false; // 重置标志
 			}
 
@@ -788,7 +1052,12 @@ int Window::runEventLoop()
 
 		// 普通输入事件收口：只在没有 resize / 对话框开关这种全局变化时，才提交本轮托管重绘。
 		if (!needResizeDirty && !dialogOpen && !dialogClose)
+		{
+			collectDirtyRootsForManagedRepaint();
 			flushManagedRepaint();
+		}
+
+		sweepClosedDialogs();
 
 		// 轻微睡眠，削峰填谷（不阻塞拖拽体验）
 		Sleep(10);
@@ -981,72 +1250,12 @@ void Window::scheduleResizeFromModal(int w, int h)
 
 void Window::adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const int finalW)
 {
-	int origParentW = this->localwidth;
-	int origParentH = this->localheight;
-	if (c->getLayoutMode() == StellarX::LayoutMode::AnchorToEdges)
-	{
-		if ((StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2())
-			|| (StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2()))
-		{
-			int origRightDist = origParentW - (c->getLocalX() + c->getLocalWidth());
-			int newWidth = finalW - c->getLocalX() - origRightDist;
-			c->setWidth(newWidth);
-			// 左侧距离固定，ctrl->x 保持为 localx 相对窗口左侧（父容器为窗口，偏移0）
-			c->setX(c->getLocalX());
-		}
-		else if ((StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
-			|| (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2())
-			|| (StellarX::Anchor::Left == c->getAnchor_1() && StellarX::Anchor::Left == c->getAnchor_2()))
-		{
-			// 仅左锚定：宽度固定不变
-			c->setX(c->getLocalX());
-			c->setWidth(c->getLocalWidth());
-		}
-		else if ((StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
-			|| (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2())
-			|| (StellarX::Anchor::Right == c->getAnchor_1() && StellarX::Anchor::Right == c->getAnchor_2()))
-		{
-			int origRightDist = origParentW - (c->getLocalX() + c->getLocalWidth());
-			c->setWidth(c->getLocalWidth()); // 宽度不变
-			c->setX(finalW - origRightDist - c->getWidth());
-		}
-		else if (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
-		{
-			c->setX(c->getLocalX());
-			c->setWidth(c->getLocalWidth());
-		}
-
-		if ((StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2())
-			|| (StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2()))
-		{
-			// 上下锚定：高度随窗口变化
-			int origBottomDist = origParentH - (c->getLocalY() + c->getLocalHeight());
-			int newHeight = finalH - c->getLocalY() - origBottomDist;
-			c->setHeight(newHeight);
-			c->setY(c->getLocalY());
-		}
-		else if ((StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
-			|| (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2())
-			|| (StellarX::Anchor::Top == c->getAnchor_1() && StellarX::Anchor::Top == c->getAnchor_2()))
-		{
-			c->setY(c->getLocalY());
-			c->setHeight(c->getLocalHeight());
-		}
-		else if ((StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::NoAnchor == c->getAnchor_2())
-			|| (StellarX::Anchor::NoAnchor == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2())
-			|| (StellarX::Anchor::Bottom == c->getAnchor_1() && StellarX::Anchor::Bottom == c->getAnchor_2()))
-		{
-			int origBottomDist = origParentH - (c->getLocalY() + c->getLocalHeight());
-			c->setHeight(c->getLocalHeight());
-			c->setY(finalH - origBottomDist - c->getHeight());
-		}
-		else
-		{
-			// 垂直无锚点：默认为顶部定位，高度固定
-			c->setY(c->getLocalY());
-			c->setHeight(c->getLocalHeight());
-		}
-	}
+	// 顶层窗口布局收口：
+	// 先用统一解算器求出控件新的运行态矩形，再通知控件“外部环境已变化”。
+	// onWindowResize() 负责快照失效/标脏，不再承担布局公式。
+	const StellarX::ResolvedLayoutRect rect =
+		c->resolveLayoutRect(this->localwidth, this->localheight, 0, 0, finalW, finalH);
+	c->applyResolvedLayoutRect(rect);
 	c->onWindowResize();
 }
 

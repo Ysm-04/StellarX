@@ -2,6 +2,175 @@
 #include "SxLog.h"
 #include<assert.h>
 #include "Window.h"
+#include <algorithm>
+
+namespace
+{
+	// 单轴解算后的临时结果：只描述“在父局部坐标系中的位置和尺寸”。
+	struct LayoutAxisResult
+	{
+		int pos = 0;
+		int size = 0;
+	};
+
+	int ClampNonNegative(int value)
+	{
+		return value < 0 ? 0 : value;
+	}
+
+	int RoundDiv(long long numerator, long long denominator)
+	{
+		if (denominator == 0)
+			return 0;
+		if (numerator >= 0)
+			return static_cast<int>((numerator + denominator / 2) / denominator);
+		return -static_cast<int>(((-numerator) + denominator / 2) / denominator);
+	}
+
+	// 旧接口兼容层：
+	// 将 setAnchor(a1, a2) 的双锚点输入映射为单轴 LayoutSpec。
+	// 这里只负责“从旧输入翻译成新模型”，不直接参与后续求解。
+	StellarX::AxisLayoutSpec BuildLegacyAxisSpec(StellarX::Anchor anchor1, StellarX::Anchor anchor2,
+		StellarX::Anchor startAnchor, StellarX::Anchor endAnchor)
+	{
+		StellarX::AxisLayoutSpec spec{};
+		spec.anchorStart = (anchor1 == startAnchor || anchor2 == startAnchor);
+		spec.anchorEnd = (anchor1 == endAnchor || anchor2 == endAnchor);
+
+		if (spec.anchorStart && spec.anchorEnd)
+		{
+			spec.sizePolicy = StellarX::AxisSizePolicy::Stretch;
+			spec.alignPolicy = StellarX::AxisAlignPolicy::Start;
+		}
+		else if (spec.anchorEnd)
+		{
+			spec.sizePolicy = StellarX::AxisSizePolicy::FixedSize;
+			spec.alignPolicy = StellarX::AxisAlignPolicy::End;
+		}
+		else
+		{
+			spec.sizePolicy = StellarX::AxisSizePolicy::FixedSize;
+			spec.alignPolicy = StellarX::AxisAlignPolicy::Start;
+		}
+
+		return spec;
+	}
+
+	// 单轴统一解算器：
+	// 输入设计态父尺寸、当前父尺寸、子控件设计态位置/尺寸，以及当前轴策略，
+	// 输出该轴在“父局部坐标系”下的运行态位置与尺寸。
+	LayoutAxisResult ResolveAxis(int parentDesignSize, int parentCurrentSize, int childDesignPos, int childDesignSize,
+		const StellarX::AxisLayoutSpec& spec, bool allowStretch)
+	{
+		LayoutAxisResult result{};
+		const int startMargin = childDesignPos;
+		const int endMargin = parentDesignSize - (childDesignPos + childDesignSize);
+
+		const bool wantsStretch = spec.sizePolicy == StellarX::AxisSizePolicy::Stretch;
+		const bool canStretch = allowStretch && spec.anchorStart && spec.anchorEnd;
+
+		if (wantsStretch && canStretch)
+		{
+			// 双边锚定 + Stretch：
+			// 保持设计态中的起边距和终边距，让尺寸随父容器变化。
+			result.pos = startMargin;
+			result.size = ClampNonNegative(parentCurrentSize - startMargin - endMargin);
+			return result;
+		}
+
+		// 其余情况一律按固定尺寸处理；即便调用方请求 Stretch，
+		// 只要锚点条件或控件能力边界不满足，也会在这里自然降级为 FixedSize。
+		result.size = ClampNonNegative(childDesignSize);
+
+		if (spec.anchorStart && !spec.anchorEnd)
+		{
+			// 仅锚定起边：保持起边距，尺寸不变。
+			result.pos = startMargin;
+			return result;
+		}
+
+		if (!spec.anchorStart && spec.anchorEnd)
+		{
+			// 仅锚定终边：保持终边距，尺寸不变。
+			result.pos = parentCurrentSize - endMargin - result.size;
+			return result;
+		}
+
+		if (spec.anchorStart && spec.anchorEnd)
+		{
+			// 双边锚定但尺寸固定：
+			// 位置由 alignPolicy 决定，用于表达“只位移、不拉伸”的场景。
+			switch (spec.alignPolicy)
+			{
+			case StellarX::AxisAlignPolicy::End:
+				result.pos = parentCurrentSize - endMargin - result.size;
+				break;
+			case StellarX::AxisAlignPolicy::Center:
+				// 保持相对父容器中心的偏移关系。
+				result.pos = childDesignPos + (parentCurrentSize - parentDesignSize) / 2;
+				break;
+			case StellarX::AxisAlignPolicy::Proportional:
+			{
+				// 保持设计态中的相对位置比例。
+				// 注意：这里只调整位置，不改变尺寸。
+				const int designTravel = parentDesignSize - result.size;
+				const int currentTravel = parentCurrentSize - result.size;
+				if (designTravel <= 0 || currentTravel <= 0)
+					result.pos = startMargin;
+				else
+					result.pos = RoundDiv(static_cast<long long>(startMargin) * currentTravel, designTravel);
+				break;
+			}
+			case StellarX::AxisAlignPolicy::Start:
+			default:
+				result.pos = startMargin;
+				break;
+			}
+			return result;
+		}
+
+		// 无锚点：退回设计态位置，尺寸保持设计值。
+		result.pos = childDesignPos;
+		return result;
+	}
+
+	const char* SxAxisName(bool horizontal)
+	{
+		return horizontal ? "X" : "Y";
+	}
+
+	void LogAxisDowngradeIfNeeded(const std::string& id, bool horizontal,
+		const StellarX::AxisLayoutSpec& spec, bool allowStretch)
+	{
+		if (spec.sizePolicy != StellarX::AxisSizePolicy::Stretch)
+			return;
+
+		if (!spec.anchorStart || !spec.anchorEnd)
+		{
+			SX_LOGD("Layout")
+				<< SX_T("布局降级：id=", "layout downgrade: id=") << id
+				<< SX_T(" axis=", " axis=") << SxAxisName(horizontal)
+				<< SX_T(" 原因=Stretch 但未同时锚定起止边", " reason=stretch without dual anchors");
+			return;
+		}
+
+		if (!allowStretch)
+		{
+			SX_LOGD("Layout")
+				<< SX_T("能力边界拦截：id=", "layout capability intercept: id=") << id
+				<< SX_T(" axis=", " axis=") << SxAxisName(horizontal)
+				<< SX_T(" 原因=当前控件禁止该轴 Stretch", " reason=stretch disabled by capability");
+		}
+	}
+
+	void ActivateExplicitLayoutSpecMode(StellarX::LayoutMode& mode)
+	{
+		// 新公开布局 API 明确属于“按边约束解算”的语义层。
+		// 一旦调用，说明外部希望控件进入统一锚定布局模型，
+		// 因此直接切换到 AnchorToEdges，避免出现“策略已设但 layoutMode 仍是 Fixed”的半失效状态。
+		mode = StellarX::LayoutMode::AnchorToEdges;
+	}
+}
 
 StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
 {
@@ -86,7 +255,62 @@ void Control::setAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2)
 {
 	this->anchor_1 = anchor_1;
 	this->anchor_2 = anchor_2;
+	// 旧 API 只作为兼容输入层存在：
+	// 这里把历史上的 anchor_1 / anchor_2 映射为新的水平/垂直轴布局规格，
+	// 后续统一解算全部以 layoutSpec 为准。
+	this->layoutSpec.horizontal = BuildLegacyAxisSpec(anchor_1, anchor_2, StellarX::Anchor::Left, StellarX::Anchor::Right);
+	this->layoutSpec.vertical = BuildLegacyAxisSpec(anchor_1, anchor_2, StellarX::Anchor::Top, StellarX::Anchor::Bottom);
 }
+void Control::setHorizontalLayoutSpec(const StellarX::AxisLayoutSpec& spec)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.horizontal = spec;
+}
+
+void Control::setVerticalLayoutSpec(const StellarX::AxisLayoutSpec& spec)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.vertical = spec;
+}
+
+void Control::setHorizontalAnchors(bool left, bool right)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.horizontal.anchorStart = left;
+	this->layoutSpec.horizontal.anchorEnd = right;
+}
+
+void Control::setVerticalAnchors(bool top, bool bottom)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.vertical.anchorStart = top;
+	this->layoutSpec.vertical.anchorEnd = bottom;
+}
+
+void Control::setHorizontalSizePolicy(StellarX::AxisSizePolicy policy)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.horizontal.sizePolicy = policy;
+}
+
+void Control::setVerticalSizePolicy(StellarX::AxisSizePolicy policy)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.vertical.sizePolicy = policy;
+}
+
+void Control::setHorizontalAlignPolicy(StellarX::AxisAlignPolicy policy)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.horizontal.alignPolicy = policy;
+}
+
+void Control::setVerticalAlignPolicy(StellarX::AxisAlignPolicy policy)
+{
+	ActivateExplicitLayoutSpecMode(this->layoutMode);
+	this->layoutSpec.vertical.alignPolicy = policy;
+}
+
 StellarX::Anchor Control::getAnchor_1() const
 {
 	return this->anchor_1;
@@ -98,6 +322,129 @@ StellarX::Anchor Control::getAnchor_2() const
 StellarX::LayoutMode Control::getLayoutMode() const
 {
 	return this->layoutMode;
+}
+StellarX::AxisLayoutSpec Control::getHorizontalLayoutSpec() const
+{
+	return layoutSpec.horizontal;
+}
+
+StellarX::AxisLayoutSpec Control::getVerticalLayoutSpec() const
+{
+	return layoutSpec.vertical;
+}
+
+const StellarX::LayoutSpec& Control::getLayoutSpec() const
+{
+	return layoutSpec;
+}
+
+const StellarX::LayoutCapability& Control::getLayoutCapability() const
+{
+	return layoutCapability;
+}
+
+void Control::setX(int x)
+{
+	this->x = x;
+	dirty = true;
+}
+
+void Control::setY(int y)
+{
+	this->y = y;
+	dirty = true;
+}
+
+void Control::setWidth(int width)
+{
+	this->width = width;
+	dirty = true;
+}
+
+void Control::setHeight(int height)
+{
+	this->height = height;
+	dirty = true;
+}
+
+bool Control::clearTransientMouseState()
+{
+	// 基类默认没有 hover / tooltip / 临时按下态等鼠标瞬时状态。
+	// 具体控件若需要在“未收到本次 WM_MOUSEMOVE”时做清理，重写此接口即可。
+	return false;
+}
+
+void Control::commitCurrentGeometryAsDesignRect()
+{
+	// 该接口是“显式提交新的设计基线”的唯一入口之一。
+	// 普通布局解算、父容器重排、窗口 resize 均不得自动回写 local*，
+	// 否则会导致设计基线漂移，后续解算越来越不稳定。
+	SX_LOGD("Layout")
+		<< SX_T("提交设计基线：id=", "commit design rect: id=") << id
+		<< SX_T(" world=(", " world=(") << x << "," << y << "," << width << "," << height << ")"
+		<< SX_T(" parentLocalBefore=(", " parentLocalBefore=(")
+		<< localx << "," << localy << "," << localWidth << "," << localHeight << ")";
+	localx = parent ? (x - parent->getX()) : x;
+	localy = parent ? (y - parent->getY()) : y;
+	localWidth = width;
+	localHeight = height;
+	SX_LOGD("Layout")
+		<< SX_T("提交设计基线完成：id=", "commit design rect done: id=") << id
+		<< SX_T(" parentLocalAfter=(", " parentLocalAfter=(")
+		<< localx << "," << localy << "," << localWidth << "," << localHeight << ")";
+}
+
+StellarX::ResolvedLayoutRect Control::resolveLayoutRect(int parentDesignW, int parentDesignH,
+	int parentWorldX, int parentWorldY, int parentCurrentW, int parentCurrentH) const
+{
+	StellarX::ResolvedLayoutRect rect{};
+
+	if (layoutMode != StellarX::LayoutMode::AnchorToEdges)
+	{
+		// 非锚点布局模式：直接使用设计态矩形，再映射到当前世界坐标。
+		rect.localX = localx;
+		rect.localY = localy;
+		rect.width = localWidth;
+		rect.height = localHeight;
+		rect.worldX = parentWorldX + rect.localX;
+		rect.worldY = parentWorldY + rect.localY;
+		return rect;
+	}
+
+	// 第 1 层：先在父局部坐标系内分别解算水平轴和垂直轴。
+	LogAxisDowngradeIfNeeded(id, true, layoutSpec.horizontal, layoutCapability.allowStretchX);
+	LogAxisDowngradeIfNeeded(id, false, layoutSpec.vertical, layoutCapability.allowStretchY);
+	const LayoutAxisResult horizontal = ResolveAxis(parentDesignW, parentCurrentW, localx, localWidth,
+		layoutSpec.horizontal, layoutCapability.allowStretchX);
+	const LayoutAxisResult vertical = ResolveAxis(parentDesignH, parentCurrentH, localy, localHeight,
+		layoutSpec.vertical, layoutCapability.allowStretchY);
+
+	// 第 2 层：把父局部矩形映射到世界坐标。
+	rect.localX = horizontal.pos;
+	rect.localY = vertical.pos;
+	rect.width = horizontal.size;
+	rect.height = vertical.size;
+	rect.worldX = parentWorldX + rect.localX;
+	rect.worldY = parentWorldY + rect.localY;
+	return rect;
+}
+
+void Control::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
+{
+	// 默认实现只应用运行态世界矩形。
+	// 若某个控件还需要在应用后继续刷新内部布局，可重写此函数。
+	applyRuntimeRectDirect(rect.worldX, rect.worldY, rect.width, rect.height);
+}
+
+void Control::applyRuntimeRectDirect(int worldX, int worldY, int width, int height)
+{
+	// 最底层运行态赋值入口：
+	// 只修改当前世界坐标和运行态尺寸，不触碰设计基线 local*。
+	this->x = worldX;
+	this->y = worldY;
+	this->width = width;
+	this->height = height;
+	dirty = true;
 }
 // 保存当前的绘图状态（字体、颜色、线型等）
 // 在控件绘制前调用，确保不会影响全局绘图状态
@@ -204,6 +551,17 @@ Control* Control::getManagedRepaintRoot()
 	return root;
 }
 
+Control* Control::getManagedRepaintDirectBranch(Control* root)
+{
+	if (!root)
+		return nullptr;
+
+	Control* branch = this;
+	while (branch->parent && branch->parent != root)
+		branch = branch->parent;
+	return branch;
+}
+
 RECT Control::getBoundsRect() const
 {
 	RECT rc{};
@@ -214,11 +572,32 @@ RECT Control::getBoundsRect() const
 	return rc;
 }
 
+RECT Control::getManagedRepaintCoverageRect() const
+{
+	// 基类默认认为“实际绘制 coverage == 控件本体矩形”。
+	// 复合控件或带浮层的控件会 override，把附加绘制区域一并并入。
+	return getBoundsRect();
+}
+
+RECT Control::getManagedRepaintPersistentCoverageRect() const
+{
+	// 基类默认认为持久绘制范围等于控件本体。
+	// 只有 Tooltip 这类临时浮层需要从持久范围中剔除。
+	return getBoundsRect();
+}
+
 bool Control::canCommitManagedPartialRepaint() const
 {
 	// 基类默认不承诺自己能安全做局部提交；
 	// 只有 Canvas / TabControl / Dialog 这类“拥有完整背景语义”的 root 才会 override 为 true。
 	return false;
+}
+
+bool Control::hasManagedDirtySubtree() const
+{
+	// 基类只感知自身是否为脏；
+	// 容器类会 override 为“自身或其受管理子树是否有脏内容”。
+	return dirty;
 }
 
 void Control::commitManagedRepaint()

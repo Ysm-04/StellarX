@@ -7,6 +7,71 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v3.1.0] - 2026-05-15
+
+### 新增
+
+- 新增四边集合式锚点语义：水平轴支持 left/right，垂直轴支持 top/bottom。
+- 新增单轴尺寸策略 `AxisSizePolicy`：`Stretch` 与 `FixedSize`。
+- 新增单轴固定尺寸位移策略 `AxisAlignPolicy`：`Start`、`End`、`Center`、`Proportional`。
+- 新增 `AxisLayoutSpec`、`LayoutSpec`、`LayoutCapability`、`ResolvedLayoutRect` 等布局基础结构。
+- `Control` 新增推荐布局接口：
+  - `setHorizontalLayoutSpec()` / `setVerticalLayoutSpec()`
+  - `setHorizontalAnchors()` / `setVerticalAnchors()`
+  - `setHorizontalSizePolicy()` / `setVerticalSizePolicy()`
+  - `setHorizontalAlignPolicy()` / `setVerticalAlignPolicy()`
+  - `commitCurrentGeometryAsDesignRect()`
+- 新增托管重绘持久 coverage 与临时 coverage 区分，用于避免 Tooltip 等临时浮层污染兄弟控件背景快照。
+
+### 变更
+
+- 明确 `localx/localy/localWidth/localHeight` 为设计态父局部矩形，不再视为普通运行时缓存。
+- 明确 `x/y/width/height` 为当前运行态绘制矩形。
+- 普通 resize、容器重排和统一布局解算默认不自动回写 `local*`。
+- `Window` 顶层控件布局与 `Canvas` 子控件布局统一走同一套轴向解算语义。
+- `Dialog` 继续保持窗口尺寸变化时只重新居中，不参与拉伸。
+- `TabControl` 外层接入统一布局，内部页签栏/页面区仍由控件自身专用逻辑管理。
+- `Table` 当前版本能力边界明确为 X 轴可拉伸、Y 轴固定，允许随锚点位移。
+- `Label::draw()` 不再承担新的几何决策入口，文本变化触发内容驱动运行态尺寸刷新。
+- 旧接口 `setLayoutMode()` 与 `setAnchor()` 保留，并作为兼容输入层映射到新布局模型的有限子集。
+- API 文档补充 `Table::setData` 追加语义、`TextBox` 字节长度和形状边界、`Button::setButtonClick` / Tooltip offset 语义、SxLog 常用用法边界和 `MessageBoxResult` 枚举值。
+
+### 修复
+
+- 修复 `TabControl::indexOf(const std::string&)` 未命中时返回值错误的问题，现在未命中返回 `-1`。
+- 修复 Dialog / overlay 关闭或遮挡后底层 hover、tooltip 状态可能不同步的问题。
+- 修复非模态 Dialog 吞掉鼠标移动后，底层控件 hover 或 Tooltip 可能残留的问题。
+- 修复局部提交时内部 coverage 扩张未反馈到 Window，导致上层 Dialog 或 overlay 漏补画的问题。
+- 修复跨 root 回调改脏后未在同一轮事件尾提交，导致 Label 等控件延迟刷新或暂时不绘制的问题。
+- 修复 Tooltip 临时浮层被兄弟控件背景快照捕获，后续回贴造成 Tooltip 残留或擦除的问题。
+- 修复 Table 分页按钮 hover/click 后可能依赖整表状态才能恢复视觉的问题。
+- 修复多层 Canvas、TabControl、Table、Dialog 混合遮挡时的若干局部重绘错层问题。
+- 修复 `WM_MOUSEMOVE` 路径中兄弟控件 `clearTransientMouseState()` 触发视觉变化但未稳定登记托管重绘的问题。
+- 修复非模态 Dialog 关闭后仍长期留在 `Window::dialogs` 容器中的问题，关闭对象改为事件安全点清理回收。
+- 修复 `TextBox::draw()` 字体夹紧和 `Button` 禁用态绘制会回写公开 `textStyle` 的问题。
+- 修复 `TextBox` 超宽显示截断可能在 GBK/MBCS 下截断半个中文字符的问题。
+
+### 兼容性
+
+- 旧布局 API 保持可用，既有代码无需立即迁移。
+- 新布局 API 为推荐入口；旧 API 不保证能反向表达新模型的所有组合。
+- `Label::textStyle` 仍然是公开字段。直接修改字体样式后，如需立即刷新尺寸，请调用 `setDirty(true)`。
+- `Table::setHeight()` 当前仍不会启用纵向拉伸，这是 v3.1.0 的当前能力边界。
+
+### 已知限制与延期事项
+
+- 焦点系统。
+- 键盘事件系统。
+- TextBox 自绘输入体系。
+- Table 内部局部重绘体系。
+- Table 纵向 Stretch。
+- Table 结构尺寸刷新从 draw 流程前移：当前 `Table::draw()` 仍可能触发 `initTextWaH()` 并刷新结构尺寸。
+- 移除 Canvas 对 Table 的历史兜底特判。
+- TabControl 内部布局应用路径收口。
+- Tooltip 完整智能选位。
+- 全局字体自动缩放。
+- 更完整的 API 文档与示例体系。
+
 ## [v3.0.2] - 2026 - 04 - 09
 
 ### ⚙️ 变更

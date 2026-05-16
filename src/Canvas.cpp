@@ -20,38 +20,101 @@ static const char* SxCanvasMsgName(UINT m)
 	}
 }
 
+namespace
+{
+	enum class SxCanvasOverlayRedrawMode
+	{
+		None,
+		RefreshSnapshot
+	};
+
+	bool SxCanvasRectValid(const RECT& rc)
+	{
+		return rc.right > rc.left && rc.bottom > rc.top;
+	}
+
+	bool SxCanvasRectsIntersect(const RECT& a, const RECT& b)
+	{
+		return a.left < b.right && a.right > b.left &&
+			a.top < b.bottom && a.bottom > b.top;
+	}
+
+	RECT SxCanvasUnionRect(const RECT& a, const RECT& b)
+	{
+		RECT out{};
+		out.left = (std::min)(a.left, b.left);
+		out.top = (std::min)(a.top, b.top);
+		out.right = (std::max)(a.right, b.right);
+		out.bottom = (std::max)(a.bottom, b.bottom);
+		return out;
+	}
+}
+
 Canvas::Canvas()
 	:Control(0, 0, 100, 100)
 {
 	this->id = "Canvas";
+	// Canvas 是通用容器，当前阶段显式允许双轴 Stretch。
+	this->layoutCapability.allowStretchX = true;
+	this->layoutCapability.allowStretchY = true;
 }
 
 Canvas::Canvas(int x, int y, int width, int height)
 	:Control(x, y, width, height)
 {
 	this->id = "Canvas";
+	this->layoutCapability.allowStretchX = true;
+	this->layoutCapability.allowStretchY = true;
+}
+
+void Canvas::relayoutManagedChildren()
+{
+	// Canvas 负责子控件从“父局部设计矩形”到“当前世界矩形”的转换。
+	// 当 Canvas 自己的位置或尺寸变化后，所有受它管理的子控件都要重新走一次统一解算。
+	for (auto& child : controls)
+	{
+		const StellarX::ResolvedLayoutRect rect =
+			child->resolveLayoutRect(localWidth, localHeight, x, y, width, height);
+		child->applyResolvedLayoutRect(rect);
+	}
 }
 
 void Canvas::setX(int x)
 {
-	this->x = x;
-	for (auto& c : controls)
-	{
-		c->onWindowResize();
-		c->setX(c->getLocalX() + this->x);
-	}
-	dirty = true;
+	// 公开 setter 在 Canvas 上不能再视为“单纯改自己的 x”：
+	// 一旦容器移动，子控件的世界坐标也必须整体重算。
+	applyRuntimeRectDirect(x, y, width, height);
+	relayoutManagedChildren();
+	onWindowResize();
 }
 
 void Canvas::setY(int y)
 {
-	this->y = y;
-	for (auto& c : controls)
-	{
-		c->onWindowResize();
-		c->setY(c->getLocalY() + this->y);
-	}
-	dirty = true;
+	applyRuntimeRectDirect(this->x, y, width, height);
+	relayoutManagedChildren();
+	onWindowResize();
+}
+
+void Canvas::setWidth(int width)
+{
+	applyRuntimeRectDirect(x, y, width, height);
+	relayoutManagedChildren();
+	onWindowResize();
+}
+
+void Canvas::setHeight(int height)
+{
+	applyRuntimeRectDirect(x, y, width, height);
+	relayoutManagedChildren();
+	onWindowResize();
+}
+
+void Canvas::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
+{
+	// 统一解算器已经给出当前运行态世界矩形；
+	// Canvas 在应用自身矩形后，还必须继续刷新全部子控件。
+	applyRuntimeRectDirect(rect.worldX, rect.worldY, rect.width, rect.height);
+	relayoutManagedChildren();
 }
 
 void Canvas::clearAllControls()
@@ -134,19 +197,55 @@ bool Canvas::handleEvent(const ExMessage& msg)
 	bool anyVisualChanged = false;
 	Control* firstConsumer = nullptr;
 
-	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	if (msg.message == WM_MOUSEMOVE)
 	{
-		Control* c = it->get();
-		bool cConsumed = c->handleEvent(msg);
-
-		if (c->isDirty()) anyDirty = true;
-		if (c->didEventAffectVisual()) anyVisualChanged = true;
-
-		if (cConsumed)
+		// WM_MOUSEMOVE 需要特殊处理：
+		// - 第一个命中的兄弟分支收到真实消息；
+		// - 后续兄弟不再重新命中，只清理旧 hover / tooltip 等临时状态。
+		for (auto it = controls.rbegin(); it != controls.rend(); ++it)
 		{
-			firstConsumer = c;
-			consumed = true;
-			break;
+			Control* c = it->get();
+			if (!consumed)
+			{
+				bool cConsumed = c->handleEvent(msg);
+				if (c->didEventAffectVisual()) anyVisualChanged = true;
+				if (cConsumed)
+				{
+					firstConsumer = c;
+					consumed = true;
+				}
+			}
+			else
+			{
+				// 后续兄弟只走临时状态清理，不会再进入自己的 handleEvent()。
+				// Tooltip 隐藏会先回贴旧快照，再改变 coverage；因此必须先保存旧覆盖范围，
+				// 避免登记重绘时丢失旧 Tooltip 区域，导致上层 overlay 补画判断不完整。
+				const RECT previousCoverage = c->getManagedRepaintCoverageRect();
+				if (c->clearTransientMouseState())
+				{
+					if (Window* host = getHostWindow())
+						host->requestManagedRepaint(c, previousCoverage);
+					anyVisualChanged = true;
+				}
+			}
+		}
+	}
+	else
+	{
+		for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		{
+			Control* c = it->get();
+			bool cConsumed = c->handleEvent(msg);
+
+			if (c->isDirty()) anyDirty = true;
+			if (c->didEventAffectVisual()) anyVisualChanged = true;
+
+			if (cConsumed)
+			{
+				firstConsumer = c;
+				consumed = true;
+				break;
+			}
 		}
 	}
 
@@ -170,14 +269,29 @@ bool Canvas::handleEvent(const ExMessage& msg)
 	return consumed;
 }
 
+bool Canvas::clearTransientMouseState()
+{
+	bool changed = false;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		Control* child = it->get();
+		if (!child->IsVisible())
+			continue;
+		if (child->clearTransientMouseState())
+			changed = true;
+	}
+	return changed;
+}
+
 
 void Canvas::addControl(std::unique_ptr<Control> control)
 {
-
-	//坐标转化
-	control->setX(control->getLocalX() + this->x);
-	control->setY(control->getLocalY() + this->y);
 	control->setParent(this);
+	// 新子控件加入容器时，立刻按“当前容器运行态矩形”解算一次，
+	// 避免后续第一次 draw / resize 前 world 坐标仍停留在设计态。
+	const StellarX::ResolvedLayoutRect rect =
+		control->resolveLayoutRect(localWidth, localHeight, this->x, this->y, this->width, this->height);
+	control->applyResolvedLayoutRect(rect);
 	SX_LOGI("Canvas")
 		<< SX_T("添加子控件：父=Canvas 子id=", "addControl: parent=Canvas childId=")
 		<< control->getId()
@@ -264,173 +378,11 @@ void Canvas::setDirty(bool dirty)
 
 void Canvas::onWindowResize()
 {
-	// 首先处理自身的快照等逻辑
+	// resize 语义已收口：
+	// Canvas 不再在这里重新解算布局，只负责丢快照、标脏，并向子控件传播“环境已变化”。
 	Control::onWindowResize();
-
-	// 记录父容器原始尺寸（用于计算子控件的右/下边距）
-	int origParentW = this->localWidth;
-	int origParentH = this->localHeight;
-
-	// 当前容器的新尺寸
-	int finalW = this->width;
-	int finalH = this->height;
-
-	// 当前容器的新坐标（全局坐标）
-	int parentX = this->x;
-	int parentY = this->y;
-
-	// 调整每个子控件在 AnchorToEdges 模式下的位置与尺寸
-	for (auto& ch : controls)
-	{
-		// Only adjust when using anchor-to-edges layout
-		if (ch->getLayoutMode() == StellarX::LayoutMode::AnchorToEdges)
-		{
-			// Determine whether this child is a Table; tables keep their height constant
-			bool isTable = (dynamic_cast<Table*>(ch.get()) != nullptr);
-
-			// Unpack anchors
-			auto a1 = ch->getAnchor_1();
-			auto a2 = ch->getAnchor_2();
-
-			bool anchorLeft = (a1 == StellarX::Anchor::Left || a2 == StellarX::Anchor::Left);
-			bool anchorRight = (a1 == StellarX::Anchor::Right || a2 == StellarX::Anchor::Right);
-			bool anchorTop = (a1 == StellarX::Anchor::Top || a2 == StellarX::Anchor::Top);
-			bool anchorBottom = (a1 == StellarX::Anchor::Bottom || a2 == StellarX::Anchor::Bottom);
-
-			// If it's a table, treat as anchored left and right horizontally and anchored top vertically by default.
-			if (isTable)
-			{
-				anchorLeft = true;
-				anchorRight = true;
-				// If no explicit vertical anchor was provided, default to top.
-				if (!(anchorTop || anchorBottom))
-				{
-					anchorTop = true;
-				}
-			}
-
-			// Compute new X and width
-			int newX = ch->getX();
-			int newWidth = ch->getWidth();
-			if (anchorLeft && anchorRight)
-			{
-				// Scale horizontally relative to parent's size.
-				if (origParentW > 0)
-				{
-					// Maintain proportional position and size based on original local values.
-					double scaleW = static_cast<double>(finalW) / static_cast<double>(origParentW);
-					newX = parentX + static_cast<int>(ch->getLocalX() * scaleW + 0.5);
-					newWidth = static_cast<int>(ch->getLocalWidth() * scaleW + 0.5);
-				}
-				else
-				{
-					// Fallback: keep original
-					newX = parentX + ch->getLocalX();
-					newWidth = ch->getLocalWidth();
-				}
-			}
-			else if (anchorLeft && !anchorRight)
-			{
-				// Only left anchored: keep original width and left margin.
-				newWidth = ch->getLocalWidth();
-				newX = parentX + ch->getLocalX();
-			}
-			else if (!anchorLeft && anchorRight)
-			{
-				// Only right anchored: keep original width and right margin.
-				newWidth = ch->getLocalWidth();
-				int origRightDist = origParentW - (ch->getLocalX() + ch->getLocalWidth());
-				newX = parentX + finalW - origRightDist - newWidth;
-			}
-			else
-			{
-				// No horizontal anchor: position relative to parent's left and width unchanged.
-				newWidth = ch->getLocalWidth();
-				newX = parentX + ch->getLocalX();
-			}
-			ch->setX(newX);
-			ch->setWidth(newWidth);
-
-			// Compute new Y and height
-			int newY = ch->getY();
-			int newHeight = ch->getHeight();
-			if (isTable)
-			{
-				// Table: Height remains constant; adjust Y based on anchors.
-				newHeight = ch->getLocalHeight();
-				if (anchorTop && anchorBottom)
-				{
-					// If both top and bottom anchored, scale Y but keep height.
-					if (origParentH > 0)
-					{
-						double scaleH = static_cast<double>(finalH) / static_cast<double>(origParentH);
-						newY = parentY + static_cast<int>(ch->getLocalY() * scaleH + 0.5);
-					}
-					else
-					{
-						newY = parentY + ch->getLocalY();
-					}
-				}
-				else if (anchorTop && !anchorBottom)
-				{
-					// Top anchored only
-					newY = parentY + ch->getLocalY();
-				}
-				else if (!anchorTop && anchorBottom)
-				{
-					// Bottom anchored only
-					int origBottomDist = origParentH - (ch->getLocalY() + ch->getLocalHeight());
-					newY = parentY + finalH - origBottomDist - newHeight;
-				}
-				else
-				{
-					// No vertical anchor: default to top
-					newY = parentY + ch->getLocalY();
-				}
-			}
-			else
-			{
-				if (anchorTop && anchorBottom)
-				{
-					// Scale vertically relative to parent's size.
-					if (origParentH > 0)
-					{
-						double scaleH = static_cast<double>(finalH) / static_cast<double>(origParentH);
-						newY = parentY + static_cast<int>(ch->getLocalY() * scaleH + 0.5);
-						newHeight = static_cast<int>(ch->getLocalHeight() * scaleH + 0.5);
-					}
-					else
-					{
-						newY = parentY + ch->getLocalY();
-						newHeight = ch->getLocalHeight();
-					}
-				}
-				else if (anchorTop && !anchorBottom)
-				{
-					// Top anchored only: keep height constant
-					newHeight = ch->getLocalHeight();
-					newY = parentY + ch->getLocalY();
-				}
-				else if (!anchorTop && anchorBottom)
-				{
-					// Bottom anchored only: keep height and adjust Y relative to bottom
-					newHeight = ch->getLocalHeight();
-					int origBottomDist = origParentH - (ch->getLocalY() + ch->getLocalHeight());
-					newY = parentY + finalH - origBottomDist - newHeight;
-				}
-				else
-				{
-					// No vertical anchor: position relative to parent's top, height constant.
-					newHeight = ch->getLocalHeight();
-					newY = parentY + ch->getLocalY();
-				}
-			}
-			ch->setY(newY);
-			ch->setHeight(newHeight);
-		}
-		// Always forward the window resize event to the child (recursively).
-		ch->onWindowResize();
-	}
+	for (auto& child : controls)
+		child->onWindowResize();
 }
 
 void Canvas::requestRepaint(Control* parent)
@@ -466,15 +418,135 @@ void Canvas::requestRepaint(Control* parent)
 
 		SX_LOG_TRACE("Dirty") << SX_T("Canvas 请求局部重绘：id=", "Canvas::requestRepaint(partial): id=") << id;
 
+		RECT paintCoverage{};
+		bool hasPaintCoverage = false;
+		RECT persistentCoverage{};
+		bool hasPersistentCoverage = false;
+		auto commitManagedChild = [&](Control* child, SxCanvasOverlayRedrawMode overlayMode)
+			{
+				if (!child || !child->IsVisible())
+					return;
+
+				const bool directDirty = child->isDirty();
+				const bool subtreeDirty = child->hasManagedDirtySubtree();
+
+				if (overlayMode == SxCanvasOverlayRedrawMode::RefreshSnapshot)
+				{
+					// overlay 补画必须先作废旧快照：
+					// 下层兄弟的持久内容刚刚已经写过像素，若继续沿用旧快照，会把旧背景再贴回来。
+					child->invalidateBackgroundSnapshot();
+					child->setDirty(true);
+					child->draw();
+				}
+				else if (directDirty)
+				{
+					child->draw();
+				}
+				else if (subtreeDirty)
+				{
+					// 这次真正脏的是“child 下面的子树”，而不是 child 自身。
+					// 例如嵌套 Canvas 中，第二层/第三层按钮脏了，但第一层 Canvas 自己并不 dirty。
+					// 这里必须把这条直接子分支提交下去，否则深层按钮状态永远没有机会被真正画出来。
+					child->commitManagedRepaint();
+				}
+				else
+				{
+					return;
+				}
+
+				const RECT childPaintRect = child->getManagedRepaintCoverageRect();
+				if (!hasPaintCoverage)
+				{
+					paintCoverage = childPaintRect;
+					hasPaintCoverage = true;
+				}
+				else
+				{
+					paintCoverage = SxCanvasUnionRect(paintCoverage, childPaintRect);
+				}
+
+				const RECT childPersistentRect = child->getManagedRepaintPersistentCoverageRect();
+				if (!hasPersistentCoverage)
+				{
+					persistentCoverage = childPersistentRect;
+					hasPersistentCoverage = true;
+				}
+				else
+				{
+					persistentCoverage = SxCanvasUnionRect(persistentCoverage, childPersistentRect);
+				}
+			};
+
 		for (auto& control : controls)
-			if (control->isDirty() && control->IsVisible())
-				control->draw();
+		{
+			Control* child = control.get();
+			if (!child->IsVisible())
+				continue;
+
+			if (child->hasManagedDirtySubtree())
+			{
+				commitManagedChild(child, SxCanvasOverlayRedrawMode::None);
+			}
+			else if (hasPaintCoverage && SxCanvasRectsIntersect(child->getManagedRepaintCoverageRect(), paintCoverage))
+			{
+				// 位于本次累计 coverage 上方、且发生相交的兄弟控件，需要补画回最上层。
+				// 但只有下层“持久内容”影响到它时，才允许作废并重新抓背景快照；
+				// 如果只是被 Tooltip 等临时浮层覆盖，则跳过兄弟补画，避免透明控件回贴旧快照擦掉 Tooltip。
+				const bool persistentHit = hasPersistentCoverage &&
+					SxCanvasRectsIntersect(child->getManagedRepaintPersistentCoverageRect(), persistentCoverage);
+				if (persistentHit)
+					commitManagedChild(child, SxCanvasOverlayRedrawMode::RefreshSnapshot);
+			}
+		}
 
 		return;
 	}
 
 	SX_LOG_TRACE("Dirty") << SX_T("Canvas 请求根级重绘：id=", "Canvas::requestRepaint(root): id=") << id;
 	onRequestRepaintAsRoot();
+}
+
+bool Canvas::hasManagedDirtySubtree() const
+{
+	if (dirty)
+		return true;
+
+	for (const auto& child : controls)
+	{
+		if (!child->IsVisible())
+			continue;
+		if (child->hasManagedDirtySubtree())
+			return true;
+	}
+	return false;
+}
+
+RECT Canvas::getManagedRepaintCoverageRect() const
+{
+	// Canvas::draw() 会先写自身背景，再强制绘制全部可见子控件。
+	// 因此它的实际 coverage 不能只看本体矩形，还要把可见子控件 coverage 递归并入。
+	RECT coverage = getBoundsRect();
+	for (const auto& child : controls)
+	{
+		if (!child->IsVisible())
+			continue;
+		coverage = SxCanvasUnionRect(coverage, child->getManagedRepaintCoverageRect());
+	}
+	return coverage;
+}
+
+RECT Canvas::getManagedRepaintPersistentCoverageRect() const
+{
+	// 持久 coverage 只描述会进入背景快照语义的范围。
+	// 子控件 Tooltip 等临时浮层不会被并入，避免兄弟控件补画时抓到临时像素。
+	RECT coverage = getBoundsRect();
+	for (const auto& child : controls)
+	{
+		if (!child->IsVisible())
+			continue;
+		coverage = SxCanvasUnionRect(coverage, child->getManagedRepaintPersistentCoverageRect());
+	}
+	return coverage;
 }
 
 bool Canvas::canCommitManagedPartialRepaint() const

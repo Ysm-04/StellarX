@@ -37,10 +37,12 @@ class Window;
 
 class Control
 {
+	friend class Window;
+	friend class Canvas;
 protected:
 	std::string id;     // 控件ID
-	int localx, x, localy, y;           // 左上角坐标
-	int localWidth, width, localHeight, height;  // 控件尺寸
+	int localx, x, localy, y;           // local* 为设计态父局部坐标，x/y 为运行态世界坐标
+	int localWidth, width, localHeight, height;  // local* 为设计态尺寸，width/height 为运行态尺寸
 	Control* parent = nullptr;    // 父控件
 	Window* hostWindow = nullptr; // 宿主窗口（顶层由 Window 注入，子控件可沿 parent 回溯）
 	bool dirty = true; // 是否重绘
@@ -49,8 +51,15 @@ protected:
 
 	/* == 布局模式 == */
 	StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
-	StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 锚点
-	StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 锚点
+	StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 旧版兼容锚点 1
+	StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 旧版兼容锚点 2
+	// 新布局模型：内部统一使用“水平轴 + 垂直轴”的规格描述，不再直接依赖旧锚点求解。
+	StellarX::LayoutSpec layoutSpec{
+		{ false, true, StellarX::AxisSizePolicy::FixedSize, StellarX::AxisAlignPolicy::End },
+		{ true, false, StellarX::AxisSizePolicy::FixedSize, StellarX::AxisAlignPolicy::Start }
+	};
+	// 控件能力边界：用于限制某些控件在特定轴上是否允许 Stretch。
+	StellarX::LayoutCapability layoutCapability{};
 
 	/* == 背景快照 ==  */
 	std::unique_ptr<IMAGE> saveBkImage;
@@ -115,14 +124,24 @@ public:
 	int getLocalRight() const { return localx + localWidth; }
 	int getLocalBottom() const { return localy + localHeight; }
 
-	virtual void setX(int x) { this->x = x; dirty = true; }
-	virtual void setY(int y) { this->y = y; dirty = true; }
-	virtual void setWidth(int width) { this->width = width; dirty = true; }
-	virtual void setHeight(int height) { this->height = height; dirty = true; }
+	// 公开几何 setter：
+	// - 面向用户使用
+	// - 默认只修改运行态矩形
+	// - 不允许自动回写设计基线 local*
+	// 若某个复合控件需要在 setter 后维护自己拥有的运行态子树一致性，
+	// 由该控件在 override 中自行处理，但仍不得越权承担统一布局器职责。
+	virtual void setX(int x);
+	virtual void setY(int y);
+	virtual void setWidth(int width);
+	virtual void setHeight(int height);
 public:
 
 	virtual void draw() = 0;
 	virtual bool handleEvent(const ExMessage& msg) = 0;//返回true代表事件已消费
+	// 轻量清理接口：仅用于“没有机会收到本次 WM_MOUSEMOVE”的兄弟分支，
+	// 清掉 hover / tooltip / 临时按下态等鼠标瞬时状态。
+	// 该接口不是事件分发入口，不参与新的命中判断，也不允许回写设计基线。
+	virtual bool clearTransientMouseState();
 	//设置是否显示
 	virtual void setIsVisible(bool show);
 	//设置父容器指针
@@ -131,8 +150,17 @@ public:
 	virtual void setHostWindow(Window* host) { this->hostWindow = host; }
 	Window* getHostWindow() const;                         // 获取宿主 Window；子控件可沿 parent 向上回溯
 	RECT getBoundsRect() const;                           // 获取当前控件外接矩形，用于覆盖/相交判断
+	// 获取本控件“本轮实际可能写到屏幕上的覆盖范围”。
+	// 默认等于控件本体矩形；像 Button 这类会额外绘制 Tooltip 的控件，可 override 后扩大范围。
+	// 托管重绘 coverage、overlay 相交判断统一走这个接口，而不再默认使用控件本体 bounds。
+	virtual RECT getManagedRepaintCoverageRect() const;
+	// 获取会影响后续控件背景快照的“持久绘制范围”。
+	// Tooltip 等临时浮层不应进入该范围，避免上层兄弟补画时把临时浮层抓进背景快照。
+	virtual RECT getManagedRepaintPersistentCoverageRect() const;
 	Control* getManagedRepaintRoot();                     // 找到本控件对应的托管重绘 root
+	Control* getManagedRepaintDirectBranch(Control* root); // 找到“root 下面承接本次脏变化的直接子分支”
 	bool hasValidBackgroundSnapshot() const { return hasSnap && saveBkImage != nullptr; } // 当前是否持有可用于局部恢复的快照
+	virtual bool hasManagedDirtySubtree() const;          // 当前控件或其受管理子树中是否存在待提交的脏内容
 	virtual bool canCommitManagedPartialRepaint() const; // 当前 root 是否可安全做“局部提交”而非整 root 重画
 	virtual void commitManagedRepaint();                  // 托管收口阶段真正执行绘制的入口
 	//设置是否重绘
@@ -148,12 +176,58 @@ public:
 	//用来检查对话框是否模态，其他控件不用实现
 	virtual bool model()const = 0;
 	//布局
+	// 设置旧版布局模式（兼容入口）
 	void setLayoutMode(StellarX::LayoutMode layoutMode_);
+	// 设置旧版双锚点输入，并映射到内部统一 LayoutSpec
 	void setAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2);
+	// 直接设置水平轴布局规格。
+	// 调用该接口后会自动切换到 AnchorToEdges 布局模式；
+	// 这是新布局模型的公开入口，后设置者会覆盖旧 setAnchor() 对水平轴的映射结果。
+	void setHorizontalLayoutSpec(const StellarX::AxisLayoutSpec& spec);
+	// 直接设置垂直轴布局规格。
+	// 调用该接口后会自动切换到 AnchorToEdges 布局模式；
+	// 这是新布局模型的公开入口，后设置者会覆盖旧 setAnchor() 对垂直轴的映射结果。
+	void setVerticalLayoutSpec(const StellarX::AxisLayoutSpec& spec);
+	// 设置水平轴锚定边集合（left / right）。
+	void setHorizontalAnchors(bool left, bool right);
+	// 设置垂直轴锚定边集合（top / bottom）。
+	void setVerticalAnchors(bool top, bool bottom);
+	// 设置水平轴尺寸策略（Stretch / FixedSize）。
+	void setHorizontalSizePolicy(StellarX::AxisSizePolicy policy);
+	// 设置垂直轴尺寸策略（Stretch / FixedSize）。
+	void setVerticalSizePolicy(StellarX::AxisSizePolicy policy);
+	// 设置水平轴固定尺寸位移策略（Start / End / Center / Proportional）。
+	void setHorizontalAlignPolicy(StellarX::AxisAlignPolicy policy);
+	// 设置垂直轴固定尺寸位移策略（Start / End / Center / Proportional）。
+	void setVerticalAlignPolicy(StellarX::AxisAlignPolicy policy);
+	// 获取旧版锚点 1（兼容读取入口）
 	StellarX::Anchor getAnchor_1() const;
+	// 获取旧版锚点 2（兼容读取入口）
 	StellarX::Anchor getAnchor_2() const;
+	// 获取旧版布局模式
 	StellarX::LayoutMode getLayoutMode() const;
+	// 获取水平轴布局规格；返回的是当前生效的新模型状态，不要求可逆回旧 anchor 语义。
+	StellarX::AxisLayoutSpec getHorizontalLayoutSpec() const;
+	// 获取垂直轴布局规格；返回的是当前生效的新模型状态，不要求可逆回旧 anchor 语义。
+	StellarX::AxisLayoutSpec getVerticalLayoutSpec() const;
+	// 获取内部统一布局规格；供 Window / Canvas 等统一解算入口使用。
+	const StellarX::LayoutSpec& getLayoutSpec() const;
+	// 获取控件能力边界；用于判断某个轴是否允许 Stretch。
+	const StellarX::LayoutCapability& getLayoutCapability() const;
+	// 显式将当前运行态矩形提交为新的设计基线。
+	// 这是“运行态 -> 设计态”的受控入口之一：
+	// - 普通 resize / 重排过程中不得自动调用
+	// - 公开 setter 也不得隐式调用
+	// - 仅用于少数需要把当前结果固化为新设计基线的场景
+	void commitCurrentGeometryAsDesignRect();
 protected:
+	// 第 1 层：根据父设计尺寸、父当前尺寸和本控件设计矩形，解算出当前运行态局部矩形。
+	StellarX::ResolvedLayoutRect resolveLayoutRect(int parentDesignW, int parentDesignH,
+		int parentWorldX, int parentWorldY, int parentCurrentW, int parentCurrentH) const;
+	// 内部受控路径：把统一解算结果应用到运行态矩形。不要把公开 setter 当成纯赋值接口来复用。
+	virtual void applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect);
+	// 最底层运行态赋值入口：仅修改运行态矩形，不回写 local*。
+	void applyRuntimeRectDirect(int worldX, int worldY, int width, int height);
 	void saveStyle();
 	void restoreStyle();
 	void resetEventVisualChanged() { eventVisualChanged = false; }

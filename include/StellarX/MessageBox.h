@@ -28,12 +28,14 @@ namespace StellarX
 	{
 	public:
 		// 模态：阻塞直到关闭，返回结果
+		// 直接创建并显示模态消息框，直到用户关闭后返回结果
 		static MessageBoxResult showModal(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",
 			MessageBoxType type = MessageBoxType::OK);
 
 		// 非模态：立即返回，通过回调异步获取结果
+		// 创建并显示非模态消息框，关闭时通过回调返回结果
 		static void showAsync(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",

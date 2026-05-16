@@ -31,23 +31,26 @@ class TextBox : public Control
 public:
 	StellarX::ControlText textStyle; //文本样式
 
+	// 构造文本框；支持输入模式和只读模式
 	TextBox(int x, int y, int width, int height, std::string text = "", StellarX::TextBoxmode mode = StellarX::TextBoxmode::INPUT_MODE, StellarX::ControlShape shape = StellarX::ControlShape::RECTANGLE);
+	// 绘制文本框
 	void draw() override;
+	// 处理输入框鼠标交互和文本录入
 	bool handleEvent(const ExMessage& msg) override;
-	//设置模式
+	// 设置文本框模式
 	void setMode(StellarX::TextBoxmode mode);
-	//设置可输入最大字符长度
+	// 设置可输入最大长度；当前按 std::string 字节长度限制，不等同于 Unicode 字符数
 	void setMaxCharLen(size_t len);
-	//设置形状
+	// 设置文本框形状；仅支持矩形/圆角矩形，圆形和椭圆会回退为 RECTANGLE
 	void setTextBoxshape(StellarX::ControlShape shape);
-	//设置边框颜色
+	// 设置边框颜色
 	void setTextBoxBorder(COLORREF color);
-	//设置背景颜色
+	// 设置背景颜色
 	void setTextBoxBk(COLORREF color);
-	//设置文本
+	// 设置当前文本
 	void setText(std::string text);
 
-	//获取文本
+	// 获取当前文本
 	std::string getText() const;
 
 private:

@@ -39,21 +39,29 @@ private:
 	// 初始化页签按钮位置和尺寸
 	inline void initTabBar();
 	inline void initTabPage();
+	// 统一刷新 TabControl 当前运行态下的页签栏和页面区布局。
+	void refreshRuntimeLayout();
 public:
+	// 默认构造：创建一个空 TabControl
 	TabControl();
+	// 指定初始位置和尺寸构造 TabControl
 	TabControl(int x, int y, int width, int height);
 	~TabControl();
 
 	//重写位置设置以适应页签和页面布局
 	void setX(int x)override;
 	void setY(int y)override;
+	void setWidth(int width) override;
+	void setHeight(int height) override;
 
 	void draw() override;
 	bool handleEvent(const ExMessage& msg) override;
+	// 只转发清理页签按钮和当前可见页面中的鼠标临时状态，不升级为整块 TabControl 重绘。
+	bool clearTransientMouseState() override;
 
-	//添加页签+页
+	// 添加一个“页签按钮 + 页面 Canvas”组合
 	void add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&& control);
-	//添加为某个页添加控件
+	// 按页签文本把控件添加到对应页面
 	void add(std::string tabText, std::unique_ptr<Control> control);
 	//设置页签位置
 	void setTabPlacement(StellarX::TabPlacement placement);
@@ -64,16 +72,22 @@ public:
 	void onWindowResize() override;
 	//获取当前激活页签索引
 	int getActiveIndex() const;
-	//设置当前激活页签索引
+	// 设置当前激活页签索引；若已是当前激活页则直接返回
 	void setActiveIndex(int idx);
-	//获取页签数量
+	// 获取页签数量
 	int count() const;
-	//通过页签文本返回索引
+	// 通过页签文本查找索引
 	int indexOf(const std::string& tabText) const;
 	//设置脏区并请求重绘
 	void setDirty(bool dirty) override;
 	//请求父控件重绘
 	void requestRepaint(Control* parent)override;          // 托管模式下登记为 root；非托管模式下局部更新脏按钮/脏页面
+	bool hasManagedDirtySubtree() const override;
+	RECT getManagedRepaintCoverageRect() const override;
+	RECT getManagedRepaintPersistentCoverageRect() const override;
 	bool canCommitManagedPartialRepaint() const override;  // 判断当前 TabControl 是否可安全做局部提交
 	void commitManagedRepaint() override;                  // 托管收口阶段执行 TabControl 的真正重绘
+protected:
+	// 外层统一解算后，TabControl 需要同步刷新其内部页签栏和页面区。
+	void applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect) override;
 };

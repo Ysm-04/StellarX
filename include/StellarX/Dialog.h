@@ -33,6 +33,8 @@
 #define BorderWidth          3 //边框宽度
 class Dialog : public Canvas
 {
+	friend class Window;
+
 	Window& hWnd;               //窗口引用
 
 	int textWidth = 0;			//文本宽度
@@ -63,18 +65,19 @@ class Dialog : public Canvas
 	bool pendingCleanup = false;           //延迟清理
 public:
 	StellarX::ControlText textStyle;   // 字体样式
-	// 清理方法声明
+	// 在事件安全点执行延迟清理；用于非模态关闭后统一回收
 	void performDelayedCleanup();
-	//工厂模式下调用非模态对话框时用来返回结果
+	// 非模态工厂调用时用于回传结果
 	std::function<void(StellarX::MessageBoxResult)> resultCallback;
-	//设置非模态获取结果的回调函数
+	// 设置非模态结果回调
 	void SetResultCallback(std::function<void(StellarX::MessageBoxResult)> cb);
-	//获取对话框消息，用以去重
+	// 获取标题文本，用于非模态去重
 	std::string GetCaption() const;
-	//获取对话框消息，用以去重
+	// 获取正文文本，用于非模态去重
 	std::string GetText() const;
 
 public:
+	// 构造对话框；modal=false 时按非模态浮层工作
 	Dialog(Window& hWnd, std::string text, std::string message = "对话框", StellarX::MessageBoxType type = StellarX::MessageBoxType::OK, bool modal = true);
 	~Dialog();
 	//绘制对话框
@@ -94,7 +97,7 @@ public:
 	// 获取对话框结果
 	StellarX::MessageBoxResult GetResult() const;
 
-	//获取对话框类型
+	// 返回当前对话框是否为模态
 	bool model() const override;
 
 	// 显示对话框
@@ -119,13 +122,14 @@ private:
 	void initDialogSize();
 	// 依据当前 Dialog 的 x/y/width/height 重新创建标题和按钮
 	void rebuildChrome();
+	// 禁止走普通 Canvas 添加路径；Dialog 内部控件由自身 chrome 重建逻辑统一维护
 	void addControl(std::unique_ptr<Control> control);
 	bool canCommitManagedPartialRepaint() const override; // 判断当前 Dialog 是否可安全做局部提交
 	void commitManagedRepaint() override;                 // 托管收口阶段执行 Dialog 的真正重绘
 
 	// 清除所有控件
 	void clearControls();
-	//创建对话框按钮
+	// 创建标准对话框功能按钮
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
 	void requestRepaint(Control* parent) override;        // 托管模式下登记为 Dialog root；非托管模式下立即更新内部按钮
 };

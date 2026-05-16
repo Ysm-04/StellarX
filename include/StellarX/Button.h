@@ -101,87 +101,96 @@ public:
 	void draw() override;
 	//按钮事件处理
 	bool handleEvent(const ExMessage& msg) override;
+	// 清理按钮的鼠标瞬时状态；用于父容器在 WM_MOUSEMOVE 短路后补做 hover/tooltip 收口。
+	bool clearTransientMouseState() override;
+	// Tooltip 可见时，按钮实际写像素范围不再等于按钮本体，需要把 Tooltip 矩形并入 coverage。
+	RECT getManagedRepaintCoverageRect() const override;
+	// Button 的持久绘制范围只包含本体；Tooltip 是临时浮层，不能污染兄弟控件背景快照。
+	RECT getManagedRepaintPersistentCoverageRect() const override;
 
-	//设置回调函数
+	// 设置 NORMAL 模式下的点击回调
 	void setOnClickListener(std::function<void()> callback);
-	//设置TOGGLE模式下被点击的回调函数
+	// 设置 TOGGLE 模式下切换到打开状态时的回调
 	void setOnToggleOnListener(std::function<void()> callback);
-	//设置TOGGLE模式下取消点击的回调函数
+	// 设置 TOGGLE 模式下切换到关闭状态时的回调
 	void setOnToggleOffListener(std::function<void()> callback);
-	//设置按钮模式
+	// 设置按钮模式（NORMAL / TOGGLE / DISABLED）
 	void setbuttonMode(StellarX::ButtonMode mode);
-	//设置圆角矩形椭圆宽度
+	// 设置圆角矩形的圆角宽度
 	void setROUND_RECTANGLEwidth(int width);
-	//设置圆角矩形椭圆高度
+	// 设置圆角矩形的圆角高度
 	void setROUND_RECTANGLEheight(int height);
-	//设置按钮填充模式
+	// 设置按钮填充模式
 	void setFillMode(StellarX::FillMode mode);
-	//设置按钮填充图案
+	// 设置按钮图案填充样式
 	void setFillIma(StellarX::FillStyle ima);
-	//设置按钮填充图像
+	// 设置按钮图像填充资源
 	void setFillIma(std::string imaName);
-	//设置按钮边框颜色
+	// 设置按钮边框颜色
 	void setButtonBorder(COLORREF Border);
-	//设置按钮未被点击颜色
+	// 设置按钮默认态颜色
 	void setButtonFalseColor(COLORREF color);
-	//设置按钮文本
+	// 设置按钮文本（char* 重载）
 	void setButtonText(const char* text);
+	// 设置按钮文本（std::string 重载）
 	void setButtonText(std::string text);
-	//设置按钮形状
+	// 设置按钮几何形状
 	void setButtonShape(StellarX::ControlShape shape);
-	//设置按钮点击状态
+	// 直接设置按钮点击状态；NORMAL 设置为 true 时触发 onClick，TOGGLE 仅在状态变化时触发 on/off 回调
 	void setButtonClick(BOOL click);
 
-	//判断按钮是否被点击
+	// 查询按钮当前是否处于点击/选中状态
 	bool isClicked() const;
 
-	//获取按钮文字
+	// 获取按钮文本
 	std::string getButtonText() const;
+	// 获取按钮文本的 C 字符串视图
 	const char* getButtonText_c() const;
-	//获取按钮模式
+	// 获取按钮模式
 	StellarX::ButtonMode getButtonMode() const;
-	//获取按钮形状
+	// 获取按钮形状
 	StellarX::ControlShape getButtonShape() const;
-	//获取按钮填充模式
+	// 获取按钮填充模式
 	StellarX::FillMode getFillMode() const;
-	//获取按钮填充图案
+	// 获取按钮图案填充样式
 	StellarX::FillStyle getFillIma() const;
-	//获取按钮填充图像
+	// 获取按钮图像填充资源
 	IMAGE* getFillImaImage() const;
-	//获取按钮边框颜色
+	// 获取按钮边框颜色
 	COLORREF getButtonBorder() const;
-	//获取按钮文字颜色
+	// 获取按钮文字颜色
 	COLORREF getButtonTextColor() const;
-	//获取按钮文字样式
+	// 获取按钮文字样式
 	StellarX::ControlText getButtonTextStyle() const;
 public:
 	// === Tooltip API===
-	//设置是否启用提示框
+	// 开关 Tooltip；关闭时只修改内部启用/显示状态，不负责智能选位
 	void enableTooltip(bool on) { tipEnabled = on; if (!on) tipVisible = false; }
-	//设置提示框延时
+	// 设置 Tooltip 延时（毫秒）
 	void setTooltipDelay(int ms) { tipDelayMs = (ms < 0 ? 0 : ms); }
-	//设置提示框是否跟随鼠标
+	// 设置 Tooltip 是否跟随鼠标
 	void setTooltipFollowCursor(bool on) { tipFollowCursor = on; }
-	//设置提示框位置偏移
+	// 设置 Tooltip 偏移量；当前仅在 setTooltipFollowCursor(true) 时参与定位
 	void setTooltipOffset(int dx, int dy) { tipOffsetX = dx; tipOffsetY = dy; }
-	//设置提示框样式
+	// 设置 Tooltip 的文字、背景和透明样式
 	void setTooltipStyle(COLORREF text, COLORREF bk, bool transparent);
-	//设置提示框文本
+	// 设置 NORMAL 模式下 Tooltip 文本
 	void setTooltipText(const std::string& s) { tipTextClick = s; tipUserOverride = true; }
+	// 设置 TOGGLE 模式开/关两种状态下的 Tooltip 文本
 	void setTooltipTextsForToggle(const std::string& onText, const std::string& offText);
 private:
-	//初始化按钮
+	// 初始化按钮内部状态、颜色和 Tooltip 默认样式
 	void initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);
-	//判断鼠标是否在圆形按钮内
+	// 判断鼠标是否在圆形按钮内
 	bool isMouseInCircle(int mouseX, int mouseY, int x, int y, int radius);
-	//判断鼠标是否在椭圆按钮内
+	// 判断鼠标是否在椭圆按钮内
 	bool isMouseInEllipse(int mouseX, int mouseY, int x, int y, int width, int height);
 	//获取对话框类型
 	bool model() const override { return false; }
-	//文本截断
+	// 按当前按钮宽度和语言特征裁剪文本
 	void cutButtonText();
-	// 统一隐藏&恢复背景
+	// 统一隐藏 Tooltip 并恢复其背景快照
 	void hideTooltip();
-	// 根据当前 click 状态选择文案
+	// 根据当前 click 状态选择 Tooltip 文案
 	void refreshTooltipTextForState();
 };

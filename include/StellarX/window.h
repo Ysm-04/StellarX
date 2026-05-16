@@ -69,37 +69,41 @@ public:
 	mutable bool dialogOpen = false;     // 项目内使用的状态位,对话框打开标志
 
 	// —— 构造/析构 ——（仅初始化成员；实际样式与子类化在 draw() 中完成）
+	// 创建纯色背景窗口
 	Window(int width, int height, int mode);
+	// 创建指定背景色窗口
 	Window(int width, int height, int mode, COLORREF bkcloc);
+	// 创建带标题与背景色的窗口
 	Window(int width, int height, int mode, COLORREF bkcloc, std::string headline);
+	// 析构窗口并释放背景、控件与子类化资源
 	~Window();
 
 	// —— 绘制与事件循环 ——（draw* 完成一次全量绘制；runEventLoop 驱动事件与统一收口）
-	void draw();                         // 纯色背景版本
-	void draw(std::string pImgFile);     // 背景图版本
+	void draw();                         // 以纯色背景执行一次全量绘制
+	void draw(std::string pImgFile);     // 以背景图执行一次全量绘制
 	int  runEventLoop();                 // 主事件循环（PeekMessage + 统一收口重绘）
 
 	// —— 背景/标题设置 ——（更换背景、背景色与标题；立即触发一次批量绘制）
-	void setBkImage(std::string pImgFile);
-	void setBkcolor(COLORREF c);
-	void setHeadline(std::string headline);
+	void setBkImage(std::string pImgFile); // 设置窗口背景图
+	void setBkcolor(COLORREF c);           // 设置窗口纯色背景
+	void setHeadline(std::string headline); // 设置窗口标题
 
 	// —— 控件/对话框管理 ——（添加到容器，或做存在性判断）
-	void addControl(std::unique_ptr<Control> control);
-	void addDialog(std::unique_ptr<Control> dialogs);
-	bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
+	void addControl(std::unique_ptr<Control> control); // 添加普通顶层控件
+	void addDialog(std::unique_ptr<Control> dialogs);  // 添加非模态对话框
+	bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const; // 检查是否已有同 caption/message 的非模态对话框
 
 	// —— 访问器 ——（只读接口，供外部查询当前窗口/标题/背景等）
-	HWND        getHwnd() const;
-	int         getWidth() const;
-	int         getHeight() const;
-	int         getPendingWidth() const;
-	int         getPendingHeight() const;
-	std::string getHeadline() const;
-	COLORREF    getBkcolor() const;
-	IMAGE* getBkImage() const;
-	std::string getBkImageFile() const;
-	std::vector<std::unique_ptr<Control>>& getControls();
+	HWND        getHwnd() const;         // 获取窗口句柄
+	int         getWidth() const;        // 获取当前有效客户区宽度
+	int         getHeight() const;       // 获取当前有效客户区高度
+	int         getPendingWidth() const; // 获取待应用宽度
+	int         getPendingHeight() const; // 获取待应用高度
+	std::string getHeadline() const;     // 获取窗口标题
+	COLORREF    getBkcolor() const;      // 获取纯色背景
+	IMAGE* getBkImage() const;           // 获取背景图对象
+	std::string getBkImageFile() const;  // 获取背景图路径
+	std::vector<std::unique_ptr<Control>>& getControls(); // 获取普通顶层控件列表
 
 	// —— 尺寸调整 / 托管重绘 ——（事件阶段登记，收口阶段提交）
 	
@@ -110,7 +114,9 @@ public:
 	// 当前是否处于“事件只改状态，不立即画”的阶段
 	bool isManagedDispatchActive() const;    
 	// 记录一笔由 source 发起的托管重绘请求
-	void requestManagedRepaint(Control* source);  
+	void requestManagedRepaint(Control* source);
+	// 记录一笔托管重绘请求，并显式并入状态清理前的旧覆盖范围
+	void requestManagedRepaint(Control* source, const RECT& previousCoverage);
 	// 在事件收口阶段提交本轮登记的 root 重绘
 	void flushManagedRepaint();                   
 private:
@@ -120,6 +126,17 @@ private:
 	void drawWindowBackground();
 	// 合成 WM_MOUSEMOVE，用于同步底层 hover 状态
 	void dispatchSyntheticMouseMoveToControls(short x, short y); 
+	enum class OverlayMouseSyncMode
+	{
+		ClearBehindOverlay, // overlay 吞掉鼠标移动：只清理底层 hover / tooltip，不重新命中底层控件
+		RestoreAtCursor    // overlay 关闭：按当前鼠标位置刷新底层 hover 状态
+	};
+	// overlay 层级变化后，同步底层鼠标瞬时状态；内部仍复用既有 synthetic WM_MOUSEMOVE 路径
+	void syncMouseStateAfterOverlayChanged(OverlayMouseSyncMode mode);
+	// 在事件安全点清理已关闭的非模态 Dialog，避免 dialogs 容器长期积累无效对象
+	void sweepClosedDialogs();
+	// 事件回调可能改脏其他 root；flush 前补收集这些跨 root 脏子树
+	void collectDirtyRootsForManagedRepaint();
 	// 清空本轮托管重绘登记
 	void clearManagedRepaintState();                                  
 	// 找出需要补画到最上层的对话框

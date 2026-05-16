@@ -93,16 +93,24 @@ private:
 	void drawHeader();   //绘制表头
 	void drawPageNum();  //绘制页码信息
 	void drawButton();   //绘制翻页按钮
+	// 统一解算后的内部应用入口：
+	// Table 需要复用自己已有的 setWidth/setX 等副作用逻辑，因此单独接管应用过程。
+	void applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect) override;
 private:
 	//用来检查对话框是否模态,此控件不做实现
 	bool model() const override { return false; };
 public:
 	StellarX::ControlText textStyle; // 文本样式
+	// 修改表格运行态 X，并同步内部页脚元素位置
 	void setX(int x) override;
+	// 修改表格运行态 Y，并同步内部页脚元素位置
 	void setY(int y) override;
+	// 修改表格运行态宽度；当前支持横向拉伸
 	void setWidth(int width) override;
+	// 修改表格运行态高度；当前版本作为行为边界明确忽略纵向 Stretch
 	void setHeight(int height) override;
 public:
+	// 构造一个基础表格，后续通过表头和数据初始化内容
 	Table(int x, int y);
 	~Table();
 
@@ -110,11 +118,18 @@ public:
 	void draw() override;
 	//事件处理
 	bool handleEvent(const ExMessage& msg) override;
+	// 只清理分页按钮的 hover / tooltip / 临时按下态，不触发表格整体重绘。
+	bool clearTransientMouseState() override;
+	// Table 重绘时会一并绘制页码 Label 和分页按钮，coverage 需要把这些内部绘制单元并入。
+	RECT getManagedRepaintCoverageRect() const override;
+	// 持久 coverage 排除分页按钮 Tooltip 等临时浮层。
+	RECT getManagedRepaintPersistentCoverageRect() const override;
 
-	//设置表头
+	// 设置表头
 	void setHeaders(std::initializer_list<std::string> headers);
-	//设置表格数据
+	// 设置表格数据（单行追加）
 	void setData(std::vector<std::string> data);
+	// 设置表格数据（多行追加）；如需覆盖请先 clearData() 或 resetTable()
 	void setData(std::initializer_list<std::vector<std::string>> data);
 	//设置每页显示的行数
 	void setRowsPerPage(int rows);

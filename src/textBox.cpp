@@ -2,10 +2,114 @@
 #include "TextBox.h"
 #include "SxLog.h"
 
+namespace
+{
+	int SxTextBoxMbcCharLen(const std::string& s, size_t i)
+	{
+		unsigned char b = static_cast<unsigned char>(s[i]);
+		if (b <= 0x7F)
+			return 1;
+
+		if (b >= 0x81 && b <= 0xFE && i + 1 < s.size())
+		{
+			unsigned char b2 = static_cast<unsigned char>(s[i + 1]);
+			if (b2 >= 0x40 && b2 <= 0xFE && b2 != 0x7F)
+				return 2;
+		}
+
+		// 非法或不完整字节按单字节容错，避免死循环。
+		return 1;
+	}
+
+	void SxTextBoxTrimTrailingSpaces(std::string& s)
+	{
+		while (!s.empty() && s.back() == ' ')
+			s.pop_back();
+
+		while (s.size() >= 2)
+		{
+			unsigned char a = static_cast<unsigned char>(s[s.size() - 2]);
+			unsigned char b = static_cast<unsigned char>(s[s.size() - 1]);
+			if (a == 0xA1 && b == 0xA1)
+				s.resize(s.size() - 2);
+			else
+				break;
+		}
+	}
+
+	std::string SxTextBoxTruncateByMbcBoundary(const std::string& text, size_t maxBytes)
+	{
+		size_t i = 0;
+		size_t lastSafe = 0;
+		while (i < text.size())
+		{
+			const int charLen = SxTextBoxMbcCharLen(text, i);
+			const size_t next = i + static_cast<size_t>(charLen);
+			if (next > maxBytes || next > text.size())
+				break;
+			lastSafe = next;
+			i = next;
+		}
+		return text.substr(0, lastSafe);
+	}
+
+	std::string SxTextBoxEllipsizeMbc(const std::string& text, int maxWidth)
+	{
+		if (maxWidth <= 0)
+			return "";
+		if (textwidth(LPCTSTR(text.c_str())) <= maxWidth)
+			return text;
+
+		const std::string ellipsis = "...";
+		const int ellipsisWidth = textwidth(LPCTSTR(ellipsis.c_str()));
+		if (ellipsisWidth > maxWidth)
+		{
+			std::string clippedEllipsis = ellipsis;
+			while (!clippedEllipsis.empty() && textwidth(LPCTSTR(clippedEllipsis.c_str())) > maxWidth)
+				clippedEllipsis.pop_back();
+			return clippedEllipsis;
+		}
+
+		const int contentLimit = maxWidth - ellipsisWidth;
+		size_t i = 0;
+		size_t lastFit = 0;
+		while (i < text.size())
+		{
+			const int charLen = SxTextBoxMbcCharLen(text, i);
+			const size_t next = i + static_cast<size_t>(charLen);
+			if (next > text.size())
+				break;
+
+			const std::string candidate = text.substr(0, next);
+			if (textwidth(LPCTSTR(candidate.c_str())) <= contentLimit)
+			{
+				lastFit = next;
+				i = next;
+			}
+			else
+			{
+				break;
+			}
+		}
+
+		if (lastFit == 0)
+			return ellipsis;
+
+		std::string head = text.substr(0, lastFit);
+		SxTextBoxTrimTrailingSpaces(head);
+		return head + ellipsis;
+	}
+}
+
 TextBox::TextBox(int x, int y, int width, int height, std::string text, StellarX::TextBoxmode mode, StellarX::ControlShape shape)
 	:Control(x, y, width, height), text(text), mode(mode), shape(shape)
 {
 	this->id = "TextBox";
+	// TextBox 当前阶段的默认布局策略：
+	// - 水平方向允许通过锚点语义拉伸
+	// - 垂直方向当前实现保持固定尺寸，不在本轮引入随高度变化的视觉自适应
+	this->layoutCapability.allowStretchX = true;
+	this->layoutCapability.allowStretchY = false;
 }
 
 void TextBox::draw()
@@ -15,22 +119,22 @@ void TextBox::draw()
 		saveStyle();
 		setfillcolor(textBoxBkClor);
 		setlinecolor(textBoxBorderClor);
-		if (textStyle.nHeight > height)
-			textStyle.nHeight = height;
-		if (textStyle.nWidth > width)
-			textStyle.nWidth = width;
-		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+		StellarX::ControlText drawStyle = textStyle;
+		if (drawStyle.nHeight > height)
+			drawStyle.nHeight = height;
+		if (drawStyle.nWidth > width)
+			drawStyle.nWidth = width;
+		settextstyle(drawStyle.nHeight, drawStyle.nWidth, drawStyle.lpszFace,
+			drawStyle.nEscapement, drawStyle.nOrientation, drawStyle.nWeight,
+			drawStyle.bItalic, drawStyle.bUnderline, drawStyle.bStrikeOut);
 
-		settextcolor(textStyle.color);
+		settextcolor(drawStyle.color);
 		setbkmode(TRANSPARENT);
 		
 		int text_width = 0;
 		int text_height = 0;
 		std::string pwdText;
 		std::string displayText;  // 用于显示的文本（可能被截断）
-		bool isTextTruncated = false;  // 标记文本是否被截断
 		
 		if (StellarX::TextBoxmode::PASSWORD_MODE == mode)
 		{
@@ -50,17 +154,8 @@ void TextBox::draw()
 		int currentWidth = textwidth(LPCTSTR(displayText.c_str()));
 		if (currentWidth > availableWidth && availableWidth > 0)
 		{
-			// 需要截断文本，预留空间放置省略号
-			int ellipsisWidth = textwidth("...");
-			int truncatedWidth = availableWidth - ellipsisWidth;
-			
-			std::string truncatedText = displayText;
-			while (truncatedText.size() > 0 && textwidth(LPCTSTR(truncatedText.c_str())) > truncatedWidth)
-			{
-				truncatedText.pop_back();
-			}
-			displayText = truncatedText + "...";
-			isTextTruncated = true;
+			// 按 GBK/MBCS 字符边界裁切，避免中文文本被截断到半个字节。
+			displayText = SxTextBoxEllipsizeMbc(displayText, availableWidth);
 			currentWidth = textwidth(LPCTSTR(displayText.c_str()));
 		}
 		
@@ -226,7 +321,7 @@ void TextBox::setText(std::string text)
 	if(text == this->text)
 		return; // 文本未改变，无需更新和重绘
 	if (text.size() > maxCharLen)
-		text = text.substr(0, maxCharLen);
+		text = SxTextBoxTruncateByMbcBoundary(text, maxCharLen);
 	this->text = text;
 	this->dirty = true; // 标记需要重绘，不论是否窗口图形上下文是否已初始化，等第一次绘制时由窗口真正调用 draw() 来重绘显示文本
 	

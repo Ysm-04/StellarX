@@ -152,9 +152,18 @@ void Table::initTextWaH()
 	// 最终表宽/高：内容 + 对称边框
 	this->width = contentW + (border << 1);
 	this->height = headerH + rowsH + footerH + (border << 1);
-	// 记录原始宽高用于锚点布局的参考；此处仅在初始化单元尺寸时重置
+	// 这是 Table 自身受控的“结构尺寸 -> 设计基线”刷新点：
+	// 表格总宽高本来就由表头、表体、页脚和分页按钮共同决定，
+	// 因此这里允许同步 localWidth/localHeight，作为后续锚点解算参考。
+	const bool baselineChanged = (this->localWidth != this->width) || (this->localHeight != this->height);
 	this->localWidth = this->width;
 	this->localHeight = this->height;
+	if (baselineChanged)
+	{
+		SX_LOGD("Layout")
+			<< SX_T("Table 刷新结构设计基线：id=", "Table refresh structural design rect: id=") << id
+			<< SX_T(" size=(", " size=(") << this->width << "," << this->height << ")";
+	}
 }
 
 void Table::initButton()
@@ -285,6 +294,10 @@ void Table::drawPageNum()
 	pageNum->textStyle = this->textStyle;
 	if (StellarX::FillMode::Null == tableFillMode)
 		pageNum->setTextdisap(true);
+	// Table 每次整表重绘前都会先回贴自己的背景快照，
+	// 页码区域会被一起清空。即便页码文本本身没变化，也必须强制把 Label 重新设脏，
+	// 否则 Label::draw() 会因为 dirty=false 直接跳过，导致页码在表格重绘后消失。
+	pageNum->setDirty(true);
 	pageNum->draw();
 }
 
@@ -355,16 +368,45 @@ void Table::setWidth(int width)
 
 void Table::setHeight(int height)
 {
-	//高度不变
+	// 当前阶段 Table 明确不支持纵向 Stretch。
+	// 高度链路依赖表头、表体、页脚、按钮和页码计算，
+	// 因此这里保持空实现，避免被通用布局层错误拉高/压缩。
 }
 
 Table::Table(int x, int y)
 	:Control(x, y, 0, 0)
 {
 	this->id = "Table";
+	// Table 当前正式能力边界：
+	// 仅允许 X 轴 Stretch，Y 轴固定尺寸。
+	this->layoutCapability.allowStretchX = true;
+	this->layoutCapability.allowStretchY = false;
 }
 
 Table::~Table() = default;
+
+void Table::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
+{
+	// Table 不能像普通控件那样直接写入 width/height：
+	// 它的 setWidth() 内部会联动列宽与页脚布局，因此这里必须复用原有 setter 副作用。
+	// 同时 Table 的 Y Fixed 是当前版本的正式行为边界：
+	// 即便统一解算器给出了新的 rect.height，这里也不会接收该高度。
+	if (this->x != rect.worldX)
+		setX(rect.worldX);
+	if (this->y != rect.worldY)
+		setY(rect.worldY);
+	if (this->width != rect.width)
+		setWidth(rect.width);
+	if (this->height != rect.height)
+	{
+		SX_LOGD("Layout")
+			<< SX_T("Table 忽略 Y 轴运行态高度写入：id=", "Table ignore runtime Y resize: id=")
+			<< id
+			<< SX_T(" currentH=", " currentH=") << this->height
+			<< SX_T(" requestedH=", " requestedH=") << rect.height;
+	}
+	dirty = true;
+}
 
 void Table::draw()
 {
@@ -461,18 +503,149 @@ void Table::draw()
 bool Table::handleEvent(const ExMessage& msg)
 {
 	if (!show)return false;
+	resetEventVisualChanged();
 	bool consume = false;
+	bool anyVisualChanged = false;
 	if (!this->isShowPageButton)
 		return consume;
+
+	if (msg.message == WM_MOUSEMOVE)
+	{
+		// Table 内部分页按钮也按“后绘制者优先”的倒序语义处理。
+		// drawButton() 里是 prev 再 next，因此这里先 next 再 prev。
+		if (nextButton)
+		{
+			if (!consume)
+			{
+				consume = nextButton->handleEvent(msg);
+				if (nextButton->didEventAffectVisual())
+					anyVisualChanged = true;
+			}
+			else if (nextButton->clearTransientMouseState())
+			{
+				anyVisualChanged = true;
+			}
+		}
+		if (prevButton)
+		{
+			if (!consume)
+			{
+				consume = prevButton->handleEvent(msg);
+				if (prevButton->didEventAffectVisual())
+					anyVisualChanged = true;
+			}
+			else if (prevButton->clearTransientMouseState())
+			{
+				anyVisualChanged = true;
+			}
+		}
+	}
 	else
 	{
-		if (prevButton)consume = prevButton->handleEvent(msg);
-		if (nextButton && !consume)
+		// 点击类消息仍保持“后绘制者优先”的倒序命中语义。
+		// 但和 WM_MOUSEMOVE 一样，分页按钮的视觉状态变化必须向上提升为 Table 重绘，
+		// 否则按钮内部已经变成 hover/click，父级却不知道需要重画整张 Table，
+		// 就会出现“状态实际变了，但屏幕上直到下一次翻页才看见”的现象。
+		if (nextButton)
+		{
 			consume = nextButton->handleEvent(msg);
+			if (nextButton->didEventAffectVisual())
+				anyVisualChanged = true;
+		}
+		if (prevButton && !consume)
+		{
+			consume = prevButton->handleEvent(msg);
+			if (prevButton->didEventAffectVisual())
+				anyVisualChanged = true;
+		}
 	}
+
+	// Table 当前还没有像 TabControl 那样把分页按钮做成可独立提交的内部绘制单元。
+	// 因此只要内部按钮的 hover / click / leave 造成视觉变化，就必须把整张 Table 设脏，
+	// 让父容器通过现有的 Table::draw() 链把页脚区域正确重画出来。
+	if (anyVisualChanged)
+		dirty = true;
+
 	if (dirty)
 		requestRepaint(parent);
+	markEventVisualChanged(anyVisualChanged || dirty);
 	return consume;
+}
+
+bool Table::clearTransientMouseState()
+{
+	bool changed = false;
+	if (nextButton && nextButton->clearTransientMouseState())
+		changed = true;
+	if (prevButton && prevButton->clearTransientMouseState())
+		changed = true;
+	return changed;
+}
+
+RECT Table::getManagedRepaintCoverageRect() const
+{
+	RECT coverage = getBoundsRect();
+
+	if (pageNum && pageNum->IsVisible())
+	{
+		const RECT pageRect = pageNum->getManagedRepaintCoverageRect();
+		coverage.left = (std::min)(coverage.left, pageRect.left);
+		coverage.top = (std::min)(coverage.top, pageRect.top);
+		coverage.right = (std::max)(coverage.right, pageRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, pageRect.bottom);
+	}
+	if (prevButton && prevButton->IsVisible())
+	{
+		const RECT prevRect = prevButton->getManagedRepaintCoverageRect();
+		coverage.left = (std::min)(coverage.left, prevRect.left);
+		coverage.top = (std::min)(coverage.top, prevRect.top);
+		coverage.right = (std::max)(coverage.right, prevRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, prevRect.bottom);
+	}
+	if (nextButton && nextButton->IsVisible())
+	{
+		const RECT nextRect = nextButton->getManagedRepaintCoverageRect();
+		coverage.left = (std::min)(coverage.left, nextRect.left);
+		coverage.top = (std::min)(coverage.top, nextRect.top);
+		coverage.right = (std::max)(coverage.right, nextRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, nextRect.bottom);
+	}
+
+	return coverage;
+}
+
+RECT Table::getManagedRepaintPersistentCoverageRect() const
+{
+	// Table 当前仍按整表绘制保证正确性；分页按钮 Tooltip 属于临时浮层，
+	// 不能进入持久 coverage，否则可能污染外层兄弟控件快照。
+	RECT coverage = getBoundsRect();
+
+	if (pageNum && pageNum->IsVisible())
+	{
+		const RECT pageRect = pageNum->getManagedRepaintPersistentCoverageRect();
+		coverage.left = (std::min)(coverage.left, pageRect.left);
+		coverage.top = (std::min)(coverage.top, pageRect.top);
+		coverage.right = (std::max)(coverage.right, pageRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, pageRect.bottom);
+	}
+	if (prevButton && prevButton->IsVisible())
+	{
+		const RECT prevRect = prevButton->getManagedRepaintPersistentCoverageRect();
+		coverage.left = (std::min)(coverage.left, prevRect.left);
+		coverage.top = (std::min)(coverage.top, prevRect.top);
+		coverage.right = (std::max)(coverage.right, prevRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, prevRect.bottom);
+	}
+	if (nextButton && nextButton->IsVisible())
+	{
+		const RECT nextRect = nextButton->getManagedRepaintPersistentCoverageRect();
+		coverage.left = (std::min)(coverage.left, nextRect.left);
+		coverage.top = (std::min)(coverage.top, nextRect.top);
+		coverage.right = (std::max)(coverage.right, nextRect.right);
+		coverage.bottom = (std::max)(coverage.bottom, nextRect.bottom);
+	}
+
+	return coverage;
 }
 
 void Table::setHeaders(std::initializer_list<std::string> headers)

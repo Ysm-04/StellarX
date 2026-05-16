@@ -173,11 +173,13 @@ void Button::draw()
 
 	//保存当前样式和颜色
 	saveStyle();
+	StellarX::ControlText drawTextStyle = textStyle;
 
 	if (StellarX::ButtonMode::DISABLED == mode)   //设置禁用按钮色
 	{
 		setfillcolor(DISABLEDCOLOUR);
-		textStyle.bStrikeOut = true;
+		// 禁用态删除线只属于本次绘制效果，不回写用户公开 textStyle。
+		drawTextStyle.bStrikeOut = true;
 	}
 	else
 	{
@@ -192,11 +194,11 @@ void Button::draw()
 	setlinecolor(buttonBorderColor);
 
 	//设置字体颜色
-	settextcolor(textStyle.color);
+	settextcolor(drawTextStyle.color);
 	//设置字体样式
-	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
-		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
-		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
+	settextstyle(drawTextStyle.nHeight, drawTextStyle.nWidth, drawTextStyle.lpszFace,
+		drawTextStyle.nEscapement, drawTextStyle.nOrientation, drawTextStyle.nWeight,
+		drawTextStyle.bItalic, drawTextStyle.bUnderline, drawTextStyle.bStrikeOut);
 
 	if (needCutText)
 		cutButtonText();
@@ -432,6 +434,8 @@ bool Button::handleEvent(const ExMessage& msg)
 	// 事件吞噬规则：
 	// - 鼠标移动：只有“当前命中按钮”时才吞掉，避免前一个按钮在清 hover 时截断消息，
 	//   导致后一个真正命中的按钮收不到 WM_MOUSEMOVE。
+	//   这里的前提是：父容器会保证“没有拿到真实消息的后续兄弟”还能走一遍
+	//   clearTransientMouseState()，从而清掉旧 hover / tooltip。
 	// - 鼠标按下/抬起：命中按钮区域时吞掉，避免点击穿透到底层控件。
 	if (msg.message == WM_MOUSEMOVE)
 	{
@@ -451,6 +455,86 @@ bool Button::handleEvent(const ExMessage& msg)
 	return consume;
 }
 
+bool Button::clearTransientMouseState()
+{
+	if (!show)
+		return false;
+
+	bool hoverChanged = false;
+	bool normalClickChanged = false;
+	bool bodyVisualChanged = false;
+	bool tooltipChanged = false;
+
+	if (hover)
+	{
+		hover = false;
+		hoverChanged = true;
+		bodyVisualChanged = true;
+	}
+
+	// NORMAL 模式下的按下态只属于一次鼠标交互过程；
+	// 如果本次 WM_MOUSEMOVE 已经被同层更上层的兄弟控件消费，
+	// 当前按钮就不应继续保留这笔临时按下视觉。
+	if (mode == StellarX::ButtonMode::NORMAL && click)
+	{
+		click = false;
+		normalClickChanged = true;
+		bodyVisualChanged = true;
+	}
+
+	if (tipVisible)
+	{
+		hideTooltip();
+		tooltipChanged = true;
+	}
+
+	const bool stateChanged = bodyVisualChanged || tooltipChanged;
+	if (!stateChanged)
+		return false;
+
+	SX_LOG_TRACE("Event")
+		<< SX_T("清理按钮鼠标临时状态：id=", "clear button transient mouse state: id=")
+		<< id
+		<< SX_T(" hover=", " hover=") << (hoverChanged ? 1 : 0)
+		<< SX_T(" tooltip=", " tooltip=") << (tooltipChanged ? 1 : 0)
+		<< SX_T(" normalClick=", " normalClick=") << (normalClickChanged ? 1 : 0);
+
+	markEventVisualChanged(true);
+
+	// 只有按钮本体视觉真正变化时，才请求按钮自身区域重绘；
+	// 若只是 Tooltip 消失，hideTooltip() 已经通过回贴快照清掉了悬浮层区域，
+	// 不再额外重绘按钮本体，避免高频鼠标移动时的无意义重画。
+	if (bodyVisualChanged)
+	{
+		dirty = true;
+		requestRepaint(parent);
+	}
+
+	return true;
+}
+
+RECT Button::getManagedRepaintCoverageRect() const
+{
+	RECT coverage = getBoundsRect();
+
+	if (!tipEnabled || !tipVisible)
+		return coverage;
+
+	const RECT tipRect = tipLabel.getManagedRepaintCoverageRect();
+	coverage.left = (std::min)(coverage.left, tipRect.left);
+	coverage.top = (std::min)(coverage.top, tipRect.top);
+	coverage.right = (std::max)(coverage.right, tipRect.right);
+	coverage.bottom = (std::max)(coverage.bottom, tipRect.bottom);
+	return coverage;
+}
+
+RECT Button::getManagedRepaintPersistentCoverageRect() const
+{
+	// Tooltip 属于临时浮层，只参与完整 coverage 和上层 overlay 判断；
+	// 兄弟控件是否需要作废背景快照，只应由按钮本体这类持久绘制范围决定。
+	return getBoundsRect();
+}
+
 void Button::setOnClickListener(std::function<void()> callback)
 {
 	this->onClickCallback = std::move(callback);
@@ -467,8 +551,6 @@ void Button::setOnToggleOffListener(std::function<void()> callback)
 
 void Button::setbuttonMode(StellarX::ButtonMode mode)
 {
-	if (this->mode == StellarX::ButtonMode::DISABLED && mode != StellarX::ButtonMode::DISABLED)
-		textStyle.bStrikeOut = false;
 	//取值范围参考 buttMode的枚举注释
 	this->mode = mode;
 	dirty = true; // 标记需要重绘
@@ -558,7 +640,14 @@ void Button::setButtonShape(StellarX::ControlShape shape)
 //允许通过外部函数修改按钮的点击状态，并执行相应的回调函数
 void Button::setButtonClick(BOOL click)
 {
-	this->click = click;
+	const bool targetClick = (click != FALSE);
+	// TOGGLE 状态若没有发生变化，就不应重复触发 onToggleOn/OffCallback。
+	// 否则像 TabControl 这种“外部再次激活已激活页签”的场景，
+	// 会把页面显示/隐藏、快照失效、重绘链整条重复执行一遍，最终破坏可见页的背景恢复语义。
+	if (mode == StellarX::ButtonMode::TOGGLE && this->click == targetClick)
+		return;
+
+	this->click = targetClick;
 
 	if (mode == StellarX::ButtonMode::NORMAL && click)
 	{
@@ -683,10 +772,11 @@ void Button::hideTooltip()
 	if (tipVisible)
 	{
 		tipVisible = false;
-		if (auto* host = getHostWindow(); host && host->isManagedDispatchActive())
-			tipLabel.invalidateBackgroundSnapshot();
-		else
-			tipLabel.hide(); // 还原快照+作废，防止残影
+		// Tooltip 是 Button 的内置浮层，不属于独立控件树节点。
+		// 因此在隐藏时应直接回贴它自己的背景快照并作废，
+		// 不能仅仅作废快照，否则当本轮只重绘按钮本体区域时，
+		// Tooltip 占用的那块屏幕可能无人擦除，最终表现为“鼠标移开后提示框残留”。
+		tipLabel.hide(); // 还原快照 + 作废快照，立即清掉 Tooltip 自身绘制区域
 		tipHoverTick = GetTickCount64(); // 重置计时基线
 	}
 }

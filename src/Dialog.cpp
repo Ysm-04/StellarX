@@ -5,6 +5,10 @@ Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::Messa
 	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
 	this->id = "Dialog";
+	// Dialog 当前阶段只做“居中 + 自管内部 chrome”，
+	// 不参与外部 Stretch；宿主窗口变化时只重新居中。
+	this->layoutCapability.allowStretchX = false;
+	this->layoutCapability.allowStretchY = false;
 	setHostWindow(&hWnd);
 	show = false;
 }

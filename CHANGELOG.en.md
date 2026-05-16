@@ -7,6 +7,72 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v3.1.0] - 2026-05-15
+
+### Added
+
+- Added four-edge anchor semantics: left/right on the horizontal axis, top/bottom on the vertical axis.
+- Added `AxisSizePolicy` with `Stretch` and `FixedSize`.
+- Added `AxisAlignPolicy` with `Start`, `End`, `Center`, and `Proportional`.
+- Added layout structures: `AxisLayoutSpec`, `LayoutSpec`, `LayoutCapability`, and `ResolvedLayoutRect`.
+- Added recommended layout APIs on `Control`:
+  - `setHorizontalLayoutSpec()` / `setVerticalLayoutSpec()`
+  - `setHorizontalAnchors()` / `setVerticalAnchors()`
+  - `setHorizontalSizePolicy()` / `setVerticalSizePolicy()`
+  - `setHorizontalAlignPolicy()` / `setVerticalAlignPolicy()`
+  - `commitCurrentGeometryAsDesignRect()`
+- Added a distinction between persistent repaint coverage and transient repaint coverage, preventing temporary Tooltip layers from polluting sibling background snapshots.
+- Added KEY6 pre-release regression coverage for right-side tabs, disabled button Tooltip, TextBox shapes, MessageBox branches, and modeless Dialog/Tooltip interaction.
+
+### Changed
+
+- `localx/localy/localWidth/localHeight` are now explicitly defined as the design-time parent-local rectangle.
+- `x/y/width/height` are now explicitly defined as the current runtime drawing rectangle.
+- Normal resize, container relayout, and unified layout solving no longer write back to `local*` automatically.
+- Top-level `Window` controls and `Canvas` child controls now use the same axis-based layout solving semantics.
+- `Dialog` still recenters during window resize and does not stretch with the host window.
+- `TabControl` participates in unified layout as an outer control, while its internal tab bar and page area remain self-managed.
+- `Table` is explicitly bounded to X-axis stretch and fixed Y-axis size in this version.
+- `Label::draw()` no longer acts as a geometry-decision entry point; text changes refresh runtime content-driven size.
+- Legacy `setLayoutMode()` and `setAnchor()` remain available as compatibility inputs mapped to a limited subset of the new layout model.
+- API documentation now clarifies `Table::setData` append semantics, `TextBox` byte-length and shape boundaries, `Button::setButtonClick` / Tooltip offset semantics, SxLog common-usage scope, and `MessageBoxResult` numeric values.
+
+### Fixed
+
+- Fixed `TabControl::indexOf(const std::string&)` returning an incorrect value when the tab text is not found; it now returns `-1`.
+- Fixed hover and Tooltip state synchronization after Dialog/overlay close or occlusion.
+- Fixed stale hover/Tooltip state when a modeless Dialog consumes mouse move events above underlying controls.
+- Fixed missing overlay redraw when internal partial repaint coverage expands beyond the initial coverage reported to `Window`.
+- Fixed cross-root dirty updates not being committed in the same event round, which could delay Label repaint or temporarily leave it blank.
+- Fixed Tooltip transient layers being captured by sibling background snapshots, causing stale Tooltip artifacts or unintended erasure later.
+- Fixed several Table pagination button visual-state recovery issues.
+- Fixed multiple z-order repaint issues in mixed Canvas, TabControl, Table, and Dialog overlap scenarios.
+- Fixed `clearTransientMouseState()` visual changes under `WM_MOUSEMOVE` not being reliably registered for managed repaint.
+- Fixed closed modeless Dialog instances remaining in `Window::dialogs` long-term; closed Dialogs are now swept at an event-safe point.
+- Fixed `TextBox::draw()` font clamping and disabled `Button` rendering mutating the public `textStyle` object.
+- Fixed TextBox over-width display truncation potentially cutting a GBK/MBCS multibyte character in half.
+
+### Compatibility
+
+- Legacy layout APIs remain available. Existing projects do not need immediate migration.
+- The new layout API is the recommended path. Legacy APIs are compatibility inputs and cannot represent every advanced state in the new model.
+- `Label::textStyle` remains public. After directly modifying the font style, call `setDirty(true)` when immediate size refresh is required.
+- `Table::setHeight()` still does not enable vertical stretching; this is the current v3.1.0 capability boundary.
+
+### Known Limitations and Deferred Work
+
+- Focus system.
+- Keyboard event system.
+- Self-rendered TextBox input pipeline.
+- Internal partial repaint system for Table.
+- Vertical Stretch for Table.
+- Moving Table structural size refresh out of the draw path; currently `Table::draw()` may still call `initTextWaH()` and refresh structural size.
+- Removing the historical Canvas fallback special case for Table.
+- TabControl internal layout application path cleanup.
+- Full intelligent Tooltip placement.
+- Global automatic font scaling.
+- More complete API documentation and examples.
+
 # [v3.0.2] - 2026-04-09
 
 ## ⚙️ Changes

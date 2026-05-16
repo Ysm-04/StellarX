@@ -388,4 +388,101 @@ namespace StellarX
 		Top,
 		Bottom
 	};
+
+	/*******************************************************************************
+	 * @枚举: AxisSizePolicy
+	 * @摘要: 单轴尺寸策略，决定该轴是否允许因父容器变化而拉伸
+	 * @详细说明:
+	 *   该枚举只决定“尺寸是否变化”，不决定“位置如何求解”。
+	 *   若需要在固定尺寸下决定控件如何位移，应结合 AxisAlignPolicy 一起使用。
+	 *
+	 * @成员说明:
+	 *   Stretch   - 允许尺寸随父容器变化而变化
+	 *   FixedSize - 尺寸保持设计态大小，仅位置按锚点/位移策略变化
+	 ******************************************************************************/
+	enum class AxisSizePolicy
+	{
+		Stretch,
+		FixedSize
+	};
+
+	/*******************************************************************************
+	 * @枚举: AxisAlignPolicy
+	 * @摘要: 单轴固定尺寸时的位置策略
+	 * @详细说明:
+	 *   该策略只在“该轴不拉伸”时生效，用于决定控件在父容器变化后如何重新定位。
+	 *   其中 Proportional 只用于位置求解，不参与尺寸缩放。
+	 *
+	 * @成员说明:
+	 *   Start        - 保持起边距离
+	 *   End          - 保持终边距离
+	 *   Center       - 保持相对父容器中心的偏移关系
+	 *   Proportional - 保持设计态中的相对位置比例
+	 ******************************************************************************/
+	enum class AxisAlignPolicy
+	{
+		Start,
+		End,
+		Center,
+		Proportional
+	};
+
+	/*******************************************************************************
+	 * @结构体: AxisLayoutSpec
+	 * @摘要: 描述单个坐标轴上的锚点与解算策略
+	 * @详细说明:
+	 *   一个控件完整布局由“水平轴 + 垂直轴”两份 AxisLayoutSpec 组成。
+	 *   anchorStart / anchorEnd 只表达当前轴是否锚定起止边；
+	 *   sizePolicy 决定该轴是否允许拉伸；
+	 *   alignPolicy 则用于固定尺寸时的位置求解。
+	 ******************************************************************************/
+	struct AxisLayoutSpec
+	{
+		bool anchorStart = false;
+		bool anchorEnd = false;
+		AxisSizePolicy sizePolicy = AxisSizePolicy::FixedSize;
+		AxisAlignPolicy alignPolicy = AxisAlignPolicy::Start;
+	};
+
+	/*******************************************************************************
+	 * @结构体: LayoutSpec
+	 * @摘要: 控件完整布局规格，由水平轴和垂直轴两部分组成
+	 ******************************************************************************/
+	struct LayoutSpec
+	{
+		AxisLayoutSpec horizontal{};
+		AxisLayoutSpec vertical{};
+	};
+
+	/*******************************************************************************
+	 * @结构体: LayoutCapability
+	 * @摘要: 控件能力边界，声明控件在哪些轴上允许 Stretch
+	 * @详细说明:
+	 *   规则表负责定义“某种组合如何解算”，LayoutCapability 负责声明
+	 *   “该控件是否允许采用这种组合”。例如 Table 当前阶段仅允许 X 轴拉伸，
+	 *   因此 allowStretchY 会被显式关闭。
+	 ******************************************************************************/
+	struct LayoutCapability
+	{
+		bool allowStretchX = true;
+		bool allowStretchY = true;
+	};
+
+	/*******************************************************************************
+	 * @结构体: ResolvedLayoutRect
+	 * @摘要: 统一布局解算后的运行态矩形结果
+	 * @详细说明:
+	 *   localX/localY 表示解算完成后的“父局部坐标”；
+	 *   worldX/worldY 表示映射到窗口世界坐标后的最终绘制位置；
+	 *   width/height 为运行态尺寸。
+	 ******************************************************************************/
+	struct ResolvedLayoutRect
+	{
+		int localX = 0;
+		int localY = 0;
+		int width = 0;
+		int height = 0;
+		int worldX = 0;
+		int worldY = 0;
+	};
 }
