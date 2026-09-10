@@ -2,13 +2,14 @@
  * @file demo.cpp
  * @brief 一个简单的演示程序，展示 StellarX GUI 框架的基本用法。
  * @description 创建一个带有按钮的窗口，点击按钮会弹出对话框
+ * @note 来源：项目作者提供。
  */
 
  // 只需包含这一个头文件即可使用所有功能
 #include "StellarX.h"
 
 // 程序入口点（请使用WinMain以获得更好的兼容性）
-int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
 	// 1. 创建一个640x480的窗口，背景为白色，标题为"我的应用"
 	Window mainWindow(640, 480, 0, RGB(255, 255, 255), "我的第一个星垣应用");
@@ -20,9 +21,10 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		StellarX::ButtonMode::NORMAL,
 		StellarX::ControlShape::ROUND_RECTANGLE
 	);
+	auto* myButtonPtr = myButton.get();
 
 	// 3. 为按钮设置点击事件（使用Lambda表达式）
-	myButton->setOnClickListener([&mainWindow]() {
+	myButton->setOnClickListener([&mainWindow, myButtonPtr]() {
 		// 使用消息框工厂创建模态对话框
 		auto result = StellarX::MessageBox::showModal(
 			mainWindow,
@@ -32,12 +34,12 @@ int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _
 		);
 		// 处理对话框结果
 		if (result == StellarX::MessageBoxResult::OK) {
-			// 用户点击了确定按钮
+			myButtonPtr->setButtonText("已确认");
+		}
+		else {
+			myButtonPtr->setButtonText("已取消");
 		}
 		});
-
-
-
 	// 4. (可选)设置按钮样式
 	myButton->textStyle.nHeight = 20;
 	myButton->textStyle.color = RGB(0, 0, 128); // 深蓝色文字

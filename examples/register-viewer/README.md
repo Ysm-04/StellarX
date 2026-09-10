@@ -1,17 +1,14 @@
-# Register Viewer (StellarX example)
+# 32 位寄存器查看器
 
-**A 32-bit register visualizer built with StellarX** (Windows + EasyX).  
-Features:
-- 32 toggle bits (MSB→LSB = 31..0)
-- Range invert, logical left/right shift
-- Hex/Decimal display with signed/unsigned toggle
-- Grouped binary view with "last/current" snapshots
-- One-click set all 0 / all 1
+来源：项目作者提供。
 
-## Build & Run
-1. Ensure StellarX and EasyX are in your include/lib paths.
-2. Build as a normal C++ Win32 desktop app (e.g., VS 2019+).
-3. Run the executable.
+功能包括：
 
-This example demonstrates StellarX APIs with a single `main.cpp` (~450 LOC):
-`Window / Canvas / Button / Label / TextBox` + simple event callbacks.
+- 直接切换 31~0 位并实时更新显示；
+- 对指定闭区间执行按位取反；
+- 逻辑左移、逻辑右移；
+- 十六进制、十进制、分组二进制显示；
+- 有符号/无符号十进制切换；
+- 一键置 0 或置 1。
+
+输入范围限定为 `0~31`，非法内容会显示提示。源码为 `main.cpp`，预览程序为 `register-viewer.exe`。

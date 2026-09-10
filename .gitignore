@@ -24,6 +24,9 @@
 *.dll
 *.lib
 
+# examples 中的 Release EXE 与对应源码一同提供。
+!/examples/**/*.exe
+
 # 临时文件
 *.cache
 *.zip
