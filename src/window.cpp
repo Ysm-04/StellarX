@@ -1,6 +1,7 @@
 ﻿#include "Window.h"
 #include "Dialog.h"
 #include"SxLog.h"
+#include "SxEventLoopInternal.h"
 #include <easyx.h>
 #include <algorithm>
 // 可能频繁出现且对调试信息干扰较大的消息（例如鼠标移动），
@@ -49,6 +50,97 @@ static void collectManagedControlOverlays(const std::vector<std::unique_ptr<Cont
 bool Window::isManagedDispatchActive() const
 {
 	return managedDispatchActive;
+}
+
+void Window::beginMutationScope()
+{
+	// Window 是顶层 mutation 边界；嵌套事务只增加深度，不立即提交任何结构变更。
+	++mutationScopeDepth;
+}
+
+void Window::endMutationScope()
+{
+	// 只有最外层事务结束后才允许提交队列，保证事件遍历和回调链中的对象地址稳定。
+	if (mutationScopeDepth > 0)
+		--mutationScopeDepth;
+	if (mutationScopeDepth == 0 && !managedDispatchActive)
+		flushPendingMutationsInTree();
+}
+
+bool Window::isMutationTransactionActive() const
+{
+	// applyingControlMutations 也视作事务，避免提交队列时因回调递归修改同一容器。
+	return managedDispatchActive || mutationScopeDepth > 0 || applyingControlMutations;
+}
+
+void Window::requestFullSceneRedraw()
+{
+	// 非局部变化只置位，不在调用点立即绘制；主循环安全点会统一消费该请求。
+	fullSceneRedrawRequested = true;
+}
+
+void Window::flushPendingControlMutations()
+{
+	// Window 是顶层所有权边界；这里只在最外层事务结束后修改 controls，保证回调遍历安全。
+	if (applyingControlMutations || pendingControlMutations.empty())
+		return;
+	applyingControlMutations = true;
+	bool changed = false;
+	for (auto& mutation : pendingControlMutations)
+	{
+		switch (mutation.kind)
+		{
+		case ControlMutationKind::Add:
+			if (mutation.control)
+			{
+				mutation.control->setHostWindow(this);
+				controls.push_back(std::move(mutation.control));
+				changed = true;
+			}
+			break;
+		case ControlMutationKind::Remove:
+		{
+			auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+				{ return item && item->getHandle() == mutation.handle; });
+			if (it != controls.end())
+			{
+				controls.erase(it);
+				changed = true;
+			}
+			break;
+		}
+		case ControlMutationKind::Clear:
+			if (!controls.empty())
+			{
+				controls.clear();
+				changed = true;
+			}
+			break;
+		}
+	}
+	pendingControlMutations.clear();
+	applyingControlMutations = false;
+	if (changed)
+	{
+		// 顶层结构变化会影响 z-order 和所有背景快照，因此不能只重画单个旧 root。
+		clearManagedRepaintState();
+		fullSceneRedrawRequested = true;
+	}
+}
+
+void Window::flushPendingMutationsInTree()
+{
+	flushPendingControlMutations();
+	for (auto& control : controls)
+		if (control) control->flushPendingMutations();
+	for (auto& dialog : dialogs)
+		if (dialog) dialog->flushPendingMutations();
+}
+
+void Window::markAllControlsDirty()
+{
+	for (auto& control : controls)
+		if (control) control->setDirty(true);
 }
 
 /**
@@ -171,6 +263,8 @@ void Window::drawWindowBackground()
 
 void Window::redrawScene(bool forceControlsDirty, bool forceDialogsDirty)
 {
+	// 全场景重绘是 resize、对话框层级变化和结构提交的保守收口路径。
+	beginMutationScope();
 	drawWindowBackground();
 
 	for (auto& c : controls)
@@ -185,6 +279,7 @@ void Window::redrawScene(bool forceControlsDirty, bool forceDialogsDirty)
 			d->setDirty(true);
 		d->draw();
 	}
+	endMutationScope();
 }
 
 /**
@@ -571,6 +666,7 @@ Window::Window(int w, int h, int mode, COLORREF bk, std::string title)
 Window::~Window()
 {
 	// 先销毁控件树，再关闭图形环境，避免控件析构时访问已关闭的 EasyX 上下文。
+	pendingControlMutations.clear();
 	dialogs.clear();
 	controls.clear();
 	background.reset();
@@ -703,7 +799,7 @@ void Window::draw()
 	{
 		hWnd = initgraph(width, height, windowMode);
 	}
-	
+
 	// 子类化：让我们的 WndProcThunk 接管窗口消息（仅执行一次）
 	if (!procHooked)
 	{
@@ -786,22 +882,18 @@ void Window::draw(std::string imagePath)
 int Window::runEventLoop()
 {
 	ExMessage msg;
-	bool running = true;
 
 	// 说明：统一使用 needResizeDirty 作为“收口重绘”的唯一标志位
 	//       不再引入额外 pendingResize 等状态，避免分叉导致状态不一致。
-	while (running)
+	while (true)
 	{
-	
-		bool consume = false; // 事件是否被消费的标志（用于输入事件分发）
-
-		if (peekmessage(&msg, EX_MOUSE | EX_KEY | EX_WINDOW, true))
-		{
+		// drainMessageBatch 将一轮消息限制在固定上限；批次结束后统一处理 resize、tick 和重绘。
+		const auto batch = StellarX::Internal::drainMessageBatch(msg,
+			[](ExMessage& next) { return peekmessage(&next, EX_MOUSE | EX_KEY | EX_WINDOW, true); },
+			[&](const ExMessage&) {
+			bool consume = false; // 每条消息独立判断，不能把上一条消息的消费状态带入下一条。
 			if (msg.message == WM_CLOSE)
-			{
-				running = false;
-				return 0;
-			}
+				return false;
 
 			// 保险：如果 EX_WINDOW 转译了 GETMINMAXINFO，同样按最小客户区折算处理
 			if (msg.message == WM_GETMINMAXINFO)
@@ -813,7 +905,7 @@ int Window::runEventLoop()
 				AdjustWindowRectEx(&rc, style, FALSE, ex);
 				mmi->ptMinTrackSize.x = rc.right - rc.left;
 				mmi->ptMinTrackSize.y = rc.bottom - rc.top;
-				continue;
+				return true;
 			}
 
 			// 关键点⑥：WM_SIZE 只记录新尺寸；若非拉伸阶段则立即置位 needResizeDirty
@@ -835,7 +927,7 @@ int Window::runEventLoop()
 
 					}
 				}
-				continue;
+				return true;
 			}
 
 			// 输入优先：先给顶层“非模态对话框”，再传给普通控件。
@@ -908,11 +1000,24 @@ int Window::runEventLoop()
 					<< SX_T(" id=", " id=") << firstConsumer->getId();
 			}
 			managedDispatchActive = false;
-		}
+			flushPendingMutationsInTree();
+			return true;
+		});
+		if (batch.stopped)
+			return 0;
+
+		const ULONGLONG nowMs = GetTickCount64();
+		// tick 独立于鼠标消息推进 Tooltip 等延时状态，仍放在事务内避免回调立即改 vector。
+		beginMutationScope();
+		for (auto& control : controls)
+			if (control && control->IsVisible()) control->tick(nowMs);
+		for (auto& dialog : dialogs)
+			if (dialog && dialog->IsVisible()) dialog->tick(nowMs);
+		endMutationScope();
 
 		// 对话框打开/关闭属于全局层级变化：这里仍然使用整场景重绘兜底，
 		// 并在结束后清空本轮托管重绘登记，避免旧的 root 请求延后提交。
-		bool needredraw = false;
+		bool needredraw = fullSceneRedrawRequested;
 		if(dialogOpen)
 		{
 			for (auto& d : dialogs)
@@ -939,8 +1044,9 @@ int Window::runEventLoop()
 			EndBatchDraw();
 			needredraw = false;
 			dialogOpen = false;
+			fullSceneRedrawRequested = false;
 			clearManagedRepaintState();
-			
+
 		}
 		// —— 统一收口（needResizeDirty 为真时执行一次性重绘）——
 		// resize 会改变布局和背景基线，因此仍然走整场景重绘，而不是局部 root 提交。
@@ -1059,11 +1165,10 @@ int Window::runEventLoop()
 
 		sweepClosedDialogs();
 
-		// 轻微睡眠，削峰填谷（不阻塞拖拽体验）
-		Sleep(10);
+		// 只在真正空闲时短暂让出 CPU；有消息的批次不得人为限速。
+		if (batch.shouldSleep())
+			Sleep(1);
 	}
-
-	return 1;
 }
 
 // ---------------- 其余接口 ----------------
@@ -1099,11 +1204,76 @@ void Window::setHeadline(std::string title)
 		SetWindowText(hWnd, headline.c_str());
 }
 
-void Window::addControl(std::unique_ptr<Control> control)
+StellarX::ControlHandle Window::addControl(std::unique_ptr<Control> control)
 {
+	if (!control)
+		return {};
+	const StellarX::ControlHandle handle = control->getHandle();
+	// 回调或绘制阶段只排队所有权变更；非事务调用则立即提交，保持旧的同步使用体验。
+	if (isMutationTransactionActive())
+	{
+		PendingControlMutation mutation;
+		mutation.kind = ControlMutationKind::Add;
+		mutation.handle = handle;
+		mutation.control = std::move(control);
+		pendingControlMutations.push_back(std::move(mutation));
+		return handle;
+	}
 	// 新增控件：仅加入管理容器，具体绘制在 draw()/收口时统一进行
 	control->setHostWindow(this);
 	controls.push_back(std::move(control));
+	return handle;
+}
+
+bool Window::removeControl(StellarX::ControlHandle handle)
+{
+	if (!handle)
+		return false;
+	bool exists = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; }) != controls.end();
+	for (const auto& mutation : pendingControlMutations)
+	{
+		if (mutation.kind == ControlMutationKind::Clear)
+			exists = false;
+		else if (mutation.handle == handle)
+			exists = mutation.kind == ControlMutationKind::Add;
+	}
+	if (!exists)
+		return false;
+	pendingControlMutations.push_back({ ControlMutationKind::Remove, handle, nullptr });
+	if (!isMutationTransactionActive())
+		flushPendingMutationsInTree();
+	return true;
+}
+
+void Window::clearControls()
+{
+	pendingControlMutations.push_back({ ControlMutationKind::Clear, {}, nullptr });
+	if (!isMutationTransactionActive())
+		flushPendingMutationsInTree();
+}
+
+Control* Window::findControl(StellarX::ControlHandle handle)
+{
+	auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; });
+	return it == controls.end() ? nullptr : it->get();
+}
+
+const Control* Window::findControl(StellarX::ControlHandle handle) const
+{
+	auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; });
+	return it == controls.end() ? nullptr : it->get();
+}
+
+std::vector<StellarX::ControlHandle> Window::getControlHandles() const
+{
+	std::vector<StellarX::ControlHandle> handles;
+	handles.reserve(controls.size());
+	for (const auto& control : controls)
+		if (control) handles.push_back(control->getHandle());
+	return handles;
 }
 
 void Window::addDialog(std::unique_ptr<Control> dlg)
@@ -1172,11 +1342,6 @@ IMAGE* Window::getBkImage() const
 std::string Window::getBkImageFile() const
 {
 	return bkImageFile;
-}
-
-std::vector<std::unique_ptr<Control>>& Window::getControls()
-{
-	return controls;
 }
 
 void Window::pumpResizeIfNeeded()

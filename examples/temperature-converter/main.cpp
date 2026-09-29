@@ -105,7 +105,6 @@ int main()
                 return;
             }
             fahrenheitResultPtr->setText(formatTemperature(fahrenheit) + " ℉");
-            fahrenheitResultPtr->draw();
         });
 
     // 华氏转摄氏：C = (F - 32) ÷ 1.8。
@@ -130,7 +129,6 @@ int main()
                 return;
             }
             celsiusResultPtr->setText(formatTemperature(celsius) + " ℃");
-            celsiusResultPtr->draw();
         });
 
     // Window 接管控件后完成首次绘制，并进入事件循环。

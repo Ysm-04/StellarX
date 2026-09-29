@@ -7,6 +7,53 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v4.0.0] - 2026-09-30
+
+v4.0.0 contains breaking changes to control ownership, text styles, and TabControl APIs. Read the Compatibility and Migration section before upgrading.
+
+### Added
+
+- Added `StellarX::ControlHandle` as a stable control identity for the current process run.
+- Added controlled ownership APIs to Window and Canvas: `addControl()`, `removeControl()`, `clearControls()`, `findControl()`, and `getControlHandles()`.
+- Added nested structural-mutation transactions. Control add/remove/clear requests made during events, drawing, ticks, or button callbacks enter pending queues and commit at a safe point after the outermost transaction.
+- Added a control tick chain so delayed states such as Tooltip visibility no longer depend on additional mouse messages.
+- Added `src/internal/SxEventLoopInternal.h` and `src/internal/SxTextInternal.h`. They ship with source distributions but are not public APIs.
+
+### Changed
+
+- `ControlText::faceName` is now an owning `std::string`, and text-style comparison uses string content.
+- TabControl now uses `addTab(button, page)` and `tryAddToPage(index, control)`. Page identity is index-based and duplicate captions are valid.
+- `TabControl::setActiveIndex()` now returns `bool`. Empty controls may record an initial index; invalid runtime indices return `false`.
+- `SxLogger::setConfig()` now returns `bool`. A candidate file sink replaces the old configuration only after it opens successfully.
+- The event loop processes up to 128 messages per batch. Active rounds no longer sleep unconditionally; idle rounds use a short `Sleep(1)`, and resize/repaint consolidation runs at each batch boundary.
+- Source distribution layout is now explicit: public headers in `include/StellarX`, implementations in `src`, and implementation-only headers in `src/internal`.
+
+### Fixed
+
+- Fixed UAF and iterator invalidation risks when callbacks remove themselves, remove siblings, or clear a container.
+- Fixed empty TabControl draw/activation bounds errors and duplicate-caption tabs becoming active simultaneously.
+- Unified snapshot, geometry-setter, and coverage rectangle semantics to remove stale pixels after move, resize, or hide operations.
+- Fixed redundant full-scene redraws during Dialog cleanup, overlay cleanup ordering, and underlying interaction restoration.
+- Fixed narrow Table sizing, column-width totals, MBCS truncation, and coverage boundaries; also fixed old pagination-button snapshots covering a newly rendered page label after runtime data reset.
+- Fixed Tooltip timing with a stationary cursor and inconsistent cleanup after disable or mouse leave.
+- Fixed password masking by byte rather than logical MBCS character, including malformed trailing-byte handling.
+- Fixed logger rotation name collisions, possible truncation after rename failure, and configuration/file-sink desynchronization.
+
+### Compatibility and Migration
+
+- Removed `Window::getControls()` and `Canvas::getControls()`. Store `ControlHandle` values and call `findControl()` when temporary object access is needed.
+- Removed `Canvas::clearAllControls()`; use `clearControls()`.
+- Replace `ControlText::lpszFace` with `ControlText::faceName`.
+- Migrate legacy `TabControl::add(...)` calls to `addTab()` / `tryAddToPage()`.
+- Callers may check the new boolean results from `setActiveIndex()` and `SxLogger::setConfig()`.
+- After requesting control removal inside a callback, do not access that control again. Destruction occurs when the outermost transaction ends.
+
+### Validation
+
+- On 2026-09-30, the development repository passed 15/15 non-UI tests in Debug x64, Debug x64 ASan, Release x64, and Debug Win32.
+- x64 ASan reported no memory errors, and KEY1 through KEY6 all compiled and linked.
+- KEY1 through KEY6 completed manual UI regression with no obvious issues found.
+- The release repository compiled and linked the x64 Debug/Release core library and all nine examples through CMake without starting any example UI.
 ## [v3.1.0] - 2026-05-15
 
 ### Added

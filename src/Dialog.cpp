@@ -1,5 +1,6 @@
 ﻿#include "Dialog.h"
 #include "SxLog.h"
+#include "SxEventLoopInternal.h"
 
 Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::MessageBoxType type, bool modal)
 	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
@@ -52,7 +53,7 @@ void Dialog::draw()
 		setbkmode(TRANSPARENT);
 
 		//设置字体样式
-		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 
@@ -181,6 +182,8 @@ void Dialog::Show()
 
 		while (show)
 		{
+			// 模态对话框保留自己的轮询循环，但消息同样批量处理并在每轮末尾统一绘制。
+			int processedMessages = 0;
 			// ① 轮询窗口尺寸（不依赖 WM_SIZE）
 			RECT rc;
 			GetClientRect(hWnd.getHwnd(), &rc);
@@ -205,12 +208,13 @@ void Dialog::Show()
 
 			// ② 处理这只对话框的鼠标/键盘（沿用原来 EX_MOUSE | EX_KEY）
 			ExMessage msg;
-			if (peekmessage(&msg, EX_MOUSE | EX_KEY))
-			{
-				handleEvent(msg);
-				if (!show)
-					break;
-			}
+			const auto batch = StellarX::Internal::drainMessageBatch(msg,
+				[](ExMessage& next) { return peekmessage(&next, EX_MOUSE | EX_KEY); },
+				[&](const ExMessage& next) {
+					handleEvent(next);
+					return show;
+				});
+			processedMessages = static_cast<int>(batch.processed);
 
 			// ③ 最后一笔：只画这只模态，保证永远在最上层
 			if (dirty)
@@ -221,7 +225,8 @@ void Dialog::Show()
 				dirty = false;
 			}
 
-			Sleep(10);
+			if (batch.shouldSleep())
+				Sleep(1);
 		}
 
 		if (pendingCleanup && !isCleaning)
@@ -236,13 +241,20 @@ void Dialog::Close()
 {
 	if (!show) return;
 
+	// 关闭只改变可见状态并登记一次全场景收口；对象和快照清理延后到安全阶段执行。
 	show = false;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
+	hWnd.dialogClose = true;
+	hWnd.requestFullSceneRedraw();
 
 	// 工厂模式下非模态触发回调 返回结果
 	if (resultCallback && !modal)
+	{
+		// 回调可能继续修改宿主控件树，因此也纳入 MutationScope，禁止遍历期间立即销毁对象。
+		auto mutationScope = enterMutationScope();
 		resultCallback(this->result);
+	}
 }
 
 void Dialog::recenterInHostWindow()
@@ -538,7 +550,7 @@ void Dialog::splitMessageLines()
 void Dialog::getTextSize()
 {
 	saveStyle();
-	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 	this->textHeight = 0;
@@ -607,7 +619,7 @@ void Dialog::initDialogSize()
 	// 计算文本区域宽度（包括边距）
 	int textAreaWidth = textWidth + textToBorderMargin * 2;
 	saveStyle();
-	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 	int titleAreaWidth = textwidth(LPCTSTR(titleText.c_str())) + textToBorderMargin * 2 + closeButtonWidth + buttonMargin;
@@ -650,37 +662,15 @@ void Dialog::performDelayedCleanup()
 
 	isCleaning = true;
 
-	auto& c = hWnd.getControls();
-	for (auto& control : c)
-		control->setDirty(true);
-
+	for (auto& control : controls)
+		control->invalidateBackgroundSnapshot();
 	controls.clear();
 
 	// 重置指针
 	closeButton = nullptr;
-	// 释放背景图像资源
-	if (saveBkImage && hasSnap)
-	{
-		restBackground();
-		FlushBatchDraw();
-		invalidateBackgroundSnapshot();
-	}
-	if (!(saveBkImage && hasSnap))
-	{
-		// 没有背景快照：强制一次完整重绘，立即擦掉残影
-		hWnd.pumpResizeIfNeeded(); // 如果正好有尺寸标志，顺便统一收口
-		// 即使没有尺寸变化，也重绘一帧
-		BeginBatchDraw();
-		// 背景
-		if (hWnd.getBkImage() && !hWnd.getBkImageFile().empty())
-			putimage(0, 0, hWnd.getBkImage());
-		else { setbkcolor(hWnd.getBkcolor()); cleardevice(); }
-		// 所有普通控件
-		for (auto& c : hWnd.getControls()) c->draw();
-		// 其他对话框（this 已经 show=false，会早退不绘）
-		EndBatchDraw();
-		FlushBatchDraw();
-	}
+	// 清理阶段不直接写屏；Window 会在安全点统一重绘剩余场景。
+	invalidateBackgroundSnapshot();
+	hWnd.requestFullSceneRedraw();
 	// 重置状态
 	needsInitialization = true;
 	pendingCleanup = false;

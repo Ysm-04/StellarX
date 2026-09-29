@@ -1,6 +1,8 @@
 ﻿#include "SxLog.h"
 #include <cstdlib>
 #include <clocale>
+#include <filesystem>
+#include <system_error>
 
 /********************************************************************************
  * @文件: SxLog.cpp
@@ -90,7 +92,7 @@ namespace StellarX
         // 说明:
         // - makeTimestampLocal 形如 "2026-01-09 12:34:56"
         // - 文件名中把 '-' ' ' ':' 替换为 '_'，只保留数字与 '_'，降低环境差异
-        const std::string ts = SxLogger::makeTimestampLocal();
+		const std::string ts = SxLogger::makeTimestampLocal();
         std::string safeTs;
         safeTs.reserve(ts.size());
         for (char ch : ts)
@@ -100,12 +102,32 @@ namespace StellarX
         }
         if (safeTs.empty()) safeTs = "rotated";
 
-        const std::string rotated = filePath + "." + safeTs;
-        std::rename(filePath.c_str(), rotated.c_str());
+		// 毫秒和序号共同组成后缀，解决同一秒甚至同一毫秒内多次滚动的冲突。
+		const auto now = std::chrono::system_clock::now();
+		const auto millis = std::chrono::duration_cast<std::chrono::milliseconds>(
+			now.time_since_epoch()).count() % 1000;
+		std::ostringstream suffix;
+		suffix << safeTs << "_" << std::setw(3) << std::setfill('0') << millis;
 
-        // 重新打开新文件
-        // 注意: 这里用 append=false，确保新文件从空开始
-        return open(filePath, false);
+		std::filesystem::path rotated;
+		std::error_code ec;
+		do
+		{
+			rotated = filePath + "." + suffix.str() + "." + std::to_string(rotateSequence++);
+			ec.clear();
+		} while (std::filesystem::exists(rotated, ec) && !ec);
+
+		ec.clear();
+		std::filesystem::rename(filePath, rotated, ec);
+		if (ec)
+		{
+			// 重命名失败时必须保留原文件，并以追加模式恢复写入，绝不能截断。
+			ofs.open(filePath.c_str(), std::ios::out | std::ios::app);
+			return false;
+		}
+
+		// 只有滚动文件已安全落盘后，才创建新的空日志文件。
+		return open(filePath, false);
     }
 
     // -------- SxLogger --------
@@ -225,23 +247,26 @@ namespace StellarX
     {
         std::lock_guard<std::mutex> lock(mtx);
 
-        if (!fileSink) fileSink.reset(new FileSink());
-        fileSink->setRotateBytes(rotateBytes_);
-
-        const bool ok = fileSink->open(path, append);
-        cfg.fileEnabled = ok;
-        cfg.filePath = path;
-        cfg.fileAppend = append;
-        cfg.rotateBytes = rotateBytes_;
-        return ok;
+		if (fileSink) fileSink->flush();
+		auto candidate = std::make_unique<FileSink>();
+		candidate->setRotateBytes(rotateBytes_);
+		if (!candidate->open(path, append))
+			return false;
+		fileSink = std::move(candidate);
+		cfg.fileEnabled = true;
+		cfg.filePath = path;
+		cfg.fileAppend = append;
+		cfg.rotateBytes = rotateBytes_;
+		return true;
     }
 
     // 关闭文件输出
     void SxLogger::disableFile()
     {
         std::lock_guard<std::mutex> lock(mtx);
-        if (fileSink) fileSink->close();
-        cfg.fileEnabled = false;
+		if (fileSink) fileSink->close();
+		fileSink.reset();
+		cfg.fileEnabled = false;
     }
 
     // 获取配置副本
@@ -254,10 +279,29 @@ namespace StellarX
     }
 
     // 设置配置（整体替换）
-    void SxLogger::setConfig(const SxLogConfig& c)
+    bool SxLogger::setConfig(const SxLogConfig& c)
     {
         std::lock_guard<std::mutex> lock(mtx);
-        cfg = c;
+		std::unique_ptr<FileSink> candidate;
+		if (c.fileEnabled)
+		{
+			// 先创建候选 sink；任意打开失败都直接返回，保留旧 sink 和旧配置。
+			if (c.filePath.empty())
+				return false;
+			if (fileSink) fileSink->flush();
+			candidate = std::make_unique<FileSink>();
+			candidate->setRotateBytes(c.rotateBytes);
+			if (!candidate->open(c.filePath, c.fileAppend))
+				return false;
+		}
+
+		// 候选 sink 已经可用后才关闭旧 sink，确保配置切换不会出现短暂的无输出状态。
+		if (fileSink)
+			fileSink->close();
+		fileSink = std::move(candidate);
+		cfg = c;
+		cfg.fileEnabled = (fileSink != nullptr);
+		return true;
     }
 
     // 级别转字符串

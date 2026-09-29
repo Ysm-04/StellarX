@@ -14,8 +14,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-3.1.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-3.1.0_Release-blue.svg)
+![Source Version](https://img.shields.io/badge/Source-4.0.0-brightgreen.svg)
+![Binary Release](https://img.shields.io/badge/Binary_Release-4.0.0-blue.svg)
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
@@ -62,15 +62,15 @@ KEY4 Dialog 与 MessageBox 预览
 
 ## 最新版本
 
-### v3.1.0 (2026-05-15)
+### v4.0.0 (2026-09-30)
 
-v3.1.0 是一次布局与托管重绘稳定化版本，重点把前一阶段已经落地的能力整理为可说明、可验证、可迁移的公开语义。
+v4.0.0 是一次包含破坏性 API 调整的核心稳定性版本，重点解决回调期间控件树变更、运行期几何残影、文本所有权、日志文件切换和消息积压等问题。
 
-- **新布局 API 正式收口**：新增四边锚点集合、单轴尺寸策略 `AxisSizePolicy`、单轴固定尺寸位移策略 `AxisAlignPolicy`，并保留旧 `setLayoutMode()` / `setAnchor()` 作为兼容输入层。
-- **几何语义明确**：`localx/localy/localWidth/localHeight` 是设计态父局部矩形，`x/y/width/height` 是当前运行态绘制矩形；普通 resize 和布局解算不会自动回写设计基线。
-- **托管重绘链路稳定化**：进一步收口 Window / Canvas / TabControl / Table / Dialog 的脏区、coverage、overlay 和 Tooltip 临时浮层处理，降低遮挡、残影、错层和 hover 残留风险。
-- **Dialog / MessageBox 稳定性延续**：Dialog 在宿主窗口 resize 时继续保持居中，不参与拉伸；MessageBox 保持薄工厂层语义。
-- **当前边界明确**：Table 当前版本为 X 轴可拉伸、Y 轴固定；Tooltip 暂未实现智能选位；焦点与键盘事件系统仍为后续专题。
+- **安全的控件所有权接口**：新增稳定 `ControlHandle`，Window 与 Canvas 通过 add/remove/clear/find/handles 接口管理控件，不再公开可变 `unique_ptr` 容器。
+- **延迟结构变更事务**：事件、绘制、tick 和按钮回调期间的新增、删除与清空会在最外层事务结束后提交，避免遍历中的对象和迭代器失效。
+- **文本与页签 API 收口**：`ControlText::faceName` 改为拥有型字符串；TabControl 使用 `addTab()` / `tryAddToPage()`，并允许重复页签标题。
+- **事件循环与定时状态改进**：消息按批处理，活动轮不再固定休眠；Tooltip 等延时状态由单调时钟 tick 链驱动。
+- **缺陷修复**：修复空 TabControl、几何旧像素、Table 分页首帧覆盖、Dialog 清理、Tooltip、MBCS 截断/密码掩码、日志滚动和配置切换等问题。
 
 完整更新日志：[CHANGELOG.md](CHANGELOG.md)
 
@@ -96,6 +96,9 @@ StellarX/
 │       ├── Dialog.h
 │       └── MessageBox.h
 ├── src/
+│   ├── internal/
+│   │   ├── SxEventLoopInternal.h
+│   │   └── SxTextInternal.h
 │   ├── Control.cpp
 │   ├── Window.cpp
 │   ├── Button.cpp
@@ -133,13 +136,14 @@ StellarX/
 - **控件齐全**：Button、Label、TextBox、Canvas、TabControl、Table、Dialog、MessageBox。
 - **统一布局语义**：支持四边锚点、单轴 Stretch/FixedSize、Start/End/Center/Proportional 位移策略。
 - **容器嵌套**：Canvas 与 TabControl 支持父局部坐标到窗口世界坐标的映射。
+- **稳定句柄与延迟变更**：回调期间可安全请求新增、删除或清空控件，实际结构变更在安全点提交。
 - **托管重绘**：事件阶段只修改状态并登记脏区，Window 在收口阶段统一提交重绘。
 - **对话框体系**：Dialog 支持模态/非模态，MessageBox 提供标准消息框工厂接口。
 - **调试日志**：SxLog 支持控制台/文件输出、级别过滤、Tag 过滤和中英文日志文本选择。
 
 ## 快速开始
 
-从 [Releases](https://github.com/Ysm-04/StellarX/releases/latest) 获取预编译包，或直接集成源码。
+从 [Releases](https://github.com/Ysm-04/StellarX/releases/latest) 获取已发布的预编译包，或按下文直接集成当前源码。
 
 ### 环境要求
 
@@ -147,7 +151,7 @@ StellarX/
 - Visual Studio 2019+ 或兼容 MSVC 工具链
 - C++17
 - EasyX 2022+，并与当前 Visual Studio 版本匹配
-- CMake 3.12+，可选
+- CMake 3.15+，可选
 
 ### 安装 EasyX
 
@@ -157,21 +161,43 @@ StellarX/
 
 ### CMake 构建
 
-```bash
+```powershell
 git clone https://github.com/Ysm-04/StellarX.git
 cd StellarX
-mkdir build
-cd build
-cmake ..
-cmake --build .
+cmake -S . -B build -A x64
+cmake --build build --config Release
 ```
 
-### 手动集成
+### 直接集成源码
 
-- 拷贝 `include` 与 `src` 到工程中。
-- 配置头文件搜索路径：`include/StellarX/`。
-- 将 `src` 下全部 `.cpp` 加入工程编译。
-- 在业务代码中包含：`#include "StellarX.h"`。
+请保留下面三部分的相对结构，不要把私有头移动到公共 include 目录：
+
+| 路径 | 角色 | 用户工程中的处理 |
+| --- | --- | --- |
+| `include/StellarX/*.h` | 公共 API 头 | 加入“公共头文件”分组，并配置为业务代码的包含目录 |
+| `src/*.cpp` | 框架实现 | 全部加入编译，且每个文件只能编译一次 |
+| `src/internal/*.h` | 实现专用私有头 | 随源码保留；只供框架 `.cpp` 使用，业务代码不得直接包含 |
+
+Visual Studio 中把源码直接加入现有应用工程时：
+
+1. 将 `include/StellarX/*.h`、`src/*.cpp` 和 `src/internal/*.h` 按上述目录放入项目，例如 `third_party/StellarX/`。
+2. 在“C/C++ -> 常规 -> 附加包含目录”中加入：
+   - `$(ProjectDir)third_party\StellarX\include\StellarX`
+   - `$(ProjectDir)third_party\StellarX\src\internal`
+3. 第二个目录只是为了让框架实现找到私有头。不要在业务源码中 `#include "SxEventLoopInternal.h"` 或 `#include "SxTextInternal.h"`。
+4. 将 `src` 根目录下 11 个 `.cpp` 全部加入项目；不要 `#include` 任何 `.cpp`，也不要同时编译另一份 StellarX 静态库。
+5. 使用 C++17，并把“字符集”设为“使用多字节字符集”。MSVC 增加 `/source-charset:utf-8` 和 `/execution-charset:.936`。
+6. 配置 EasyX 的头文件与库目录，并链接 EasyX、`user32.lib`、`gdi32.lib`、`shell32.lib`。
+7. 业务代码统一使用 `#include "StellarX.h"`，不要依赖聚合头内部的包含顺序。
+
+若一个解决方案有多个可执行项目，建议单独建立 `StellarX.Core` 静态库工程：把 `src/*.cpp` 和两份私有头放入该库，`include/StellarX` 作为公共包含目录，`src/internal` 只配置在库工程自身；业务工程只引用静态库和公共包含目录。
+
+使用本仓库 CMake 目标时，私有包含目录已经正确封装：
+
+```cmake
+add_subdirectory(third_party/StellarX)
+target_link_libraries(MyApp PRIVATE StellarX)
+```
 
 ### 第一个窗口
 
@@ -183,9 +209,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     Window mainWindow(800, 600, NULL, RGB(255, 255, 255), "我的星垣应用");
 
     auto button = std::make_unique<Button>(30, 30, 160, 42, "Click Me");
-    button->setOnClickListener([]()
+    button->setOnClickListener([&mainWindow]()
     {
-        SX_LOGI("Demo") << SX_T("按钮被点击", "Button clicked");
+        StellarX::MessageBox::showModal(
+            mainWindow,
+            "按钮被点击",
+            "提示",
+            StellarX::MessageBoxType::OK);
     });
 
     mainWindow.addControl(std::move(button));
@@ -218,6 +248,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 | 结构体 | 描述 |
 | --- | --- |
+| `ControlHandle` | 当前进程运行期间稳定的控件身份；用于安全查询和删除，不代表对象仍然存活 |
 | `ControlText` | 字体名称、高度、宽度、颜色、旋转、字重、斜体、下划线、删除线等文本样式 |
 | `RouRectangle` | 圆角矩形角部椭圆尺寸 |
 | `AxisLayoutSpec` | 单轴锚点集合、尺寸策略和位移策略 |
@@ -258,7 +289,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 ## 布局系统
 
-v3.1.0 推荐使用新的单轴布局 API，而不是继续扩展旧双锚点模型。
+v4.0.0 继续推荐使用单轴布局 API，而不是继续扩展旧双锚点模型。
 
 ### 核心语义
 
@@ -304,9 +335,10 @@ rightButton->setHorizontalAlignPolicy(StellarX::AxisAlignPolicy::End);
 ## TabControl
 
 - 页签栏支持 `Top`、`Bottom`、`Left`、`Right`。
-- 可通过 `add(std::string tabText, std::unique_ptr<Control> control)` 向指定页签添加子控件。
-- `indexOf(tabText)` 找到匹配页签返回索引，未找到返回 `-1`。
-- 本版本只收口外层布局和重绘职责，不重写内部页签栏/页面区机制。
+- 使用 `addTab(button, page)` 添加“页签按钮 + 页面 Canvas”，并取得稳定的页签索引。
+- 使用 `tryAddToPage(index, control)` 向指定页追加控件；失败时会把 `unique_ptr` 所有权返还调用方。
+- 文本重载只匹配第一个同名页签；`indexOf(tabText)` 未命中返回 `-1`。
+- `setActiveIndex(index)` 返回是否成功；空 TabControl 可在首次绘制前预设默认索引。
 
 ## Button 文本截断与 Tooltip
 
@@ -337,12 +369,15 @@ SX_TRACE_SCOPE("Layout", "resolve layout");
 
 如果控制台输出影响 resize 或最大化期间的观感，可降低日志级别、关闭控制台输出，或改用文件输出。SxLog 宏当前为 `if/else` 短路形式，不建议裸放在未加大括号的 `if/else` 单行分支中。
 
+`SxLogger::setConfig()` 在 v4.0.0 中返回 `bool`。新文件 sink 打开失败时返回 `false`，旧配置和旧 sink 保持有效。
+
 ## 高级主题与最佳实践
 
 - 自定义控件应继承 `Control`，实现 `draw()` 与 `handleEvent()`。
 - 事件已处理时返回 `true`，避免继续向下层控件分发。
 - 绘制前确保 EasyX 输出目标正确；需要直接画屏幕时应保证 `SetWorkingImage(nullptr)`。
 - 状态变化后优先标脏并请求托管重绘，不要在事件处理中随意直接绘制。
+- 容器外部保存 `ControlHandle` 并通过 `findControl()` 临时查询；不要长期保存容器引用或在请求删除后继续使用裸指针。
 - 公开 setter 面向用户使用；统一布局器使用内部受控路径应用运行态矩形。
 - 直接修改 `Label::textStyle` 后，如需立即刷新内容尺寸，请调用 `setDirty(true)`。
 
@@ -374,6 +409,15 @@ SX_TRACE_SCOPE("Layout", "resolve layout");
 - TabControl 内部布局应用路径尚未完全收口。
 - Tooltip 尚未实现完整智能选位。
 - 暂无全局字体自动缩放系统。
+
+## 从 v3.1.0 升级
+
+- `Window::getControls()`、`Canvas::getControls()` 已移除，改用 `addControl()`、`removeControl()`、`clearControls()`、`findControl()` 和 `getControlHandles()`。
+- `Canvas::clearAllControls()` 改为 `clearControls()`。
+- `ControlText::lpszFace` 改为拥有型字符串 `faceName`。
+- `TabControl::add(...)` 改为 `addTab()` / `tryAddToPage()`；`setActiveIndex()` 现在返回 `bool`。
+- `SxLogger::setConfig()` 现在返回 `bool`，调用方应处理文件 sink 配置失败。
+- 回调中请求删除控件后，不要继续访问该控件；实际删除会延迟到最外层结构变更事务结束。
 
 ## 许可证
 

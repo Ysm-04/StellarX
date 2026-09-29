@@ -7,6 +7,53 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v4.0.0] - 2026-09-30
+
+v4.0.0 包含控件所有权、文本样式和 TabControl API 的破坏性调整。升级前请先阅读本节“兼容性与迁移”。
+
+### 新增
+
+- 新增 `StellarX::ControlHandle`，用于在当前进程运行期间稳定标识控件。
+- Window 与 Canvas 新增受控所有权接口：`addControl()`、`removeControl()`、`clearControls()`、`findControl()`、`getControlHandles()`。
+- 新增嵌套结构变更事务。事件、绘制、tick 和按钮回调期间的控件增删清空先进入 pending 队列，在最外层事务结束后的安全点提交。
+- 新增控件 tick 链，Tooltip 等延时状态不再依赖额外鼠标消息。
+- 新增 `src/internal/SxEventLoopInternal.h` 与 `src/internal/SxTextInternal.h`。二者随源码分发，但不是公共 API。
+
+### 变更
+
+- `ControlText::faceName` 改为拥有型 `std::string`，字体样式比较按字符串内容进行。
+- TabControl 改用 `addTab(button, page)` 和 `tryAddToPage(index, control)`；页签身份以索引为准，重复标题合法。
+- `TabControl::setActiveIndex()` 改为返回 `bool`；空容器可预设首次激活索引，运行期非法索引返回 `false`。
+- `SxLogger::setConfig()` 改为返回 `bool`。候选文件 sink 打开成功后才替换旧配置，失败时保留旧配置和旧 sink。
+- 事件循环单轮最多批处理 128 条消息；活动轮不再固定休眠，空闲轮使用短暂 `Sleep(1)`，每批末尾统一收口 resize 与重绘。
+- 源码分发结构调整为：`include/StellarX` 存放公共头、`src` 存放实现、`src/internal` 存放实现专用私有头。
+
+### 修复
+
+- 修复回调中删除自身、兄弟控件或清空容器可能造成的 UAF 和迭代器失效。
+- 修复空 TabControl 绘制/激活越界，以及同名页签可能同时处于激活状态的问题。
+- 统一控件快照、几何 setter 与 coverage 矩形语义，修复移动、缩放、隐藏后的旧像素和局部重绘残影。
+- 修复 Dialog 关闭清理触发额外全量重绘、overlay 清理时序和底层交互恢复问题。
+- 修复 Table 极窄宽度、列宽总和、文本 MBCS 截断和 coverage 边界；修复运行期重置后旧分页按钮快照覆盖新页码标签的首帧问题。
+- 修复 Tooltip 静止鼠标下不能按时出现、禁用或移出后状态清理不一致的问题。
+- 修复密码掩码按字节而非逻辑字符生成，以及非法 MBCS 尾字节处理问题。
+- 修复日志同毫秒滚动重名、rename 失败后可能截断原日志、配置切换与实际文件 sink 不同步的问题。
+
+### 兼容性与迁移
+
+- 移除 `Window::getControls()` 与 `Canvas::getControls()`；外部代码应保存 `ControlHandle`，按需调用 `findControl()`。
+- 移除 `Canvas::clearAllControls()`；使用 `clearControls()`。
+- 将 `ControlText::lpszFace` 替换为 `ControlText::faceName`。
+- 将旧 `TabControl::add(...)` 调用迁移到 `addTab()` / `tryAddToPage()`。
+- 调用 `setActiveIndex()` 和 `SxLogger::setConfig()` 时可检查新的布尔返回值。
+- 回调中请求删除控件后，不得继续访问该控件；对象会在最外层事务结束时销毁。
+
+### 验证
+
+- 2026-09-30 在开发仓库完成 Debug x64、Debug x64 ASan、Release x64、Debug Win32 四种配置的非 UI 测试，均为 15/15 通过。
+- x64 ASan 未报告内存错误，KEY1 至 KEY6 均完成编译链接。
+- KEY1 至 KEY6 已由人工完成 UI 回归，暂未发现明显问题。
+- 发布仓库使用 CMake 完成 x64 Debug/Release 核心库及 9 个示例的编译链接验证，未启动示例界面。
 ## [v3.1.0] - 2026-05-15
 
 ### 新增

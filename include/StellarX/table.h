@@ -85,19 +85,19 @@ private:
 	COLORREF tableBorderClor = TABLE_DEFAULT_BORDER_COLOR;     // 表格边框颜色
 	COLORREF tableBkClor = TABLE_DEFAULT_BG_COLOR;         // 表格背景颜色
 
-	void initTextWaH();  //初始化文本像素宽度和高度
-	void initButton();   //初始化翻页按钮
-	void initPageNum();  //初始化页码标签
+	void initTextWaH();  // 初始化文本像素宽度和高度，并据此更新列宽/行高缓存
+	void initButton();   // 初始化或刷新上一页/下一页按钮
+	void initPageNum();  // 初始化或刷新页码标签
 
-	void drawTable();    //绘制当前页
-	void drawHeader();   //绘制表头
-	void drawPageNum();  //绘制页码信息
-	void drawButton();   //绘制翻页按钮
+	void drawTable();    // 绘制当前页的数据行
+	void drawHeader();   // 绘制表头区域
+	void drawPageNum();  // 绘制页码信息
+	void drawButton();   // 绘制翻页按钮
 	// 统一解算后的内部应用入口：
 	// Table 需要复用自己已有的 setWidth/setX 等副作用逻辑，因此单独接管应用过程。
 	void applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect) override;
 private:
-	//用来检查对话框是否模态,此控件不做实现
+	// Table 不是模态对话框，固定返回 false。
 	bool model() const override { return false; };
 public:
 	StellarX::ControlText textStyle; // 文本样式
@@ -105,18 +105,21 @@ public:
 	void setX(int x) override;
 	// 修改表格运行态 Y，并同步内部页脚元素位置
 	void setY(int y) override;
-	// 修改表格运行态宽度；当前支持横向拉伸
+	// 修改表格运行态宽度；当前支持横向拉伸。
+	// 会重新计算列宽、页脚控件位置和托管重绘 coverage。
 	void setWidth(int width) override;
-	// 修改表格运行态高度；当前版本作为行为边界明确忽略纵向 Stretch
+	// 修改表格运行态高度；当前版本作为行为边界明确忽略纵向 Stretch。
+	// 表格高度由表头、行高、页脚和按钮布局共同计算，外部写入会被有意丢弃。
 	void setHeight(int height) override;
 public:
 	// 构造一个基础表格，后续通过表头和数据初始化内容
 	Table(int x, int y);
+	// 析构表格并释放内部按钮、页码标签等资源。
 	~Table();
 
-	// 绘制表格
+	// 绘制表格背景、表头、当前页数据、页码和翻页按钮。
 	void draw() override;
-	//事件处理
+	// 处理翻页按钮事件，并在页码变化时请求重绘。
 	bool handleEvent(const ExMessage& msg) override;
 	// 只清理分页按钮的 hover / tooltip / 临时按下态，不触发表格整体重绘。
 	bool clearTransientMouseState() override;
@@ -125,60 +128,62 @@ public:
 	// 持久 coverage 排除分页按钮 Tooltip 等临时浮层。
 	RECT getManagedRepaintPersistentCoverageRect() const override;
 
-	// 设置表头
+	// 设置表头；会按新的表头列数规范化已有数据行，并重新计算分页和列宽。
 	void setHeaders(std::initializer_list<std::string> headers);
-	// 设置表格数据（单行追加）
+	// 设置表格数据（单行追加）。
+	// 该接口是 append 语义，不会替换已有数据；如需覆盖请先 clearData() 或 resetTable()。
 	void setData(std::vector<std::string> data);
 	// 设置表格数据（多行追加）；如需覆盖请先 clearData() 或 resetTable()
 	void setData(std::initializer_list<std::vector<std::string>> data);
-	//设置每页显示的行数
+	// 设置每页显示的行数；小于 1 会被夹紧为 1，并同步修正当前页和总页数。
 	void setRowsPerPage(int rows);
-	//设置是否显示翻页按钮
+	// 设置是否显示翻页按钮。
 	void showPageButton(bool isShow);
-	//设置表格边框颜色
+	// 设置表格边框颜色。
 	void setTableBorder(COLORREF color);
-	//设置表格背景颜色
+	// 设置表格背景颜色。
 	void setTableBk(COLORREF color);
-	//设置填充模式
+	// 设置表格填充模式。
 	void setTableFillMode(StellarX::FillMode mode);
-	//设置线型
+	// 设置表格边框线型。
 	void setTableLineStyle(StellarX::LineStyle style);
-	//设置边框宽度
+	// 设置表格边框宽度。
 	void setTableBorderWidth(int width);
-	//清空表头
+	// 清空表头并标记尺寸缓存失效。
 	void clearHeaders();
-	//清空表格数据
+	// 清空表格数据并重置分页状态。
 	void clearData();
-	//清空表头和数据
+	// 清空表头和数据，恢复为空表状态。
 	void resetTable();
-	//窗口变化丢快照+标脏
+	// 窗口变化时丢弃背景快照并标记表格需要重绘。
 	void onWindowResize() override;
 
 	//************************** 获取属性 *****************************/
 
-	//获取当前页码
+	// 获取当前页码。
 	int getCurrentPage() const;
-	//获取总页数
+	// 获取总页数。
 	int getTotalPages() const;
-	//获取每页显示的行数
+	// 获取每页显示的行数。
 	int getRowsPerPage() const;
-	//获取是否显示翻页按钮
+	// 获取是否显示翻页按钮。
 	bool getShowPageButton() const;
-	//获取表格边框颜色
+	// 获取表格边框颜色。
 	COLORREF getTableBorder() const;
-	//获取表格背景颜色
+	// 获取表格背景颜色。
 	COLORREF getTableBk() const;
-	//获取填充模式
+	// 获取表格填充模式。
 	StellarX::FillMode getTableFillMode() const;
-	//获取线型
+	// 获取表格边框线型。
 	StellarX::LineStyle getTableLineStyle() const;
-	//获取表头
+	// 获取表头副本。
 	std::vector<std::string> getHeaders() const;
-	//获取表格数据
+	// 获取表格数据副本。
 	std::vector<std::vector<std::string>> getData() const;
-	//获取表格边框宽度
+	// 获取表格边框宽度。
 	int getTableBorderWidth() const;
-	//获取表格尺寸
+	// 获取表格当前运行态尺寸；高度为内部内容计算结果，不受 setHeight() 外部写入驱动。
 	int getTableWidth() const;
+	// 获取表格当前运行态高度。
 	int getTableHeight() const;
 };

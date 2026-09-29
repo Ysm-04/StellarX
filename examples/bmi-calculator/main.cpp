@@ -136,8 +136,6 @@ int main()
             else
                 advicePtr->setText("肥胖：建议咨询专业医务人员获取个性化建议。");
 
-            bmiPtr->draw();
-            advicePtr->draw();
         });
 
     // 将控件统一交给 Window 管理。

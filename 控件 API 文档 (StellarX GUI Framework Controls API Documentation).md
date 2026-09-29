@@ -1,11 +1,11 @@
 # StellarX GUI Framework 控件 API 文档 / Controls API Documentation
 
-版本 / Version: v3.1.0
-日期 / Date: 2026-05-15
+版本 / Version: v4.0.0
+日期 / Date: 2026-09-30
 
-本文档基于当前最新源码与旧版 API 文档全量审校后整理，覆盖 StellarX v3.1.0 的核心类型、控件 API、布局语义、托管重绘语义、日志系统和当前限制。
+本文档基于当前最新源码与旧版 API 文档全量审校后整理，覆盖 StellarX v4.0.0 的核心类型、控件所有权、布局语义、托管重绘、日志系统和当前限制。
 
-This document is revised from a full audit of the current source code and the previous API documentation. It covers core types, control APIs, layout semantics, managed repaint semantics, logging utilities, and current limitations in StellarX v3.1.0.
+This document is revised from a full audit of the current source code and the previous API documentation. It covers core types, control ownership, layout semantics, managed repaint, logging utilities, and current limitations in StellarX v4.0.0.
 
 ## 1. 全局约定 / Global Conventions
 
@@ -18,6 +18,10 @@ This document is revised from a full audit of the current source code and the pr
 `StellarX.h` 是推荐的主入口头文件。当前源码实际包含 `CoreTypes.h`、`SxLog.h`、`Control.h`、`Canvas.h`、`Window.h`、`Button.h`、`Label.h`、`TextBox.h`、`Table.h`、`Dialog.h`、`MessageBox.h`、`TabControl.h`；该顺序属于框架内部实现，用户代码不应依赖内部包含顺序。
 
 `StellarX.h` is the recommended main include header. The current source includes `CoreTypes.h`, `SxLog.h`, `Control.h`, `Canvas.h`, `Window.h`, `Button.h`, `Label.h`, `TextBox.h`, `Table.h`, `Dialog.h`, `MessageBox.h`, and `TabControl.h`; this order is an internal implementation detail and user code should not depend on it.
+
+`src/internal/SxEventLoopInternal.h` 和 `src/internal/SxTextInternal.h` 是实现专用私有头。直接集成源码时必须随 `src/*.cpp` 保留并配置给框架实现，但业务代码不得包含它们。
+
+`src/internal/SxEventLoopInternal.h` and `src/internal/SxTextInternal.h` are implementation-only private headers. Keep them available to framework `.cpp` files when integrating source, but do not include them from application code.
 
 ### 1.2 坐标与几何 / Coordinates and Geometry
 
@@ -39,12 +43,12 @@ This document is revised from a full audit of the current source code and the pr
 
 - 每个控件实现 `draw()` 和 `handleEvent(const ExMessage&)`。
 - `handleEvent()` 返回 `true` 表示事件已被消费，父容器不应继续向下层分发。
-- v3.1.0 采用托管重绘思路：事件处理阶段优先修改状态和登记脏区，绘制提交由 `Window` 在事件尾统一收口。
+- v4.0.0 采用托管重绘与延迟结构变更：事件阶段优先修改状态、登记脏区并排队控件树变更，`Window` 在安全点统一提交。
 - `discardBackground()` 表示回贴并释放背景快照；`invalidateBackgroundSnapshot()` 表示仅作废快照，不回贴旧背景。
 
 - Every control implements `draw()` and `handleEvent(const ExMessage&)`.
 - `handleEvent()` returns `true` when the event is consumed.
-- v3.1.0 uses managed repaint semantics: event handling primarily mutates state and registers dirty coverage; `Window` commits repaint work at the end of the event round.
+- v4.0.0 uses managed repaint and deferred structural mutation: event handling mutates state, records dirty coverage, and queues control-tree changes; `Window` commits them at a safe point.
 - `discardBackground()` restores and releases the snapshot; `invalidateBackgroundSnapshot()` only invalidates the snapshot.
 
 ## 2. CoreTypes 基础类型 / Core Types
@@ -75,7 +79,7 @@ struct ControlText
 {
     int nHeight = 0;
     int nWidth = 0;
-    LPCTSTR lpszFace = "微软雅黑";
+    std::string faceName = "微软雅黑";
     COLORREF color = RGB(0, 0, 0);
     int nEscapement = 0;
     int nOrientation = 0;
@@ -83,6 +87,9 @@ struct ControlText
     bool bItalic = false;
     bool bUnderline = false;
     bool bStrikeOut = false;
+
+    bool operator==(const ControlText& text) const;
+    bool operator!=(const ControlText& text) const;
 };
 
 struct RouRectangle
@@ -92,11 +99,32 @@ struct RouRectangle
 };
 ```
 
-`ControlText` 用于 Button、Label、TextBox、Table 等控件文本样式。`RouRectangle` 用于圆角矩形角部椭圆尺寸。
+`ControlText` 用于 Button、Label、TextBox、Table 等控件文本样式。`faceName` 由对象拥有，不再保存外部字符指针。`RouRectangle` 用于圆角矩形角部椭圆尺寸。
 
-`ControlText` is used by controls such as Button, Label, TextBox, and Table. `RouRectangle` controls corner ellipse size for rounded rectangles.
+`ControlText` is used by controls such as Button, Label, TextBox, and Table. `faceName` is owned by the object instead of storing an external character pointer. `RouRectangle` controls corner ellipse size for rounded rectangles.
 
-### 2.4 布局类型 / Layout Types
+### 2.4 稳定控件句柄 / Stable Control Handle
+
+```cpp
+struct ControlHandle
+{
+    std::uint64_t value = 0;
+
+    explicit operator bool() const noexcept;
+    bool operator==(const ControlHandle& other) const noexcept;
+    bool operator!=(const ControlHandle& other) const noexcept;
+};
+```
+
+- `value == 0` 表示无效句柄；非零值只保证当前进程本次运行期间的身份稳定。
+- 句柄可用于 `removeControl()`、`findControl()` 和 `getControlHandles()`，但不证明对象仍然存活。
+- 控件移除后旧句柄仍可安全比较或查询，`findControl()` 会返回 `nullptr`。
+
+- `value == 0` is invalid; nonzero identity is stable only for the current process run.
+- Use handles with `removeControl()`, `findControl()`, and `getControlHandles()`, but do not treat a handle as proof of object lifetime.
+- A removed handle remains safe to compare or query; `findControl()` returns `nullptr`.
+
+### 2.5 布局类型 / Layout Types
 
 旧接口保留：
 
@@ -105,7 +133,7 @@ enum class LayoutMode { Fixed, AnchorToEdges };
 enum class Anchor { NoAnchor = 0, Left = 1, Right, Top, Bottom };
 ```
 
-v3.1.0 推荐接口：
+v4.0.0 推荐接口：
 
 ```cpp
 enum class AxisSizePolicy
@@ -221,13 +249,19 @@ virtual void setDirty(bool dirty);
 bool IsVisible() const;
 bool isDirty();
 std::string getId() const;
+StellarX::ControlHandle getHandle() const noexcept;
 bool didEventAffectVisual() const;
 virtual bool clearTransientMouseState();
+virtual void tick(ULONGLONG nowMs);
 ```
 
 `clearTransientMouseState()` 用于清理 hover、Tooltip、临时按下态等鼠标瞬时状态。它不是新的事件分发入口，也不做新命中判断。
 
 `clearTransientMouseState()` clears transient mouse states such as hover, Tooltip visibility, and temporary pressed state. It is not an event dispatch entry and does not perform new hit-testing.
+
+`getHandle()` 返回控件稳定身份；`tick()` 由 Window 使用单调时钟驱动，默认实现为空，延时提示等控件可重写。
+
+`getHandle()` returns stable control identity. `tick()` is driven by Window with a monotonic clock; its default implementation is empty and timed controls may override it.
 
 ### 3.5 父子关系和宿主窗口 / Parent and Host Window
 
@@ -322,11 +356,23 @@ void setHeadline(std::string headline);
 ### 4.4 控件与 Dialog 管理 / Control and Dialog Management
 
 ```cpp
-void addControl(std::unique_ptr<Control> control);
+StellarX::ControlHandle addControl(std::unique_ptr<Control> control);
+bool removeControl(StellarX::ControlHandle handle);
+void clearControls();
+Control* findControl(StellarX::ControlHandle handle);
+const Control* findControl(StellarX::ControlHandle handle) const;
+std::vector<StellarX::ControlHandle> getControlHandles() const;
 void addDialog(std::unique_ptr<Control> dialogs);
 bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
-std::vector<std::unique_ptr<Control>>& getControls();
 ```
+
+- `addControl()` 总会立即返回新控件句柄；事务期间对象先进入 pending 队列，`findControl()` 在正式提交前不会返回它。
+- `removeControl()` 返回目标是否命中且删除请求已排队/提交。`clearControls()` 同样会在事务期间延迟。
+- `getControlHandles()` 返回当前已提交控件的句柄快照，不暴露容器所有权。
+
+- `addControl()` always returns the new handle immediately. During a transaction, the object stays pending and `findControl()` cannot see it until commit.
+- `removeControl()` reports whether the target was found and its removal was queued/committed. `clearControls()` is also deferred during transactions.
+- `getControlHandles()` returns a snapshot of committed handles without exposing container ownership.
 
 ### 4.5 查询 / Getters
 
@@ -355,11 +401,19 @@ bool isManagedDispatchActive() const;
 void requestManagedRepaint(Control* source);
 void requestManagedRepaint(Control* source, const RECT& previousCoverage);
 void flushManagedRepaint();
+void beginMutationScope();
+void endMutationScope();
+bool isMutationTransactionActive() const;
+void requestFullSceneRedraw();
 ```
 
 这些接口属于高级/内部路径。业务代码一般只需要调用 `draw()` 和 `runEventLoop()`。带 `previousCoverage` 的重载用于在 hover / Tooltip 等临时状态清理后保留清理前覆盖范围，避免上层 overlay 补画判断丢失旧区域。
 
 These are advanced/internal path APIs. Application code normally only calls `draw()` and `runEventLoop()`. The overload with `previousCoverage` preserves the pre-cleanup coverage of transient states such as hover / Tooltip, preventing upper overlay repaint checks from losing the old affected area.
+
+`beginMutationScope()` / `endMutationScope()` 允许嵌套且必须成对。最外层结束后才允许提交 pending mutation；`requestFullSceneRedraw()` 把无法安全局部修复的变化推迟到下一安全点整场景重绘。普通业务代码通常不需要直接调用这些接口。
+
+`beginMutationScope()` / `endMutationScope()` may nest and must be paired. Pending mutations commit only after the outermost scope ends. `requestFullSceneRedraw()` defers changes that cannot be repaired locally to the next safe full-scene redraw. Normal application code rarely calls these APIs directly.
 
 ## 5. Button 按钮 / Button
 
@@ -566,6 +620,7 @@ void setHeight(int height) override;
 void draw() override;
 bool handleEvent(const ExMessage& msg) override;
 bool clearTransientMouseState() override;
+void tick(ULONGLONG nowMs) override;
 ```
 
 Canvas 的几何 setter 会同步重算受管理子控件的世界坐标。
@@ -575,15 +630,23 @@ Canvas geometry setters recalculate managed children world coordinates.
 ### 8.3 子控件与样式 / Children and Style
 
 ```cpp
-void addControl(std::unique_ptr<Control> control);
+StellarX::ControlHandle addControl(std::unique_ptr<Control> control);
+bool removeControl(StellarX::ControlHandle handle);
+void clearControls();
+Control* findControl(StellarX::ControlHandle handle);
+const Control* findControl(StellarX::ControlHandle handle) const;
+std::vector<StellarX::ControlHandle> getControlHandles() const;
 void setShape(StellarX::ControlShape shape);
 void setCanvasfillMode(StellarX::FillMode mode);
 void setBorderColor(COLORREF color);
 void setCanvasBkColor(COLORREF color);
 void setCanvasLineStyle(StellarX::LineStyle style);
 void setLinewidth(int width);
-std::vector<std::unique_ptr<Control>>& getControls();
 ```
+
+Canvas 的句柄与 pending 语义和 Window 一致。`findControl()` 只查询直接子控件且不返回尚未提交的对象；事务中失败或尚未命中的查询应在提交后重试。
+
+Canvas follows the same handle and pending semantics as Window. `findControl()` searches direct children only and does not expose uncommitted objects; retry a lookup after transaction commit when needed.
 
 ### 8.4 可见性、resize、托管重绘 / Visibility, Resize, Managed Repaint
 
@@ -627,26 +690,32 @@ void setHeight(int height) override;
 void draw() override;
 bool handleEvent(const ExMessage& msg) override;
 bool clearTransientMouseState() override;
+void tick(ULONGLONG nowMs) override;
 ```
 
 ### 9.3 页签管理 / Tab Management
 
 ```cpp
-void add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&& control);
-void add(std::string tabText, std::unique_ptr<Control> control);
+size_t addTab(std::unique_ptr<Button> button, std::unique_ptr<Canvas> page);
+std::unique_ptr<Control> tryAddToPage(size_t pageIndex, std::unique_ptr<Control> control);
+std::unique_ptr<Control> tryAddToPage(const std::string& tabText, std::unique_ptr<Control> control);
 void setTabPlacement(StellarX::TabPlacement placement);
 void setTabBarHeight(int height);
 void setIsVisible(bool visible) override;
 void onWindowResize() override;
 int getActiveIndex() const;
-void setActiveIndex(int idx);
+bool setActiveIndex(int idx);
 int count() const;
 int indexOf(const std::string& tabText) const;
 ```
 
-`indexOf()` 找到匹配页签返回索引，未找到返回 `-1`。
+`addTab()` 的参数为空时返回 `size_t(-1)`；事务期间返回包含 pending 页签的逻辑索引，因此可立即用于同一事务中的 `tryAddToPage()`。`tryAddToPage()` 成功时返回空指针，失败时原样返还控件所有权。文本重载遇到重复标题时只匹配第一个页签。
 
-`indexOf()` returns the matching index, or `-1` when not found.
+`addTab()` returns `size_t(-1)` for null input. During a transaction it returns a logical index that includes pending tabs, so the same transaction may pass it directly to `tryAddToPage()`. `tryAddToPage()` returns null on success and returns ownership unchanged on failure. The text overload matches only the first duplicate caption.
+
+`setActiveIndex()` 首次绘制前只记录默认索引；运行期索引有效或重复激活当前页时返回 `true`，非法索引返回 `false`。`indexOf()` 未命中返回 `-1`。
+
+Before the first draw, `setActiveIndex()` records the default index. At runtime it returns `true` for a valid index or the already-active page and `false` for an invalid index. `indexOf()` returns `-1` when not found.
 
 ### 9.4 dirty 与托管重绘 / Dirty State and Managed Repaint
 
@@ -883,7 +952,13 @@ logger.clearTagFilter();
 logger.enableConsole(true);
 logger.enableFile("stellarx.log", true, 1024 * 1024);
 logger.disableFile();
+StellarX::SxLogConfig config = logger.getConfigCopy();
+bool applied = logger.setConfig(config);
 ```
+
+`setConfig()` 整体替换配置并返回是否成功。启用文件输出时，候选 sink 必须先成功打开；失败会返回 `false` 并保留旧配置和旧 sink。禁用文件输出、修改路径、append 模式或滚动阈值都会同步更新 sink。
+
+`setConfig()` replaces the complete configuration and reports success. When file output is requested, the candidate sink must open first; failure returns `false` and preserves the previous configuration and sink. Disabling file output or changing path, append mode, or rotation threshold updates the sink accordingly.
 
 ### 13.4 日志宏 / Logging Macros
 
@@ -922,16 +997,33 @@ button->setHorizontalSizePolicy(StellarX::AxisSizePolicy::FixedSize);
 button->setHorizontalAlignPolicy(StellarX::AxisAlignPolicy::End);
 ```
 
-### 14.2 Label 字体样式修改
+### 14.2 稳定句柄与控件移除 / Stable Handles and Removal
+
+```cpp
+auto button = std::make_unique<Button>(20, 20, 120, 36, "Run");
+const StellarX::ControlHandle handle = window.addControl(std::move(button));
+
+if (Control* control = window.findControl(handle))
+    control->setIsVisible(false);
+
+window.removeControl(handle);
+```
+
+容器持有控件所有权。外部长期保存句柄，只有需要访问时才临时查询裸指针；请求删除后不要继续使用该指针。
+
+Containers own controls. Store handles long-term and obtain a raw pointer only for temporary access; do not use that pointer after requesting removal.
+
+### 14.3 Label 字体样式修改
 
 ```cpp
 auto label = std::make_unique<Label>(20, 20, "状态", BLACK, RGB(255, 255, 255));
 label->textStyle.nHeight = 24;
+label->textStyle.faceName = "微软雅黑";
 label->textStyle.color = RGB(200, 0, 0);
 label->setDirty(true); // 触发内容驱动尺寸刷新 / refresh content-driven runtime size
 ```
 
-### 14.3 MessageBox
+### 14.4 MessageBox
 
 ```cpp
 auto result = StellarX::MessageBox::showModal(
@@ -953,9 +1045,9 @@ StellarX::MessageBox::showAsync(
 
 ## 15. 当前限制与技术债 / Current Limitations and Technical Debt
 
-以下事项属于后续版本专题，不在 v3.1.0 中实现：
+以下事项属于后续版本专题，不在 v4.0.0 中实现：
 
-The following items are deferred to future versions and are not implemented in v3.1.0:
+The following items are deferred to future versions and are not implemented in v4.0.0:
 
 - 焦点系统 / focus system.
 - 键盘事件系统 / keyboard event system.
@@ -971,20 +1063,22 @@ The following items are deferred to future versions and are not implemented in v
 
 ## 16. 版本迁移提示 / Migration Notes
 
-从 v3.0.2 迁移到 v3.1.0：
+从 v3.1.0 迁移到 v4.0.0：
 
-When migrating from v3.0.2 to v3.1.0:
+When migrating from v3.1.0 to v4.0.0:
 
-- 旧 `setLayoutMode()` / `setAnchor()` 可继续使用，但推荐逐步迁移到新布局 API。
-- 不要依赖普通 resize 自动回写 `local*`。
-- 如果程序直接修改 `Label::textStyle`，请在需要立即刷新尺寸时调用 `setDirty(true)`。
-- 不要调用已移除的 `Dialog::setInitialization(bool)`。
-- 不要假设 Table 支持 Y 轴 Stretch。
-- 不要依赖 Tooltip 自动避让窗口边界或上层控件。
+- `Window::getControls()`、`Canvas::getControls()` 已移除，使用句柄和 add/remove/clear/find/handles 接口。
+- `Canvas::clearAllControls()` 改为 `clearControls()`。
+- `ControlText::lpszFace` 改为拥有型字符串 `faceName`，赋值时不再传入临时 `c_str()`。
+- `TabControl::add(pair)` 改为 `addTab(button, page)`；按页追加控件改用 `tryAddToPage(index, control)`。
+- `TabControl::setActiveIndex()` 与 `SxLogger::setConfig()` 现在返回 `bool`。
+- 回调中请求删除控件后不要继续使用裸指针；删除会在最外层事务结束时提交。
+- 旧布局 API 仍可使用，Table 仍不支持 Y 轴 Stretch，Tooltip 仍不自动避让边界或上层控件。
 
-- Legacy `setLayoutMode()` / `setAnchor()` still work, but new layout APIs are recommended.
-- Do not rely on normal resize to write back to `local*`.
-- If code directly modifies `Label::textStyle`, call `setDirty(true)` when immediate size refresh is needed.
-- Do not call the removed `Dialog::setInitialization(bool)`.
-- Do not assume Table supports Y-axis Stretch.
-- Do not rely on Tooltip auto-avoidance for client edges or upper controls.
+- `Window::getControls()` and `Canvas::getControls()` were removed; use handles and the add/remove/clear/find/handles APIs.
+- Replace `Canvas::clearAllControls()` with `clearControls()`.
+- Replace `ControlText::lpszFace` with the owning `faceName` string; do not assign a temporary `c_str()`.
+- Replace `TabControl::add(pair)` with `addTab(button, page)` and use `tryAddToPage(index, control)` for page children.
+- `TabControl::setActiveIndex()` and `SxLogger::setConfig()` now return `bool`.
+- Do not use a raw pointer after requesting removal inside a callback; removal commits when the outermost transaction ends.
+- Legacy layout APIs remain available. Table still does not support Y-axis Stretch, and Tooltip still does not auto-avoid boundaries or upper controls.

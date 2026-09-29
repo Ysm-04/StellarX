@@ -144,6 +144,17 @@ void Button::setTooltipTextsForToggle(const std::string& onText, const std::stri
 	tipUserOverride = true;
 }
 
+void Button::enableTooltip(bool on)
+{
+	if (tipEnabled == on)
+		return;
+	if (!on)
+		hideTooltip();
+	tipEnabled = on;
+	if (on && hover)
+		tipHoverTick = GetTickCount64();
+}
+
 void Button::initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch)
 {
 	this->id = "Button";
@@ -196,7 +207,7 @@ void Button::draw()
 	//设置字体颜色
 	settextcolor(drawTextStyle.color);
 	//设置字体样式
-	settextstyle(drawTextStyle.nHeight, drawTextStyle.nWidth, drawTextStyle.lpszFace,
+	settextstyle(drawTextStyle.nHeight, drawTextStyle.nWidth, drawTextStyle.faceName.c_str(),
 		drawTextStyle.nEscapement, drawTextStyle.nOrientation, drawTextStyle.nWeight,
 		drawTextStyle.bItalic, drawTextStyle.bUnderline, drawTextStyle.bStrikeOut);
 
@@ -221,8 +232,12 @@ void Button::draw()
 
 	//设置按钮填充模式
 	setfillstyle((int)buttonFillMode, (int)buttonFillIma, buttonFileIMAGE.get());
-	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)
-		saveBackground(this->x, this->y, (this->width + bordWith), (this->height + bordHeight));
+	const int snapshotWidth = this->width + bordWith;
+	const int snapshotHeight = this->height + bordHeight;
+	// 快照尺寸与按钮实际 coverage 使用同一组值，避免边框或右下边界没有被恢复。
+	if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) ||
+		(saveWidth != snapshotWidth) || (saveHeight != snapshotHeight) || !saveBkImage)
+		saveBackground(this->x, this->y, snapshotWidth, snapshotHeight);
 	// 恢复背景（清除旧内容）
 	restBackground();
 	//根据按钮形状绘制
@@ -282,12 +297,13 @@ bool Button::handleEvent(const ExMessage& msg)
 {
 	if (!show)
 		return false;
+	auto mutationScope = enterMutationScope();
 	resetEventVisualChanged();
 
 	bool oldHover = hover;// 注意：只在状态变化时记录，避免 WM_MOUSEMOVE 刷屏
 	bool oldClick = click;
 	const bool oldTipVisible = tipVisible;
-	
+
 	bool consume = false;//是否消耗事件
 	const bool isMouseMessage =
 		msg.message == WM_MOUSEMOVE ||
@@ -397,29 +413,7 @@ bool Button::handleEvent(const ExMessage& msg)
 		{
 			// 到点就显示
 			if (GetTickCount64() - tipHoverTick >= (ULONGLONG)tipDelayMs)
-			{
-				tipVisible = true;
-
-				// 定位（跟随鼠标 or 相对按钮）
-				int tipX = tipFollowCursor ? (lastMouseX + tipOffsetX) : lastMouseX;
-				int tipY = tipFollowCursor ? (lastMouseY + tipOffsetY) : y + height;
-				// 设置文本（用户可能动态改了提示文本
-				if (tipUserOverride)
-				{
-					if (mode == StellarX::ButtonMode::NORMAL)
-						tipLabel.setText(tipTextClick);
-					else if (mode == StellarX::ButtonMode::TOGGLE)
-						tipLabel.setText(click ? tipTextOn : tipTextOff);
-				}
-				else
-					if (mode == StellarX::ButtonMode::TOGGLE)
-						tipLabel.setText(click ? tipTextOn : tipTextOff);
-				// 设置位置
-				tipLabel.setX(tipX);
-				tipLabel.setY(tipY);
-				// 标记需要绘制
-				tipLabel.setDirty(true);
-			}
+				showTooltipAtLastMouse();
 		}
 	}
 
@@ -453,6 +447,19 @@ bool Button::handleEvent(const ExMessage& msg)
 		requestRepaint(parent);
 
 	return consume;
+}
+
+void Button::tick(ULONGLONG nowMs)
+{
+	// tick 只处理已经命中的按钮；到期后显示 Tooltip，并把重绘交给父容器统一提交。
+	if (!show || !tipEnabled || !hover || tipVisible)
+		return;
+	if (nowMs - tipHoverTick < static_cast<ULONGLONG>(tipDelayMs))
+		return;
+	showTooltipAtLastMouse();
+	dirty = true;
+	markEventVisualChanged(true);
+	requestRepaint(parent);
 }
 
 bool Button::clearTransientMouseState()
@@ -516,6 +523,8 @@ bool Button::clearTransientMouseState()
 RECT Button::getManagedRepaintCoverageRect() const
 {
 	RECT coverage = getBoundsRect();
+	coverage.right += bordWith;
+	coverage.bottom += bordHeight;
 
 	if (!tipEnabled || !tipVisible)
 		return coverage;
@@ -532,7 +541,10 @@ RECT Button::getManagedRepaintPersistentCoverageRect() const
 {
 	// Tooltip 属于临时浮层，只参与完整 coverage 和上层 overlay 判断；
 	// 兄弟控件是否需要作废背景快照，只应由按钮本体这类持久绘制范围决定。
-	return getBoundsRect();
+	RECT coverage = getBoundsRect();
+	coverage.right += bordWith;
+	coverage.bottom += bordHeight;
+	return coverage;
 }
 
 void Button::setOnClickListener(std::function<void()> callback)
@@ -640,6 +652,7 @@ void Button::setButtonShape(StellarX::ControlShape shape)
 //允许通过外部函数修改按钮的点击状态，并执行相应的回调函数
 void Button::setButtonClick(BOOL click)
 {
+	auto mutationScope = enterMutationScope();
 	const bool targetClick = (click != FALSE);
 	// TOGGLE 状态若没有发生变化，就不应重复触发 onToggleOn/OffCallback。
 	// 否则像 TabControl 这种“外部再次激活已激活页签”的场景，
@@ -769,6 +782,7 @@ void Button::cutButtonText()
 
 void Button::hideTooltip()
 {
+	// 隐藏提示时先回贴其独立快照，再作废状态，避免 Tooltip 像素留在按钮之外。
 	if (tipVisible)
 	{
 		tipVisible = false;
@@ -779,6 +793,30 @@ void Button::hideTooltip()
 		tipLabel.hide(); // 还原快照 + 作废快照，立即清掉 Tooltip 自身绘制区域
 		tipHoverTick = GetTickCount64(); // 重置计时基线
 	}
+}
+
+void Button::showTooltipAtLastMouse()
+{
+	// Tooltip 的位置和文案在真正显示时计算，保证 Toggle 状态与最后一次鼠标位置一致。
+	if (!tipEnabled || tipVisible)
+		return;
+	tipVisible = true;
+	const int tipX = tipFollowCursor ? lastMouseX + tipOffsetX : lastMouseX;
+	const int tipY = tipFollowCursor ? lastMouseY + tipOffsetY : y + height;
+	if (tipUserOverride)
+	{
+		if (mode == StellarX::ButtonMode::NORMAL)
+			tipLabel.setText(tipTextClick);
+		else if (mode == StellarX::ButtonMode::TOGGLE)
+			tipLabel.setText(click ? tipTextOn : tipTextOff);
+	}
+	else if (mode == StellarX::ButtonMode::TOGGLE)
+	{
+		tipLabel.setText(click ? tipTextOn : tipTextOff);
+	}
+	tipLabel.setX(tipX);
+	tipLabel.setY(tipY);
+	tipLabel.setDirty(true);
 }
 
 void Button::refreshTooltipTextForState()

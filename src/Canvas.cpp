@@ -1,6 +1,7 @@
 ﻿#include "Canvas.h"
 #include "SxLog.h"
 #include "Window.h"
+#include <algorithm>
 
 static bool SxIsNoisyMsg(UINT m)
 {
@@ -81,32 +82,64 @@ void Canvas::relayoutManagedChildren()
 
 void Canvas::setX(int x)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	// 公开 setter 在 Canvas 上不能再视为“单纯改自己的 x”：
 	// 一旦容器移动，子控件的世界坐标也必须整体重算。
 	applyRuntimeRectDirect(x, y, width, height);
 	relayoutManagedChildren();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Canvas::setY(int y)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	applyRuntimeRectDirect(this->x, y, width, height);
 	relayoutManagedChildren();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Canvas::setWidth(int width)
 {
-	applyRuntimeRectDirect(x, y, width, height);
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
+	applyRuntimeRectDirect(x, y, (std::max)(0, width), height);
 	relayoutManagedChildren();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Canvas::setHeight(int height)
 {
-	applyRuntimeRectDirect(x, y, width, height);
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
+	applyRuntimeRectDirect(x, y, width, (std::max)(0, height));
 	relayoutManagedChildren();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Canvas::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
@@ -117,13 +150,81 @@ void Canvas::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
 	relayoutManagedChildren();
 }
 
-void Canvas::clearAllControls()
+void Canvas::beginMutationScope()
 {
-	controls.clear();
+	++mutationScopeDepth;
+	Control::beginMutationScope();
+}
+
+void Canvas::endMutationScope()
+{
+	if (mutationScopeDepth > 0)
+		--mutationScopeDepth;
+	Window* host = getHostWindow();
+	if (mutationScopeDepth == 0 && !host)
+		flushPendingMutations();
+	// 向外层传播结束事务可能触发当前 Canvas 被删除，因此这里必须是本函数的最后一步。
+	Control::endMutationScope();
+}
+
+void Canvas::flushPendingMutations()
+{
+	// 先按入队顺序应用 Add/Remove/Clear，再递归提交子容器，保证一次回调的结果可预测。
+	if (applyingControlMutations)
+		return;
+	applyingControlMutations = true;
+	bool changed = false;
+	for (auto& mutation : pendingControlMutations)
+	{
+		switch (mutation.kind)
+		{
+		case ControlMutationKind::Add:
+			if (mutation.control)
+			{
+				mutation.control->setParent(this);
+				const StellarX::ResolvedLayoutRect rect = mutation.control->resolveLayoutRect(
+					localWidth, localHeight, x, y, width, height);
+				mutation.control->applyResolvedLayoutRect(rect);
+				controls.push_back(std::move(mutation.control));
+				changed = true;
+			}
+			break;
+		case ControlMutationKind::Remove:
+		{
+			auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+				{ return item && item->getHandle() == mutation.handle; });
+			if (it != controls.end())
+			{
+				controls.erase(it);
+				changed = true;
+			}
+			break;
+		}
+		case ControlMutationKind::Clear:
+			if (!controls.empty())
+			{
+				controls.clear();
+				changed = true;
+			}
+			break;
+		}
+	}
+	pendingControlMutations.clear();
+	for (auto& child : controls)
+		child->flushPendingMutations();
+	applyingControlMutations = false;
+	if (changed)
+	{
+		// 子树结构变化会使既有快照失去可信的覆盖关系，升级为宿主窗口的一次整场景重绘。
+		dirty = true;
+		if (auto* host = getHostWindow()) host->requestFullSceneRedraw();
+		else if (parent) parent->setDirty(true);
+	}
 }
 
 void Canvas::draw()
 {
+	auto mutationScope = enterMutationScope();
 	if (!dirty || !show)
 	{
 		for (auto& control : controls)
@@ -190,6 +291,7 @@ void Canvas::draw()
 bool Canvas::handleEvent(const ExMessage& msg)
 {
 	if (!show) return false;
+	auto mutationScope = enterMutationScope();
 	resetEventVisualChanged();
 
 	bool consumed = false;
@@ -284,8 +386,22 @@ bool Canvas::clearTransientMouseState()
 }
 
 
-void Canvas::addControl(std::unique_ptr<Control> control)
+StellarX::ControlHandle Canvas::addControl(std::unique_ptr<Control> control)
 {
+	if (!control)
+		return {};
+	const StellarX::ControlHandle handle = control->getHandle();
+	Window* host = getHostWindow();
+	if (!applyingControlMutations && (mutationScopeDepth > 0 || (host && host->isMutationTransactionActive())))
+	{
+		// 事务内只转移所有权并返回句柄，实际挂接父指针和布局在提交阶段完成。
+		PendingControlMutation mutation;
+		mutation.kind = ControlMutationKind::Add;
+		mutation.handle = handle;
+		mutation.control = std::move(control);
+		pendingControlMutations.push_back(std::move(mutation));
+		return handle;
+	}
 	control->setParent(this);
 	// 新子控件加入容器时，立刻按“当前容器运行态矩形”解算一次，
 	// 避免后续第一次 draw / resize 前 world 坐标仍停留在设计态。
@@ -304,6 +420,73 @@ void Canvas::addControl(std::unique_ptr<Control> control)
 
 	controls.push_back(std::move(control));
 	dirty = true;
+	return handle;
+}
+
+void Canvas::tick(ULONGLONG nowMs)
+{
+	if (!show)
+		return;
+	auto mutationScope = enterMutationScope();
+	for (auto& control : controls)
+		if (control && control->IsVisible()) control->tick(nowMs);
+}
+
+bool Canvas::removeControl(StellarX::ControlHandle handle)
+{
+	if (!handle)
+		return false;
+	bool exists = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; }) != controls.end();
+	for (const auto& mutation : pendingControlMutations)
+	{
+		if (mutation.kind == ControlMutationKind::Clear)
+			exists = false;
+		else if (mutation.handle == handle)
+			exists = mutation.kind == ControlMutationKind::Add;
+	}
+	if (!exists)
+		return false;
+	Window* host = getHostWindow();
+	if (!applyingControlMutations && (mutationScopeDepth > 0 || (host && host->isMutationTransactionActive())))
+	{
+		pendingControlMutations.push_back({ ControlMutationKind::Remove, handle, nullptr });
+		return true;
+	}
+	pendingControlMutations.push_back({ ControlMutationKind::Remove, handle, nullptr });
+	flushPendingMutations();
+	return true;
+}
+
+void Canvas::clearControls()
+{
+	Window* host = getHostWindow();
+	pendingControlMutations.push_back({ ControlMutationKind::Clear, {}, nullptr });
+	if (!applyingControlMutations && mutationScopeDepth == 0 && (!host || !host->isMutationTransactionActive()))
+		flushPendingMutations();
+}
+
+Control* Canvas::findControl(StellarX::ControlHandle handle)
+{
+	auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; });
+	return it == controls.end() ? nullptr : it->get();
+}
+
+const Control* Canvas::findControl(StellarX::ControlHandle handle) const
+{
+	auto it = std::find_if(controls.begin(), controls.end(), [&](const auto& item)
+		{ return item && item->getHandle() == handle; });
+	return it == controls.end() ? nullptr : it->get();
+}
+
+std::vector<StellarX::ControlHandle> Canvas::getControlHandles() const
+{
+	std::vector<StellarX::ControlHandle> handles;
+	handles.reserve(controls.size());
+	for (const auto& control : controls)
+		if (control) handles.push_back(control->getHandle());
+	return handles;
 }
 
 void Canvas::setShape(StellarX::ControlShape shape)

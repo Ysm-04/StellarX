@@ -27,15 +27,16 @@ namespace StellarX
 	class MessageBox
 	{
 	public:
-		// 模态：阻塞直到关闭，返回结果
-		// 直接创建并显示模态消息框，直到用户关闭后返回结果
+		// 模态：直接创建并显示对话框，阻塞到用户关闭后返回结果。
+		// 调用期间会运行 Dialog 自己的模态事件循环。
 		static MessageBoxResult showModal(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",
 			MessageBoxType type = MessageBoxType::OK);
 
-		// 非模态：立即返回，通过回调异步获取结果
-		// 创建并显示非模态消息框，关闭时通过回调返回结果
+		// 非模态：创建后立即返回，由 Window 托管生命周期和绘制层级。
+		// 若同一窗口中已存在相同 caption/text 的可见非模态对话框，则不会重复创建。
+		// 用户关闭时通过 onResult 异步返回结果；回调允许排队修改宿主控件树。
 		static void showAsync(Window& wnd,
 			const std::string& text,
 			const std::string& caption = "提示",

@@ -172,46 +172,18 @@ namespace
 	}
 }
 
-StellarX::ControlText& StellarX::ControlText::operator=(const ControlText& text)
+bool StellarX::ControlText::operator==(const ControlText& text) const
 {
-	{
-		nHeight = text.nHeight;
-		nWidth = text.nWidth;
-		lpszFace = text.lpszFace;
-		color = text.color;
-		nEscapement = text.nEscapement;
-		nOrientation = text.nOrientation;
-		nWeight = text.nWeight;
-		bItalic = text.bItalic;
-		bUnderline = text.bUnderline;
-		bStrikeOut = text.bStrikeOut;
-		return *this;
-	}
-}
-
-bool StellarX::ControlText::operator!=(const ControlText& text)
-{
-	if(nHeight != text.nHeight)
-		return true;
-	else if (nWidth != text.nWidth)
-		return true;
-	else if (lpszFace != text.lpszFace)
-		return true;
-	else if (color != text.color)
-		return true;
-	else if (nEscapement != text.nEscapement)
-		return true;
-	else if (nOrientation != text.nOrientation)
-		return true;
-	else if (nWeight != text.nWeight)
-		return true;
-	else if (bItalic != text.bItalic)
-		return true;
-	else if (bUnderline != text.bUnderline)
-		return true;
-	else if (bStrikeOut != text.bStrikeOut)
-		return true;
-	return false;
+	return nHeight == text.nHeight &&
+		nWidth == text.nWidth &&
+		faceName == text.faceName &&
+		color == text.color &&
+		nEscapement == text.nEscapement &&
+		nOrientation == text.nOrientation &&
+		nWeight == text.nWeight &&
+		bItalic == text.bItalic &&
+		bUnderline == text.bUnderline &&
+		bStrikeOut == text.bStrikeOut;
 }
 void Control::setIsVisible(bool show)
 {
@@ -345,26 +317,66 @@ const StellarX::LayoutCapability& Control::getLayoutCapability() const
 
 void Control::setX(int x)
 {
+	// 先保存旧 coverage 并回贴旧快照，再写入新坐标；这样移动控件不会留下旧像素。
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn)
+		discardBackground();
 	this->x = x;
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Control::setY(int y)
 {
+	// Y 方向与 X 方向使用同一生命周期顺序，旧区域和新区域都由托管重绘统一收口。
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn)
+		discardBackground();
 	this->y = y;
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Control::setWidth(int width)
 {
-	this->width = width;
+	// 尺寸变化会改变快照大小，必须先释放旧快照，避免新绘制复用错误尺寸的背景。
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn)
+		discardBackground();
+	this->width = (std::max)(0, width);
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Control::setHeight(int height)
 {
-	this->height = height;
+	// 高度调整同样登记变化前的 coverage，供 Window 在提交阶段覆盖旧、新两个区域。
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn)
+		discardBackground();
+	this->height = (std::max)(0, height);
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 bool Control::clearTransientMouseState()
@@ -526,7 +538,25 @@ void Control::onRequestRepaintAsRoot()
 bool Control::shouldDeferManagedRepaint() const
 {
 	Window* host = getHostWindow();
-	return host && host->isManagedDispatchActive();
+	return host && (host->isManagedDispatchActive() || host->isMutationTransactionActive());
+}
+
+void Control::beginMutationScope()
+{
+	// 子控件不单独维护顶层事务，沿 parent 链把计数交给 Canvas 或 Window。
+	if (parent)
+		parent->beginMutationScope();
+	else if (auto* host = getHostWindow())
+		host->beginMutationScope();
+}
+
+void Control::endMutationScope()
+{
+	// 与 beginMutationScope 对称；最外层 root 结束后才有资格提交待处理队列。
+	if (parent)
+		parent->endMutationScope();
+	else if (auto* host = getHostWindow())
+		host->endMutationScope();
 }
 
 // 获取宿主 Window：
@@ -611,9 +641,10 @@ void Control::commitManagedRepaint()
 
 void Control::saveBackground(int x, int y, int w, int h)
 {
-	
+
 	if (w <= 0 || h <= 0) return;
 	saveBkX = x; saveBkY = y; saveWidth = w; saveHeight = h;
+	// 快照描述的是下一次局部恢复所需的屏幕背景，位置或尺寸变化时不能继续复用旧缓存。
 	if (saveBkImage)
 	{
 		//尺寸变了才重建，避免反复 new/delete

@@ -20,6 +20,8 @@
 
 每个目录内的同名 `.exe` 是使用 Visual Studio 2022、C++17、x64 Release 和静态运行库 `/MT` 构建的预览程序，仅适用于 64 位 Windows。这些程序未进行数字签名，Windows SmartScreen 可能显示安全提示。
 
+仓库中的现有 `.exe` 仍是 v3.1.0 历史预览产物，本次 v4.0.0 源码更新未重新生成它们。验证新版源码时请按下文重新构建，不要用现有 `.exe` 判断 v4.0.0 行为。
+
 源码统一保存为 UTF-8；鉴于当前 StellarX/EasyX 使用窄字符串绘制中文，MSVC 构建会通过 `/execution-charset:.936` 生成 GBK 字符串，避免中文控件乱码。
 
 `login-interface` 和 `bmi-calculator` 依赖各自的 `assets/` 目录；移动 EXE 时应同时复制资源目录。资源缺失时，这两个示例会退回纯色背景，不影响其余交互。

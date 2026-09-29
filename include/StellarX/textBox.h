@@ -37,23 +37,26 @@ public:
 	void draw() override;
 	// 处理输入框鼠标交互和文本录入
 	bool handleEvent(const ExMessage& msg) override;
-	// 设置文本框模式
+	// 设置文本框模式。
+	// PASSWORD_MODE 只改变显示形态：内部仍保存真实文本，绘制时临时生成掩码。
 	void setMode(StellarX::TextBoxmode mode);
-	// 设置可输入最大长度；当前按 std::string 字节长度限制，不等同于 Unicode 字符数
+	// 设置可输入最大长度；当前按 std::string 字节长度限制，不等同于 Unicode 字符数。
+	// len 为 0 时保持原值；截断逻辑会尽量落在完整 MBCS/GBK 字符边界上。
 	void setMaxCharLen(size_t len);
-	// 设置文本框形状；仅支持矩形/圆角矩形，圆形和椭圆会回退为 RECTANGLE
+	// 设置文本框形状；仅支持矩形/圆角矩形，圆形和椭圆会回退为 RECTANGLE。
 	void setTextBoxshape(StellarX::ControlShape shape);
-	// 设置边框颜色
+	// 设置文本框边框颜色。
 	void setTextBoxBorder(COLORREF color);
-	// 设置背景颜色
+	// 设置文本框背景颜色。
 	void setTextBoxBk(COLORREF color);
-	// 设置当前文本
+	// 设置当前文本。
+	// 超过 maxCharLen 时按字节长度截断；已绘制且存在父控件时会请求父级托管重绘。
 	void setText(std::string text);
 
-	// 获取当前文本
+	// 获取当前真实文本；PASSWORD_MODE 下也返回未掩码内容。
 	std::string getText() const;
 
 private:
-	//用来检查对话框是否模态,此控件不做实现
+	// TextBox 不是模态对话框，固定返回 false。
 	bool model() const override { return false; };
 };

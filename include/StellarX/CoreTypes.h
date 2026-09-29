@@ -11,6 +11,8 @@
 #pragma once
 
 #include "easyx.h"
+#include <cstdint>
+#include <string>
 
  /**
   * @命名空间: StellarX
@@ -27,6 +29,41 @@
   */
 namespace StellarX
 {
+	/**
+	 * @结构体名称: ControlHandle
+	 * @功能描述: 表示控件在当前进程内的稳定身份句柄
+	 *
+	 * @详细说明:
+	 * 控件由 Window、Canvas、TabControl 等容器持有所有权，外部调用方不应长期保存
+	 * 控件对象地址。ControlHandle 用一个不暴露对象地址的整数值表示控件身份，
+	 * 用于后续 removeControl、findControl、getControlHandles 等安全查询和删除操作。
+	 *
+	 * 句柄值为 0 时表示无效句柄；非 0 值由控件构造时单调分配，只保证当前进程
+	 * 本次运行期间的身份稳定，不保证跨进程、跨运行或序列化后仍然有效。
+	 *
+	 * @成员说明:
+	 * std::uint64_t value = 0; - 句柄原始值，0 表示无效句柄。
+	 *
+	 * @使用示例:
+	 *   StellarX::ControlHandle handle = wnd.addControl(std::move(control));
+	 *   if (handle) wnd.removeControl(handle);
+	 *
+	 * @备注:
+	 * 控件被移除后，旧句柄仍可安全用于比较或查询，但 findControl 可能返回 nullptr；
+	 * 调用方不得把句柄视为对象生命周期仍然存在的证明。
+	 */
+	struct ControlHandle
+	{
+		std::uint64_t value = 0;
+
+		// 判断句柄是否有效；value 为 0 时返回 false。
+		explicit operator bool() const noexcept { return value != 0; }
+		// 比较两个句柄是否指向同一控件身份。
+		bool operator==(const ControlHandle& other) const noexcept { return value == other.value; }
+		// 比较两个句柄是否指向不同控件身份。
+		bool operator!=(const ControlHandle& other) const noexcept { return value != other.value; }
+	};
+
 	/**
 	 * @枚举类名称: FillStyle
 	 * @功能描述: 用来定义控件填充图案的枚举类
@@ -131,7 +168,7 @@ namespace StellarX
 	 * @成员说明:
 	 *      int       nHeight = 0;          - 字体高度
 	 *	    int       nWidth = 0;           - 字体宽度 如果为0则自适应
-	 *	LPCTSTR       lpszFace = "宋体";    - 字体名称
+	 *	std::string   faceName = "微软雅黑";    - 字体名称
 	 *	COLORREF      color = RGB(0, 0, 0); - 字体颜色
 	 *	     int      nEscapement = 0;      - 字符串旋转角度
 	 *	     int      nOrientation = 0;     - 字符旋转角度
@@ -144,7 +181,8 @@ namespace StellarX
 	{
 		int  nHeight = 0;           //- 字体高度
 		int  nWidth = 0;            //- 字体宽度 如果为0则自适应
-		LPCTSTR  lpszFace = "微软雅黑";     //- 字体名称
+		// 由对象拥有字体名，避免从临时字符串或外部缓冲区保存悬空指针。
+		std::string faceName = "微软雅黑"; //- 字体名称
 		COLORREF color = RGB(0, 0, 0);  //- 字体颜色
 		int nEscapement = 0;       //- 字符串旋转角度
 		int nOrientation = 0;      //- 字符旋转角度
@@ -153,8 +191,10 @@ namespace StellarX
 		bool bUnderline = false;    //- 是否下划线
 		bool bStrikeOut = false;     //- 是否删除线
 
-		bool operator!=(const ControlText& text);
-		ControlText& operator=(const ControlText& text);
+		// 比较两份字体样式是否完全一致。
+		bool operator==(const ControlText& text) const;
+		// 比较两份字体样式是否存在任意差异。
+		bool operator!=(const ControlText& text) const { return !(*this == text); }
 	};
 
 	/**
@@ -252,7 +292,25 @@ namespace StellarX
 		int ROUND_RECTANGLEheight = 20;  //构成圆角矩形的圆角的椭圆的高度。
 	};
 
-	// 消息框类型
+	/**
+	 * @枚举名称: MessageBoxType
+	 * @功能描述: 定义标准消息框按钮组合
+	 *
+	 * @详细说明:
+	 * MessageBoxType 决定 Dialog / MessageBox 工厂创建哪些功能按钮，
+	 * 例如只有确定按钮、确定取消按钮、是否按钮等。
+	 *
+	 * @取值说明:
+	 * OK               - 只有确定按钮
+	 * OKCancel         - 确定和取消按钮
+	 * YesNo            - 是和否按钮
+	 * YesNoCancel      - 是、否和取消按钮
+	 * RetryCancel      - 重试和取消按钮
+	 * AbortRetryIgnore - 中止、重试和忽略按钮
+	 *
+	 * @使用示例:
+	 *   StellarX::MessageBoxType type = StellarX::MessageBoxType::YesNo;
+	 */
 	enum class MessageBoxType
 	{
 		OK,                // 只有确定按钮
@@ -263,7 +321,27 @@ namespace StellarX
 		AbortRetryIgnore,  // 中止、重试和忽略按钮
 	};
 
-	// 消息框返回值
+	/**
+	 * @枚举名称: MessageBoxResult
+	 * @功能描述: 定义消息框关闭后的用户选择结果
+	 *
+	 * @详细说明:
+	 * 模态消息框通过 showModal 返回该枚举；非模态消息框通过 showAsync 的回调返回。
+	 * 当前取值与 Win32 常见 MessageBox 返回码保持一致，便于迁移和日志排查。
+	 *
+	 * @取值说明:
+	 * OK     - 用户点击确定
+	 * Cancel - 用户点击取消或关闭对话框
+	 * Yes    - 用户点击是
+	 * No     - 用户点击否
+	 * Abort  - 用户点击中止
+	 * Retry  - 用户点击重试
+	 * Ignore - 用户点击忽略
+	 *
+	 * @使用示例:
+	 *   StellarX::MessageBoxResult result =
+	 *       StellarX::MessageBox::showModal(wnd, "继续执行？", "确认", StellarX::MessageBoxType::YesNo);
+	 */
 	enum class MessageBoxResult
 	{
 		OK = 1,         // 确定按钮
@@ -428,13 +506,22 @@ namespace StellarX
 	};
 
 	/*******************************************************************************
-	 * @结构体: AxisLayoutSpec
+	 * @结构体名称: AxisLayoutSpec
 	 * @摘要: 描述单个坐标轴上的锚点与解算策略
 	 * @详细说明:
 	 *   一个控件完整布局由“水平轴 + 垂直轴”两份 AxisLayoutSpec 组成。
 	 *   anchorStart / anchorEnd 只表达当前轴是否锚定起止边；
 	 *   sizePolicy 决定该轴是否允许拉伸；
 	 *   alignPolicy 则用于固定尺寸时的位置求解。
+	 *
+	 * @成员说明:
+	 * bool anchorStart               - 是否锚定当前轴起边（水平轴为左边，垂直轴为上边）。
+	 * bool anchorEnd                 - 是否锚定当前轴终边（水平轴为右边，垂直轴为下边）。
+	 * AxisSizePolicy sizePolicy      - 当前轴尺寸策略，决定是否随父容器变化而拉伸。
+	 * AxisAlignPolicy alignPolicy    - 固定尺寸时的位置策略。
+	 *
+	 * @备注:
+	 * anchorStart / anchorEnd 不直接决定尺寸，尺寸是否变化以 sizePolicy 为准。
 	 ******************************************************************************/
 	struct AxisLayoutSpec
 	{
@@ -445,8 +532,16 @@ namespace StellarX
 	};
 
 	/*******************************************************************************
-	 * @结构体: LayoutSpec
+	 * @结构体名称: LayoutSpec
 	 * @摘要: 控件完整布局规格，由水平轴和垂直轴两部分组成
+	 * @详细说明:
+	 *   LayoutSpec 是控件对统一布局器的完整声明。水平轴和垂直轴分别独立描述
+	 *   锚点、尺寸策略和固定尺寸时的位置策略，Window / Canvas 在 resize 时据此
+	 *   解算运行态矩形。
+	 *
+	 * @成员说明:
+	 * AxisLayoutSpec horizontal - 水平轴布局规格。
+	 * AxisLayoutSpec vertical   - 垂直轴布局规格。
 	 ******************************************************************************/
 	struct LayoutSpec
 	{
@@ -455,12 +550,20 @@ namespace StellarX
 	};
 
 	/*******************************************************************************
-	 * @结构体: LayoutCapability
+	 * @结构体名称: LayoutCapability
 	 * @摘要: 控件能力边界，声明控件在哪些轴上允许 Stretch
 	 * @详细说明:
 	 *   规则表负责定义“某种组合如何解算”，LayoutCapability 负责声明
 	 *   “该控件是否允许采用这种组合”。例如 Table 当前阶段仅允许 X 轴拉伸，
 	 *   因此 allowStretchY 会被显式关闭。
+	 *
+	 * @成员说明:
+	 * bool allowStretchX - 是否允许该控件在水平轴使用 Stretch 尺寸策略。
+	 * bool allowStretchY - 是否允许该控件在垂直轴使用 Stretch 尺寸策略。
+	 *
+	 * @备注:
+	 * 能力边界用于保护控件自身实现约束；即使调用方设置了 Stretch，
+	 * 不被允许的轴也应被布局层拒绝或降级处理。
 	 ******************************************************************************/
 	struct LayoutCapability
 	{
@@ -469,12 +572,20 @@ namespace StellarX
 	};
 
 	/*******************************************************************************
-	 * @结构体: ResolvedLayoutRect
+	 * @结构体名称: ResolvedLayoutRect
 	 * @摘要: 统一布局解算后的运行态矩形结果
 	 * @详细说明:
 	 *   localX/localY 表示解算完成后的“父局部坐标”；
 	 *   worldX/worldY 表示映射到窗口世界坐标后的最终绘制位置；
 	 *   width/height 为运行态尺寸。
+	 *
+	 * @成员说明:
+	 * int localX  - 解算后的父局部 X 坐标。
+	 * int localY  - 解算后的父局部 Y 坐标。
+	 * int width   - 解算后的运行态宽度。
+	 * int height  - 解算后的运行态高度。
+	 * int worldX  - 映射到窗口坐标系后的 X 坐标。
+	 * int worldY  - 映射到窗口坐标系后的 Y 坐标。
 	 ******************************************************************************/
 	struct ResolvedLayoutRect
 	{

@@ -168,30 +168,62 @@ TabControl::~TabControl()
 
 void TabControl::setX(int x)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	applyRuntimeRectDirect(x, y, width, height);
 	refreshRuntimeLayout();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void TabControl::setY(int y)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	applyRuntimeRectDirect(x, y, width, height);
 	refreshRuntimeLayout();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void TabControl::setWidth(int width)
 {
-	applyRuntimeRectDirect(x, y, width, height);
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
+	applyRuntimeRectDirect(x, y, (std::max)(0, width), height);
 	refreshRuntimeLayout();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void TabControl::setHeight(int height)
 {
-	applyRuntimeRectDirect(x, y, width, height);
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
+	applyRuntimeRectDirect(x, y, width, (std::max)(0, height));
 	refreshRuntimeLayout();
 	onWindowResize();
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void TabControl::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
@@ -205,6 +237,7 @@ void TabControl::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rec
 void TabControl::draw()
 {
 	if (!dirty || !show)return;
+	auto mutationScope = enterMutationScope();
 	   // 绘制画布背景和基本形状及其子画布控件
 	Canvas::draw();
 	for (auto& c : controls)
@@ -218,8 +251,8 @@ void TabControl::draw()
 		c.first->draw();
 	}
 
-	// 首次绘制时处理默认激活页签
-	if (IsFirstDraw)
+	// 首次绘制时处理默认激活页签；空容器保持待定状态，不能访问最后一个元素。
+	if (IsFirstDraw && !controls.empty())
 	{
 		if (defaultActivation >= 0 && defaultActivation < (int)controls.size())
 			controls[defaultActivation].first->setButtonClick(true);
@@ -233,6 +266,7 @@ void TabControl::draw()
 bool TabControl::handleEvent(const ExMessage& msg)
 {
 	if (!show)return false;
+	auto mutationScope = enterMutationScope();
 	resetEventVisualChanged();
 	bool consume = false;
 	bool anyVisualChanged = false;
@@ -317,9 +351,28 @@ bool TabControl::clearTransientMouseState()
 	return changed;
 }
 
-void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>&& control)
+size_t TabControl::addTab(std::unique_ptr<Button> button, std::unique_ptr<Canvas> page)
 {
-	controls.push_back(std::move(control));
+	if (!button || !page)
+		return static_cast<size_t>(-1);
+	Window* host = getHostWindow();
+	if (mutationScopeDepth > 0 || (host && host->isMutationTransactionActive()))
+	{
+		// 返回“逻辑索引”而不是物理 vector 下标，使回调可以立即向待提交页面添加控件。
+		const size_t index = controls.size() + pendingTabs.size();
+		pendingTabs.emplace_back(std::move(button), std::move(page));
+		dirty = true;
+		return index;
+	}
+	return addTabDirect(std::move(button), std::move(page));
+}
+
+size_t TabControl::addTabDirect(std::unique_ptr<Button> button, std::unique_ptr<Canvas> page)
+{
+	if (!button || !page)
+		return static_cast<size_t>(-1);
+	// 只有在事务提交阶段才真正加入 controls，并在这里一次性建立按钮、页面和回调关系。
+	controls.emplace_back(std::move(button), std::move(page));
 	initTabBar();
 	initTabPage();
 	size_t idx = controls.size() - 1;
@@ -338,20 +391,20 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 					break;
 				}
 			}
-			for (auto& tab : controls)
+			for (size_t i = 0; i < controls.size(); ++i)
 			{
-				if (tab.first->getButtonText() != controls[idx].first->getButtonText() && tab.first->isClicked())
-					tab.first->setButtonClick(false);
+				if (i != idx && controls[i].first->isClicked())
+					controls[i].first->setButtonClick(false);
 			}
-			
-		
+
+
 			SX_LOGI("Tab") << SX_T("激活选项卡：","activate tab: ") << prevIdx << "->" << (int)idx
 				<< " text=" << controls[idx].first->getButtonText();
 			controls[idx].second->onWindowResize();
 			controls[idx].second->setIsVisible(true);
 			dirty = true;
-			
-			
+
+
 		});
 	controls[idx].first->setOnToggleOffListener([this, idx]()
 		{
@@ -364,21 +417,66 @@ void TabControl::add(std::pair<std::unique_ptr<Button>, std::unique_ptr<Canvas>>
 	controls[idx].second->setParent(this);
 	controls[idx].second->setLinewidth(canvaslinewidth);
 	controls[idx].second->setIsVisible(false);
+	dirty = true;
+	return idx;
 }
 
-void TabControl::add(std::string tabText, std::unique_ptr<Control> control)
+void TabControl::tick(ULONGLONG nowMs)
 {
-	control->setDirty(true);
+	if (!show)
+		return;
+	auto mutationScope = enterMutationScope();
 	for (auto& tab : controls)
 	{
-		if (tab.first->getButtonText() == tabText)
-		{
-			control->setParent(tab.second.get());
-			control->setIsVisible(tab.second->IsVisible());
-			tab.second->addControl(std::move(control));
-			break;
-		}
+		if (tab.first && tab.first->IsVisible()) tab.first->tick(nowMs);
+		if (tab.second && tab.second->IsVisible()) tab.second->tick(nowMs);
 	}
+}
+
+std::unique_ptr<Control> TabControl::tryAddToPage(size_t pageIndex, std::unique_ptr<Control> control)
+{
+	// 返回非空 unique_ptr 表示索引无效且调用方仍拥有控件；成功路径才会消耗所有权。
+	if (!control)
+		return control;
+	Canvas* page = nullptr;
+	if (pageIndex < controls.size())
+		page = controls[pageIndex].second.get();
+	else
+	{
+		const size_t pendingIndex = pageIndex - controls.size();
+		if (pendingIndex < pendingTabs.size())
+			page = pendingTabs[pendingIndex].second.get();
+	}
+	if (!page)
+		return control;
+	control->setDirty(true);
+	control->setIsVisible(page->IsVisible());
+	page->addControl(std::move(control));
+	dirty = true;
+	return nullptr;
+}
+
+void TabControl::flushPendingMutations()
+{
+	// 先提交 Canvas 自身的页内控件，再提交完整页签；两层队列都在同一外层收口完成。
+	Canvas::flushPendingMutations();
+	if (!pendingTabs.empty())
+	{
+		auto tabs = std::move(pendingTabs);
+		pendingTabs.clear();
+		for (auto& tab : tabs)
+			addTabDirect(std::move(tab.first), std::move(tab.second));
+	}
+	for (auto& tab : controls)
+		if (tab.second) tab.second->flushPendingMutations();
+}
+
+std::unique_ptr<Control> TabControl::tryAddToPage(const std::string& tabText, std::unique_ptr<Control> control)
+{
+	const int idx = indexOf(tabText);
+	if (idx < 0)
+		return control;
+	return tryAddToPage(static_cast<size_t>(idx), std::move(control));
 }
 
 void TabControl::setTabPlacement(StellarX::TabPlacement placement)
@@ -446,22 +544,30 @@ int TabControl::getActiveIndex() const
 	return -1;
 }
 
-void TabControl::setActiveIndex(int idx)
+bool TabControl::setActiveIndex(int idx)
 {
+	// 首次绘制前仅记录待激活索引，真正页签尚未加入时也不访问 controls。
+	if (idx < 0)
+		return false;
 	if (IsFirstDraw)
+	{
 		defaultActivation = idx;
+		return true;
+	}
 	else
 	{
 		// 外部重复激活“已经处于激活状态”的页签时，不应再把整条 onToggleOn 链重跑一遍。
 		// 否则当前可见页面会重复执行 onWindowResize()/setIsVisible(true)，
 		// 对页内像 Table 这种会越出页面边界绘制的控件，容易把快照链再次扰乱，留下残影。
-		if (idx >= 0 && idx < controls.size())
+		if (idx >= 0 && idx < static_cast<int>(controls.size()))
 		{
 			if (getActiveIndex() == idx)
-				return;
+				return true;
 			controls[idx].first->setButtonClick(true);
+			return true;
 		}
 	}
+	return false;
 }
 
 int TabControl::count() const

@@ -141,6 +141,7 @@ namespace StellarX
         // 绑定一个输出流引用（常见用法：std::cout）
         explicit ConsoleSink(std::ostream& os) : out(os) {}
 
+        // 返回控制台 sink 的固定名称。
         const char* name() const override { return "console"; }
 
         // 写入一行（不自动追加换行，换行由上层统一拼接）
@@ -158,8 +159,10 @@ namespace StellarX
     class FileSink : public ILogSink
     {
     public:
+        // 构造一个尚未打开文件的文件 sink。
         FileSink() = default;
 
+        // 返回文件 sink 的固定名称。
         const char* name() const override { return "file"; }
 
         // 打开文件
@@ -192,6 +195,8 @@ namespace StellarX
         std::string filePath;    // 当前文件路径
         bool appendMode = true;  // 是否追加模式（用于 reopen）
         std::size_t rotateBytes = 0; // 滚动阈值
+		// 时间戳精度不足时用递增序号补足文件名唯一性，避免连续滚动互相覆盖。
+		std::uint64_t rotateSequence = 0;
     };
 
     /* ========================= 日志中心 SxLogger ========================= */
@@ -264,8 +269,8 @@ namespace StellarX
         // 获取配置副本（避免外部直接改内部 cfg）
         SxLogConfig getConfigCopy() const;
 
-        // 批量设置配置（整体替换）
-        void setConfig(const SxLogConfig& cfg);
+        // 批量设置配置（整体替换）；新文件 sink 打开成功后才替换旧配置。
+        bool setConfig(const SxLogConfig& cfg);
 
         // 工具：把级别转为字符串（用于前缀）
         static const char* levelToString(SxLogLevel level);
@@ -274,6 +279,7 @@ namespace StellarX
         static std::string makeTimestampLocal();
 
     private:
+        // 构造日志单例的初始配置和默认 sink。
         SxLogger();
 
         // 判断 tag 是否允许输出（根据 Tag 过滤模式与 tagList）
@@ -300,6 +306,7 @@ namespace StellarX
     // 说明：
     // - 只做“选择 zhCN 或 enUS”，不做编码转换
     // - 输出显示是否正常由终端环境决定
+    // 根据当前日志语言选择中文或英文文本。
     inline const char* SxT(const char* zhCN, const char* enUS)
     {
         return (SxLogger::Get().getLanguage() == SxLogLanguage::ZhCN) ? zhCN : enUS;
@@ -309,6 +316,7 @@ namespace StellarX
     // 说明：
     // - C++20 的 u8"xxx" 是 char8_t*，为了兼容调用端，这里提供重载
     // - reinterpret_cast 只是改指针类型，不做 UTF-8 -> GBK 转码
+    // 兼容 C++20 char8_t 字符串字面量的双语选择入口。
     inline const char* SxT(const char8_t* zhCN, const char* enUS)
     {
         return (SxLogger::Get().getLanguage() == SxLogLanguage::ZhCN)
@@ -337,6 +345,7 @@ namespace StellarX
 
         // 拼接内容（流式写法）
         template<typename T>
+        // 向当前日志行追加一个可流式输出的值。
         SxLogLine& operator<<(const T& v)
         {
             ss << v;

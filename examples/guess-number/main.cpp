@@ -87,8 +87,6 @@ int main()
             else
                 resultPtr->setText("猜对了！点击“再来一次”继续");
 
-            countPtr->draw();
-            resultPtr->draw();
         });
 
     // “再来一次”必须修改外层 answer 和 guessCount，不能重新声明同名局部变量。
@@ -100,8 +98,6 @@ int main()
             inputPtr->setText("");
             resultPtr->setText("已生成新的数字");
             countPtr->setText("0");
-            resultPtr->draw();
-            countPtr->draw();
         });
 
     // Window 接管所有控件的生命周期。

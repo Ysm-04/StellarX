@@ -28,9 +28,9 @@ class Label : public Control
 	StellarX::ControlText lastMeasuredStyle;   // 最近一次参与尺寸测量的字体样式
 	bool contentMeasureValid = false;          // 当前内容尺寸缓存是否有效
 
-	//标签事件处理（标签无事件）不实现具体代码
-	bool handleEvent(const ExMessage& msg) override { return false; }
-	//用来检查对话框是否模态,此控件不做实现
+	// Label 不处理输入事件，固定返回 false。
+	bool handleEvent(const ExMessage&) override { return false; }
+	// Label 不是模态对话框，固定返回 false。
 	bool model() const override { return false; };
 	// 根据当前文本和字体样式刷新运行态尺寸。
 	// 这是 Label 的内容驱动几何入口：
@@ -51,7 +51,7 @@ public:
 
 	// 绘制标签文本
 	void draw() override;
-	//用于“隐藏提示框”时调用（还原并释放快照）
+	// 隐藏 Label 并恢复背景；主要供 Button Tooltip 关闭时复用。
 	void hide();
 	// Label 的内容尺寸由文本和字体样式共同决定。
 	// 因此只要进入 dirty 状态，就在绘制前先刷新一次运行态尺寸，
@@ -61,7 +61,8 @@ public:
 	void setTextdisap(bool key);
 	// 设置标签背景颜色
 	void setTextBkColor(COLORREF color);
-	// 设置标签文本，并触发内容驱动尺寸刷新
+	// 设置标签文本，并触发内容驱动尺寸刷新。
+	// Label 的布局系统只负责位置；运行态宽高仍由文本和 textStyle 测量结果决定。
 	void setText(std::string text);
 protected:
 	// 统一布局器只负责安置 Label 的运行态位置；

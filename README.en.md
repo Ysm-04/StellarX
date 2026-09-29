@@ -14,8 +14,8 @@ Blog: https://blog.stellarx-gui.top
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Version](https://img.shields.io/badge/Version-3.1.0-brightgreen.svg)
-![Download](https://img.shields.io/badge/Download-3.1.0_Release-blue.svg)
+![Source Version](https://img.shields.io/badge/Source-4.0.0-brightgreen.svg)
+![Binary Release](https://img.shields.io/badge/Binary_Release-4.0.0-blue.svg)
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
@@ -48,17 +48,17 @@ Blog: https://blog.stellarx-gui.top
   </tr>
 </table>
 
-## Latest Release
+## Latest Version
 
-### v3.1.0 (2026-05-15)
+### v4.0.0 (2026-09-30)
 
-v3.1.0 is a layout and managed repaint stabilization release. It turns the capabilities landed in the previous development phase into documented, verifiable, and migratable public semantics.
+v4.0.0 is a core-stability release with breaking API changes. It focuses on control-tree mutation during callbacks, runtime geometry artifacts, text ownership, logger sink switching, and message backlog handling.
 
-- **New layout API finalized**: four-edge anchors, per-axis `AxisSizePolicy`, per-axis fixed-size `AxisAlignPolicy`, while keeping legacy `setLayoutMode()` / `setAnchor()` as compatibility inputs.
-- **Clear geometry semantics**: `localx/localy/localWidth/localHeight` are design-time parent-local rectangles, while `x/y/width/height` are current runtime drawing rectangles. Normal resize and layout solving do not write back to the design baseline.
-- **Managed repaint stabilization**: Window / Canvas / TabControl / Table / Dialog dirty coverage, overlay, and Tooltip transient-layer paths are consolidated to reduce ghosting, z-order errors, and stale hover state.
-- **Dialog / MessageBox stability retained**: Dialog recenters during host-window resize and does not stretch. MessageBox remains a thin factory layer.
-- **Current boundaries clarified**: Table supports X-axis stretch and fixed Y-axis size in this version. Tooltip intelligent placement, focus, and keyboard event systems are deferred.
+- **Safe control ownership APIs**: stable `ControlHandle` values replace mutable access to container-owned `unique_ptr` collections. Window and Canvas expose add/remove/clear/find/handles operations.
+- **Deferred structural mutations**: add, remove, and clear requests made during events, drawing, ticks, or button callbacks are committed after the outermost transaction ends.
+- **Text and tab API consolidation**: `ControlText::faceName` is an owning string; TabControl now uses `addTab()` / `tryAddToPage()` and supports duplicate tab captions.
+- **Event loop and timed-state improvements**: messages are processed in bounded batches, active rounds no longer sleep unconditionally, and delayed Tooltip state is driven by a monotonic tick chain.
+- **Defect fixes**: empty TabControl handling, stale geometry pixels, first-frame Table pagination overlap, Dialog cleanup, Tooltip behavior, MBCS truncation/password masking, and logger rotation/configuration.
 
 Full changelog: [CHANGELOG.en.md](CHANGELOG.en.md)
 
@@ -84,6 +84,9 @@ StellarX/
 │       ├── Dialog.h
 │       └── MessageBox.h
 ├── src/
+│   ├── internal/
+│   │   ├── SxEventLoopInternal.h
+│   │   └── SxTextInternal.h
 │   ├── Control.cpp
 │   ├── Window.cpp
 │   ├── Button.cpp
@@ -121,13 +124,14 @@ Design principles:
 - **Common controls**: Button, Label, TextBox, Canvas, TabControl, Table, Dialog, and MessageBox.
 - **Unified layout semantics**: four-edge anchors, per-axis Stretch/FixedSize, and Start/End/Center/Proportional alignment.
 - **Nested containers**: Canvas and TabControl map parent-local child coordinates to window-world coordinates.
+- **Stable handles and deferred mutation**: callbacks may request control add/remove/clear operations, which are committed at a safe point.
 - **Managed repaint**: event handling mutates state and records dirty coverage; Window commits repaint work in a centralized pass.
 - **Dialog system**: Dialog supports modal/modeless usage; MessageBox provides a standard factory interface.
 - **Debug logging**: SxLog supports console/file output, levels, tag filters, file rotation, and bilingual text selection.
 
 ## Quick Start
 
-Get the prebuilt package from [Releases](https://github.com/Ysm-04/StellarX/releases/latest), or integrate the source directly.
+Get an already published prebuilt package from [Releases](https://github.com/Ysm-04/StellarX/releases/latest), or integrate the current source as described below.
 
 ### Requirements
 
@@ -135,7 +139,7 @@ Get the prebuilt package from [Releases](https://github.com/Ysm-04/StellarX/rele
 - Visual Studio 2019+ or a compatible MSVC toolchain
 - C++17
 - EasyX 2022+ matching your Visual Studio version
-- CMake 3.12+, optional
+- CMake 3.15+, optional
 
 ### Install EasyX
 
@@ -145,21 +149,43 @@ Get the prebuilt package from [Releases](https://github.com/Ysm-04/StellarX/rele
 
 ### Build with CMake
 
-```bash
+```powershell
 git clone https://github.com/Ysm-04/StellarX.git
 cd StellarX
-mkdir build
-cd build
-cmake ..
-cmake --build .
+cmake -S . -B build -A x64
+cmake --build build --config Release
 ```
 
-### Manual Integration
+### Direct Source Integration
 
-- Copy `include` and `src` into your project.
-- Add include path: `include/StellarX/`.
-- Add all `.cpp` files under `src` to your build.
-- Include the main header in your code: `#include "StellarX.h"`.
+Keep these three parts in their relative layout. Do not move private headers into the public include directory:
+
+| Path | Role | Treatment in your project |
+| --- | --- | --- |
+| `include/StellarX/*.h` | Public API headers | Put in a public-header group and expose as the application include directory |
+| `src/*.cpp` | Framework implementation | Compile every file exactly once |
+| `src/internal/*.h` | Implementation-only private headers | Distribute with the source; framework `.cpp` files may include them, application code must not |
+
+When adding the source directly to an existing Visual Studio application project:
+
+1. Place `include/StellarX/*.h`, `src/*.cpp`, and `src/internal/*.h` under a preserved root such as `third_party/StellarX/`.
+2. Add these paths under **C/C++ -> General -> Additional Include Directories**:
+   - `$(ProjectDir)third_party\StellarX\include\StellarX`
+   - `$(ProjectDir)third_party\StellarX\src\internal`
+3. The second path exists only so framework implementation files can resolve private headers. Do not include `SxEventLoopInternal.h` or `SxTextInternal.h` from application code.
+4. Add all 11 `.cpp` files directly under `src` to the project. Do not `#include` a `.cpp` file and do not also link another copy of the StellarX static library.
+5. Enable C++17 and select **Use Multi-Byte Character Set**. With MSVC, add `/source-charset:utf-8` and `/execution-charset:.936`.
+6. Configure the EasyX include/library directories and link EasyX, `user32.lib`, `gdi32.lib`, and `shell32.lib`.
+7. Application code should include only `#include "StellarX.h"` and must not depend on the aggregate header's internal include order.
+
+For a solution with multiple executables, create a separate `StellarX.Core` static-library project. Put `src/*.cpp` and both private headers in that library, expose `include/StellarX` as the public include directory, and keep `src/internal` private to the library project. Applications then reference only the static library and the public headers.
+
+When using this repository's CMake target, the private include directory is already encapsulated:
+
+```cmake
+add_subdirectory(third_party/StellarX)
+target_link_libraries(MyApp PRIVATE StellarX)
+```
 
 ### First Window
 
@@ -171,9 +197,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
     Window mainWindow(800, 600, EX_SHOWCONSOLE, RGB(255, 255, 255), "My StellarX App");
 
     auto button = std::make_unique<Button>(30, 30, 160, 42, "Click Me");
-    button->setOnClickListener([]()
+    button->setOnClickListener([&mainWindow]()
     {
-        SX_LOGI("Demo") << SX_T("按钮被点击", "Button clicked");
+        StellarX::MessageBox::showModal(
+            mainWindow,
+            "Button clicked",
+            "Notice",
+            StellarX::MessageBoxType::OK);
     });
 
     mainWindow.addControl(std::move(button));
@@ -206,6 +236,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 | Struct | Description |
 | --- | --- |
+| `ControlHandle` | Stable control identity for the current process run; safe for lookup/removal but not proof that the object is still alive |
 | `ControlText` | Font face, height, width, color, rotation, weight, italic, underline, and strikeout |
 | `RouRectangle` | Corner ellipse size for rounded rectangles |
 | `AxisLayoutSpec` | Per-axis anchors, size policy, and alignment policy |
@@ -246,7 +277,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 ## Layout System
 
-v3.1.0 recommends the new per-axis layout API instead of extending the old two-anchor model further.
+v4.0.0 continues to recommend the per-axis layout API instead of extending the old two-anchor model further.
 
 ### Core Semantics
 
@@ -292,9 +323,10 @@ rightButton->setHorizontalAlignPolicy(StellarX::AxisAlignPolicy::End);
 ## TabControl
 
 - Tab bar supports `Top`, `Bottom`, `Left`, and `Right`.
-- Use `add(std::string tabText, std::unique_ptr<Control> control)` to add a child to a named tab page.
-- `indexOf(tabText)` returns the matching index or `-1` when not found.
-- This version only consolidates outer layout and repaint responsibilities. It does not rewrite the internal tab bar/page layout mechanism.
+- Use `addTab(button, page)` to add a tab-button/page-Canvas pair and obtain its stable page index.
+- Use `tryAddToPage(index, control)` to append a child. On failure, the function returns ownership to the caller.
+- The text overload matches only the first duplicate caption; `indexOf(tabText)` returns `-1` when not found.
+- `setActiveIndex(index)` reports success with `bool`. An empty TabControl may record a default index before its first draw.
 
 ## Button Text Truncation and Tooltip
 
@@ -325,12 +357,15 @@ SX_TRACE_SCOPE("Layout", "resolve layout");
 
 If console output causes visible delay during resize or maximize operations, lower the log level, disable console output, or switch to file output. SxLog macros currently use an `if/else` short-circuit form; avoid placing them naked in single-line `if/else` branches without braces.
 
+`SxLogger::setConfig()` returns `bool` in v4.0.0. If a candidate file sink cannot be opened, it returns `false` and preserves the previous configuration and sink.
+
 ## Advanced Topics and Best Practices
 
 - Custom controls should derive from `Control` and implement `draw()` and `handleEvent()`.
 - Return `true` when an event is consumed to stop propagation.
 - Ensure the EasyX output target is correct before drawing; use `SetWorkingImage(nullptr)` when drawing directly to the screen.
 - Prefer marking dirty and requesting managed repaint after state changes; avoid arbitrary direct drawing inside event handlers.
+- Store `ControlHandle` values outside containers and use `findControl()` for temporary lookup. Do not retain mutable container references or use a raw pointer after requesting its removal.
 - Public setters are user-facing. The unified layout solver uses internal controlled paths to apply runtime rectangles.
 - After directly modifying `Label::textStyle`, call `setDirty(true)` if immediate content-size refresh is required.
 
@@ -362,6 +397,15 @@ Use with caution or avoid for:
 - TabControl internal layout application path is not fully consolidated yet.
 - Tooltip intelligent placement is not implemented yet.
 - Global automatic font scaling is not implemented yet.
+
+## Upgrading from v3.1.0
+
+- `Window::getControls()` and `Canvas::getControls()` were removed. Use `addControl()`, `removeControl()`, `clearControls()`, `findControl()`, and `getControlHandles()`.
+- Replace `Canvas::clearAllControls()` with `clearControls()`.
+- Replace `ControlText::lpszFace` with the owning `faceName` string.
+- Replace `TabControl::add(...)` with `addTab()` / `tryAddToPage()`. `setActiveIndex()` now returns `bool`.
+- `SxLogger::setConfig()` now returns `bool`; callers should handle file-sink configuration failure.
+- After requesting control removal from a callback, do not access that control again. Destruction is deferred until the outermost structural-mutation transaction ends.
 
 ## License
 

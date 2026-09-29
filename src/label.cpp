@@ -8,6 +8,7 @@ namespace
 	// 都可以先把运行态尺寸收口好，而不必等到 draw() 再决定几何。
 	void MeasureLabelText(const std::string& text, const StellarX::ControlText& style, int& width, int& height)
 	{
+		// 使用独立的兼容 DC 测量文本，不依赖当前 EasyX 工作图像，也不会改动屏幕状态。
 		width = 0;
 		height = 0;
 
@@ -29,7 +30,7 @@ namespace
 		fontDesc.lfClipPrecision = CLIP_DEFAULT_PRECIS;
 		fontDesc.lfQuality = DEFAULT_QUALITY;
 		fontDesc.lfPitchAndFamily = DEFAULT_PITCH | FF_DONTCARE;
-		lstrcpynA(fontDesc.lfFaceName, style.lpszFace ? style.lpszFace : "微软雅黑", LF_FACESIZE);
+		lstrcpynA(fontDesc.lfFaceName, style.faceName.empty() ? "微软雅黑" : style.faceName.c_str(), LF_FACESIZE);
 
 		HFONT font = CreateFontIndirectA(&fontDesc);
 		HFONT oldFont = nullptr;
@@ -104,6 +105,7 @@ void Label::refreshContentDrivenRuntimeGeometry()
 		return;
 	}
 
+	// 只有文本或字体样式发生变化才重新测量，避免每次普通重绘都创建 GDI 资源。
 	int newWidth = 0;
 	int newHeight = 0;
 	MeasureLabelText(text, textStyle, newWidth, newHeight);
@@ -136,7 +138,7 @@ void Label::draw()
 			setbkcolor(textBkColor); //设置背景颜色
 		}
 		settextcolor(textStyle.color);
-		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);   //设置字体样式
 		if ((saveBkX != this->x) || (saveBkY != this->y) || (!hasSnap) || (saveWidth != this->width) || (saveHeight != this->height) || !saveBkImage)

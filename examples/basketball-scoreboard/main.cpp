@@ -27,7 +27,6 @@ void bindScoreButton(Button* button, int points, int* score, Label* scoreLabel)
         {
             *score += points;
             scoreLabel->setText(formatScore(*score));
-            scoreLabel->draw();
         });
 }
 }
@@ -82,8 +81,6 @@ int main()
             scoreB = 0;
             scoreAPtr->setText("00");
             scoreBPtr->setText("00");
-            scoreAPtr->draw();
-            scoreBPtr->draw();
         });
 
     // 将控件所有权交给窗口。move 后不能再通过原 unique_ptr 访问控件。

@@ -65,11 +65,12 @@ class Dialog : public Canvas
 	bool pendingCleanup = false;           //延迟清理
 public:
 	StellarX::ControlText textStyle;   // 字体样式
-	// 在事件安全点执行延迟清理；用于非模态关闭后统一回收
+	// 在事件安全点执行延迟清理；用于非模态关闭后统一回收。
+	// Close() 只隐藏并标记待清理，真正释放内部按钮和快照要等到这里执行。
 	void performDelayedCleanup();
-	// 非模态工厂调用时用于回传结果
+	// 非模态工厂调用时用于回传结果；回调可能修改宿主控件树，因此 Close() 会在 mutation scope 内触发它。
 	std::function<void(StellarX::MessageBoxResult)> resultCallback;
-	// 设置非模态结果回调
+	// 设置非模态结果回调；仅在非模态 Dialog 关闭时异步调用。
 	void SetResultCallback(std::function<void(StellarX::MessageBoxResult)> cb);
 	// 获取标题文本，用于非模态去重
 	std::string GetCaption() const;
@@ -77,59 +78,64 @@ public:
 	std::string GetText() const;
 
 public:
-	// 构造对话框；modal=false 时按非模态浮层工作
+	// 构造对话框；modal=false 时按非模态浮层工作，由 Window 接管生命周期和层级。
 	Dialog(Window& hWnd, std::string text, std::string message = "对话框", StellarX::MessageBoxType type = StellarX::MessageBoxType::OK, bool modal = true);
+	// 析构对话框并释放内部控件资源。
 	~Dialog();
-	//绘制对话框
+	// 绘制对话框背景、标题、正文和功能按钮。
 	void draw() override;
-	//事件处理
+	// 处理关闭按钮和功能按钮事件。
 	bool  handleEvent(const ExMessage& msg) override;
-	// 设置标题
+	// 设置标题并标记布局需要重建。
 	void SetTitle(const std::string& title);
-	// 设置消息内容
+	// 设置消息内容并标记文本换行和布局需要重建。
 	void SetMessage(const std::string& message);
-	// 设置对话框类型
+	// 设置对话框类型并重建功能按钮组合。
 	void SetType(StellarX::MessageBoxType type);
-	// 设置模态属性
+	// 设置模态属性，决定 Show() 使用阻塞循环还是交给 Window 主循环。
 	void SetModal(bool modal);
-	// 设置对话框结果
+	// 设置对话框结果，通常由功能按钮回调写入。
 	void SetResult(StellarX::MessageBoxResult result);
 	// 获取对话框结果
 	StellarX::MessageBoxResult GetResult() const;
 
-	// 返回当前对话框是否为模态
+	// 返回当前对话框是否为模态；Window 用它区分阻塞式对话框和托管浮层。
 	bool model() const override;
 
-	// 显示对话框
+	// 显示对话框。模态对话框会进入自己的消息循环；非模态对话框只标记可见，由 Window 主循环驱动。
 	void Show();
-	// 关闭对话框
+	// 关闭对话框。
+	// 该调用只设置隐藏、结果和待清理标志，并请求整场景重绘；对象释放延迟到 performDelayedCleanup()。
 	void Close();
 	// 宿主窗口变化时仅重新居中，不拉伸 Dialog 自身
 	void recenterInHostWindow();
 
 private:
-	// 初始化按钮
+	// 根据当前 MessageBoxType 初始化功能按钮。
 	void initButtons();
-	// 初始化关闭按钮
+	// 初始化标题栏关闭按钮。
 	void initCloseButton();
-	// 按行分割消息内容
+	// 按当前消息内容和宽度约束分割显示行。
 	void splitMessageLines();
-	// 获取文本大小
+	// 计算当前标题和正文所需的文本尺寸。
 	void getTextSize();
 	// 标记需要重新布局并按需清空旧控件
 	void invalidateLayout(bool clearChildren);
-	//初始化对话框尺寸
+	// 根据文本和按钮数量初始化对话框尺寸。
 	void initDialogSize();
 	// 依据当前 Dialog 的 x/y/width/height 重新创建标题和按钮
 	void rebuildChrome();
 	// 禁止走普通 Canvas 添加路径；Dialog 内部控件由自身 chrome 重建逻辑统一维护
 	void addControl(std::unique_ptr<Control> control);
-	bool canCommitManagedPartialRepaint() const override; // 判断当前 Dialog 是否可安全做局部提交
-	void commitManagedRepaint() override;                 // 托管收口阶段执行 Dialog 的真正重绘
+	// 判断当前 Dialog 是否可安全做局部提交。
+	bool canCommitManagedPartialRepaint() const override;
+	// 托管收口阶段执行 Dialog 的真正重绘。
+	void commitManagedRepaint() override;
 
-	// 清除所有控件
+	// 清除 Dialog 内部所有 chrome 控件。
 	void clearControls();
-	// 创建标准对话框功能按钮
+	// 创建标准对话框功能按钮。
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
-	void requestRepaint(Control* parent) override;        // 托管模式下登记为 Dialog root；非托管模式下立即更新内部按钮
+	// 请求宿主窗口重绘 Dialog root；非托管模式下立即更新内部按钮。
+	void requestRepaint(Control* parent) override;
 };

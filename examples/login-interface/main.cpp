@@ -62,7 +62,7 @@ int main()
     auto heading = std::make_unique<Label>(90, 150, "欢迎使用餐馆记账管理系统");
     heading->setTextdisap(true);
     heading->textStyle.nHeight = 72;
-    heading->textStyle.lpszFace = "华文行楷";
+    heading->textStyle.faceName = "华文行楷";
 
     auto accountLabel = std::make_unique<Label>(400, 300, "账号");
     accountLabel->setTextdisap(true);
@@ -110,9 +110,9 @@ int main()
     loginResult->setTextdisap(true);
     loginResult->textStyle.nHeight = 36;
     page->addControl(std::move(loginResult));
-    tabs->add(std::make_pair(
+    tabs->addTab(
         std::make_unique<Button>(0, 0, 100, 100, "点餐"),
-        std::move(page)));
+        std::move(page));
 
     // 两种身份共用同一套校验逻辑，只把成功提示中的身份作为参数传入。
     const auto tryLogin = [=, &window](const std::string& role)

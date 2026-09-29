@@ -13,9 +13,6 @@
  *  - WM_GETMINMAXINFO：按最小“客户区”换算到“窗口矩形”，提供系统层最小轨迹值。
  *  - runEventLoop：输入事件先分发给对话框/控件，控件只登记重绘请求；真正绘制在分发或 resize 收口时统一处理。
  */
- //fuck windows 
- //fuck win32
- //fuck xiaomi
 #pragma once
 
 #include "Control.h"
@@ -55,6 +52,20 @@ class Window
 	// —— 控件/对话框 ——（容器内的普通控件与非模态对话框）
 	std::vector<std::unique_ptr<Control>> controls; // 普通顶层控件；绘制顺序也决定层级顺序
 	std::vector<std::unique_ptr<Control>> dialogs;  // 非模态对话框；始终位于普通控件之上
+	// 顶层控件的结构变更与事件分发解耦，防止回调直接改动正在遍历的 controls。
+	// add/remove/clear 在事件、绘制和回调期间只入队；最外层 mutation scope 结束后再提交。
+	enum class ControlMutationKind { Add, Remove, Clear };
+	struct PendingControlMutation
+	{
+		ControlMutationKind kind = ControlMutationKind::Clear;
+		StellarX::ControlHandle handle{};
+		std::unique_ptr<Control> control;
+	};
+	std::vector<PendingControlMutation> pendingControlMutations;
+	int mutationScopeDepth = 0;         // 允许嵌套的结构变更事务深度
+	// 队列提交期间保持该标志，避免提交过程中再次递归提交同一队列。
+	bool applyingControlMutations = false;
+	bool fullSceneRedrawRequested = false; // 非局部变化请求整场景重绘；在事件收口安全点消费
 	bool          managedDispatchActive = false; // 事件分发期：控件只改状态并登记重绘，不立即画
 	bool          managedSceneDirty = false;     // 当前分发轮次是否已经登记了至少一笔托管重绘请求
 	struct ManagedRepaintItem  // 托管重绘项：记录由哪个控件发起、需要重绘的根控件和覆盖范围（用于后续判断哪些对话框需要补画）
@@ -89,8 +100,24 @@ public:
 	void setHeadline(std::string headline); // 设置窗口标题
 
 	// —— 控件/对话框管理 ——（添加到容器，或做存在性判断）
-	void addControl(std::unique_ptr<Control> control); // 添加普通顶层控件
-	void addDialog(std::unique_ptr<Control> dialogs);  // 添加非模态对话框
+	// 添加普通顶层控件并返回稳定句柄。
+	// 在事件回调、绘制或其它 mutation transaction 中调用时，control 会先进入待提交队列；
+	// 调用方仍可立即保存返回句柄，但对象要到最外层事务结束后才真正出现在 controls 中。
+	StellarX::ControlHandle addControl(std::unique_ptr<Control> control);
+	// 按句柄移除顶层控件；事务期间延迟删除，避免遍历中的对象或迭代器失效。
+	// 返回 true 表示目标命中且删除请求已排队/提交；返回 false 表示句柄无效或未命中。
+	bool removeControl(StellarX::ControlHandle handle);
+	// 清空所有普通顶层控件；事务期间延迟到安全点提交。
+	void clearControls();
+	// 查找当前已提交的控件；不会暴露 pending 队列中的对象。
+	Control* findControl(StellarX::ControlHandle handle);
+	// 查找当前已提交控件的只读视图；不会暴露 pending 队列中的对象。
+	const Control* findControl(StellarX::ControlHandle handle) const;
+	// 返回当前已提交控件的句柄快照；调用方不得据此推断控件之后仍然存在。
+	std::vector<StellarX::ControlHandle> getControlHandles() const;
+	// 添加非模态对话框；Window 接管生命周期并在事件安全点清理关闭对象。
+	void addDialog(std::unique_ptr<Control> dialogs);
+	//非模态对话框去重
 	bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const; // 检查是否已有同 caption/message 的非模态对话框
 
 	// —— 访问器 ——（只读接口，供外部查询当前窗口/标题/背景等）
@@ -103,29 +130,48 @@ public:
 	COLORREF    getBkcolor() const;      // 获取纯色背景
 	IMAGE* getBkImage() const;           // 获取背景图对象
 	std::string getBkImageFile() const;  // 获取背景图路径
-	std::vector<std::unique_ptr<Control>>& getControls(); // 获取普通顶层控件列表
 
 	// —— 尺寸调整 / 托管重绘 ——（事件阶段登记，收口阶段提交）
-	
-	// 执行一次 resize 收口 + 统一重绘
-	void pumpResizeIfNeeded();    
-	// 供模态 Dialog 上报宿主窗口尺寸变化
-	void scheduleResizeFromModal(int w, int h);   
-	// 当前是否处于“事件只改状态，不立即画”的阶段
-	bool isManagedDispatchActive() const;    
-	// 记录一笔由 source 发起的托管重绘请求
+
+	// 执行一次 resize 收口 + 统一重绘；只在 pending 尺寸或全场景脏标记存在时真正绘制。
+	void pumpResizeIfNeeded();
+	// 供模态 Dialog 上报宿主窗口尺寸变化；只记录待应用尺寸，实际布局/重绘由窗口收口统一完成。
+	void scheduleResizeFromModal(int w, int h);
+	// 当前是否处于“事件只改状态，不立即画”的阶段。
+	// 控件在该阶段应请求托管重绘，而不是直接回贴背景或立即 draw。
+	bool isManagedDispatchActive() const;
+	// 记录一笔由 source 发起的托管重绘请求。
+	// Window 会提升到对应 root，并在事件收口时合并 coverage 后统一提交。
 	void requestManagedRepaint(Control* source);
-	// 记录一笔托管重绘请求，并显式并入状态清理前的旧覆盖范围
+	// 记录一笔托管重绘请求，并显式并入状态清理前的旧覆盖范围。
+	// 用于 hover/tooltip 等状态切换，保证旧区域和新区域都会被清理。
 	void requestManagedRepaint(Control* source, const RECT& previousCoverage);
-	// 在事件收口阶段提交本轮登记的 root 重绘
-	void flushManagedRepaint();                   
+	// 在事件收口阶段提交本轮登记的 root 重绘；会补画覆盖在脏区之上的非模态对话框。
+	void flushManagedRepaint();
+	// 进入结构变更事务。允许嵌套，调用者必须保证 begin/end 成对。
+	// 事务内的顶层控件变更只入队，不立即修改 controls/dialogs。
+	void beginMutationScope();
+	// 离开结构变更事务。最外层退出且当前不在托管分发阶段时，会提交整棵控件树的 pending mutation。
+	void endMutationScope();
+	// 判断当前是否处于不允许立即改动控件树的阶段，包括事件分发、显式事务或队列提交过程。
+	bool isMutationTransactionActive() const;
+	// 请求下一安全点执行整场景重绘；用于 Dialog 关闭、全局覆盖关系变化等无法安全局部修复的场景。
+	void requestFullSceneRedraw();
 private:
+	// 提交 Window 顶层控件队列；只允许在最外层事务安全点调用。
+	void flushPendingControlMutations();
+	// 自顶向下提交 Window、Canvas、TabControl 等容器中累积的 pending mutation。
+	void flushPendingMutationsInTree();
+	// 将全部普通控件和非模态对话框标脏，用于强制全场景重绘前统一失效缓存。
+	void markAllControlsDirty();
+	// 根据最终窗口尺寸和控件布局规格，解算并应用控件运行态矩形。
 	void adaptiveLayout(std::unique_ptr<Control>& c, const int finalH, const int finalW);
 	// resize / 初次绘制 / 对话框开关这类全局场景的整场景重绘
 	void redrawScene(bool forceControlsDirty, bool forceDialogsDirty);
+	// 绘制窗口背景；存在背景图时优先贴图，否则填充纯色背景。
 	void drawWindowBackground();
 	// 合成 WM_MOUSEMOVE，用于同步底层 hover 状态
-	void dispatchSyntheticMouseMoveToControls(short x, short y); 
+	void dispatchSyntheticMouseMoveToControls(short x, short y);
 	enum class OverlayMouseSyncMode
 	{
 		ClearBehindOverlay, // overlay 吞掉鼠标移动：只清理底层 hover / tooltip，不重新命中底层控件
@@ -133,12 +179,13 @@ private:
 	};
 	// overlay 层级变化后，同步底层鼠标瞬时状态；内部仍复用既有 synthetic WM_MOUSEMOVE 路径
 	void syncMouseStateAfterOverlayChanged(OverlayMouseSyncMode mode);
-	// 在事件安全点清理已关闭的非模态 Dialog，避免 dialogs 容器长期积累无效对象
+	// 在事件安全点清理已关闭的非模态 Dialog，避免 dialogs 容器长期积累无效对象。
+	// 清理可能触发全场景重绘请求，因此必须放在遍历之外。
 	void sweepClosedDialogs();
 	// 事件回调可能改脏其他 root；flush 前补收集这些跨 root 脏子树
 	void collectDirtyRootsForManagedRepaint();
 	// 清空本轮托管重绘登记
-	void clearManagedRepaintState();                                  
+	void clearManagedRepaintState();
 	// 找出需要补画到最上层的对话框
-	void collectManagedDialogOverlays(Control* repaintRoot, const RECT& coverage, std::vector<Control*>& overlays); 
+	void collectManagedDialogOverlays(Control* repaintRoot, const RECT& coverage, std::vector<Control*>& overlays);
 };

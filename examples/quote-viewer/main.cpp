@@ -42,10 +42,10 @@ int main()
     title->textStyle.nHeight = 40;
     auto quote = make_unique<Label>(70, 125, quotes[0].text, RGB(255, 255, 255), backgroundColor);
     quote->textStyle.nHeight = 32;
-    quote->textStyle.lpszFace = "华文楷体";
+    quote->textStyle.faceName = "华文楷体";
     auto source = make_unique<Label>(450, 205, quotes[0].source, RGB(30, 30, 30), backgroundColor);
     source->textStyle.nHeight = 24;
-    source->textStyle.lpszFace = "华文楷体";
+    source->textStyle.faceName = "华文楷体";
     auto progress = make_unique<Label>(350, 270, "1 / 6", RGB(70, 70, 70), backgroundColor);
     progress->textStyle.nHeight = 20;
 
@@ -63,9 +63,6 @@ int main()
             quotePtr->setText(quotes[index].text);
             sourcePtr->setText(quotes[index].source);
             progressPtr->setText(to_string(index + 1) + " / " + to_string(quotes.size()));
-            quotePtr->draw();
-            sourcePtr->draw();
-            progressPtr->draw();
         };
 
     // 模运算让第一条向前翻时跳到末尾，最后一条向后翻时回到开头。

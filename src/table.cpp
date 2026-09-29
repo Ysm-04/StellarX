@@ -1,8 +1,43 @@
 ﻿#include "Table.h"
 #include "SxLog.h"
+#include "Window.h"
+#include <algorithm>
 
 namespace
 {
+	int TableMbcCharLen(const std::string& text, size_t index)
+	{
+		const unsigned char lead = static_cast<unsigned char>(text[index]);
+		if (lead <= 0x7f) return 1;
+		if (lead >= 0x81 && lead <= 0xfe && index + 1 < text.size())
+		{
+			const unsigned char trail = static_cast<unsigned char>(text[index + 1]);
+			if (trail >= 0x40 && trail <= 0xfe && trail != 0x7f) return 2;
+		}
+		return 1;
+	}
+
+	std::string EllipsizeTableText(const std::string& text, int maxWidth)
+	{
+		// 逐个 MBCS 字符试探可用宽度，保证省略号不会把双字节字符拆成半个字节。
+		if (maxWidth <= 0) return "";
+		if (textwidth(text.c_str()) <= maxWidth) return text;
+		const std::string ellipsis = "...";
+		const int ellipsisWidth = textwidth(ellipsis.c_str());
+		if (ellipsisWidth > maxWidth) return "";
+		size_t index = 0;
+		size_t lastFit = 0;
+		while (index < text.size())
+		{
+			const size_t next = index + static_cast<size_t>(TableMbcCharLen(text, index));
+			if (next > text.size()) break;
+			if (textwidth(text.substr(0, next).c_str()) > maxWidth - ellipsisWidth) break;
+			lastFit = next;
+			index = next;
+		}
+		return text.substr(0, lastFit) + ellipsis;
+	}
+
 	std::vector<std::string> NormalizeTableRow(std::vector<std::string> row, size_t headerCount)
 	{
 		if (headerCount == 0)
@@ -23,6 +58,12 @@ namespace
 
 		const int total = static_cast<int>((rowCount + static_cast<size_t>(rowsPerPage) - 1) / static_cast<size_t>(rowsPerPage));
 		return total > 0 ? total : 1;
+	}
+
+	std::string BuildPageNumberText(int currentPage, int totalPages)
+	{
+		return std::string(TABLE_STR_PAGE_PREFIX) + std::to_string(currentPage) +
+			TABLE_STR_PAGE_MID + std::to_string(totalPages) + TABLE_STR_PAGE_SUFFIX;
 	}
 }
 
@@ -49,7 +90,9 @@ void Table::drawTable()
 		{
 			uX = dX + colWidths.at(j) + TABLE_COL_GAP;
 			fillrectangle(dX, dY, uX, uY);
-			outtextxy(dX + TABLE_PAD_X, dY + TABLE_PAD_Y, LPCTSTR(data[i][j].c_str()));
+			const std::string display = EllipsizeTableText(data[i][j],
+				(std::max)(0, colWidths.at(j) - TABLE_PAD_X * 2));
+			outtextxy(dX + TABLE_PAD_X, dY + TABLE_PAD_Y, LPCTSTR(display.c_str()));
 			dX += colWidths.at(j) + TABLE_COL_GAP;
 		}
 		dX = x + border;
@@ -73,7 +116,9 @@ void Table::drawHeader()
 	{
 		uX = dX + colWidths.at(i) + TABLE_COL_GAP;                // 注意这里是 +20，和表体一致
 		fillrectangle(dX, dY, uX, uY);
-		outtextxy(dX + TABLE_PAD_X, dY + TABLE_PAD_Y, LPCTSTR(headers[i].c_str()));
+		const std::string display = EllipsizeTableText(headers[i],
+			(std::max)(0, colWidths.at(i) - TABLE_PAD_X * 2));
+		outtextxy(dX + TABLE_PAD_X, dY + TABLE_PAD_Y, LPCTSTR(display.c_str()));
 		dX += colWidths.at(i) + TABLE_COL_GAP;                    // 列间距 20
 	}
 }
@@ -123,6 +168,7 @@ void Table::initTextWaH()
 			maxLineH = h;
 	if (maxLineH == 0)
 		maxLineH = textheight(LPCTSTR("A"));
+	std::fill(lineHeights.begin(), lineHeights.end(), maxLineH);
 	if (rowsPerPage < 1)
 		rowsPerPage = 1;
 
@@ -254,10 +300,6 @@ void Table::initPageNum()
 	const int headerH = baseH + TABLE_HEADER_EXTRA;
 	const int rowsH = baseH * rowsPerPage + rowsPerPage * TABLE_ROW_EXTRA;
 
-	// 内容宽度 = sum(colWidths + 20)；initTextWaH() 已把 this->width += 2*border
-	// 因此 contentW = this->width - 2*border 更稳妥
-	const int contentW = this->width - (border << 1);
-
 	// 页脚顶部位置（表头 + 可视数据区 之后）
 	pY = y + border + headerH + rowsH + TABLE_FOOTER_BLANK;         // +8 顶部留白
 
@@ -283,11 +325,7 @@ void Table::initPageNum()
 
 void Table::drawPageNum()
 {
-	pageNumtext = "第";
-	pageNumtext += std::to_string(currentPage);
-	pageNumtext += "页/共";
-	pageNumtext += std::to_string(totalPages);
-	pageNumtext += "页";
+	pageNumtext = BuildPageNumberText(currentPage, totalPages);
 	if (nullptr == pageNum || isNeedButtonAndPageNum)
 		initPageNum();
 	pageNum->setText(pageNumtext);
@@ -320,50 +358,74 @@ void Table::drawButton()
 
 void Table::setX(int x)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	this->x = x;
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Table::setY(int y)
 {
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
 	this->y = y;
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Table::setWidth(int width)
 {
-	// 调整列宽以匹配新的表格总宽度。不修改 localWidth，避免累计误差。
-	// 当 width 与当前 width 不同时，根据差值平均分配到各列，余数依次累加/扣减。
+	const RECT previousCoverage = getManagedRepaintCoverageRect();
+	const bool wasDrawn = hasValidBackgroundSnapshot();
+	if (wasDrawn) discardBackground();
+	// 运行态总宽必须和实际列宽严格一致，避免绘制超出快照与 coverage。
+	// 同时考虑表体和分页栏的最小宽度，随后把余数分配到前几列，使列宽总和严格闭合。
 	const int ncols = static_cast<int>(colWidths.size());
 	if (ncols <= 0) {
-		this->width = width;
+		this->width = (std::max)(0, width);
 		isNeedButtonAndPageNum = true;
+		dirty = true;
+		if (wasDrawn)
+		{
+			if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+			else requestRepaint(parent);
+		}
 		return;
 	}
-	int diff = width - this->width;
-	// 基础增量：整除部分
-	int baseChange = diff / ncols;
-	int remainder = diff % ncols;
-	for (int i = 0; i < ncols; ++i) {
-		int change = baseChange;
-		if (remainder > 0) {
-			change += 1;
-			remainder -= 1;
-		}
-		else if (remainder < 0) {
-			change -= 1;
-			remainder += 1;
-		}
-		int newWidth = colWidths[i] + change;
-		// 限制最小宽度为 1，防止出现负值
-		if (newWidth < 1) newWidth = 1;
-		colWidths[i] = newWidth;
-	}
-	this->width = width;
+	const int border = (std::max)(0, tableBorderWidth);
+	const int minColumnWidth = TABLE_PAD_X * 2 + 1;
+	const int contentMinWidth = (border << 1) + ncols * (minColumnWidth + TABLE_COL_GAP);
+	const int footerMinWidth = (border << 1) + textwidth(TABLE_STR_PREV) + textwidth(TABLE_STR_NEXT) +
+		textwidth(pageNumtext.c_str()) + TABLE_BTN_PAD_H * 4 + TABLE_BTN_GAP * 2;
+	const int minWidth = isShowPageButton ? (std::max)(contentMinWidth, footerMinWidth) : contentMinWidth;
+	const int targetWidth = (std::max)(width, minWidth);
+	const int targetColumnsWidth = targetWidth - (border << 1) - ncols * TABLE_COL_GAP;
+	const int baseWidth = targetColumnsWidth / ncols;
+	int remainder = targetColumnsWidth % ncols;
+	for (int i = 0; i < ncols; ++i)
+		colWidths[i] = baseWidth + (remainder-- > 0 ? 1 : 0);
+	this->width = targetWidth;
 	// 需要重新布局页脚元素
 	isNeedButtonAndPageNum = true;
+	dirty = true;
+	if (wasDrawn)
+	{
+		if (auto* host = getHostWindow()) host->requestManagedRepaint(this, previousCoverage);
+		else requestRepaint(parent);
+	}
 }
 
 void Table::setHeight(int height)
@@ -419,7 +481,7 @@ void Table::draw()
 	// 设置表格样式
 	setfillcolor(tableBkClor);
 	setlinecolor(tableBorderClor);
-	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+	settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 		textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 		textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 	settextcolor(textStyle.color);
@@ -440,7 +502,7 @@ void Table::draw()
 		// 设置表格样式
 		setfillcolor(tableBkClor);
 		setlinecolor(tableBorderClor);
-		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+		settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 			textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 			textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 		settextcolor(textStyle.color);
@@ -448,12 +510,29 @@ void Table::draw()
 		setfillstyle((int)tableFillMode);
 		setbkmode(TRANSPARENT);
 
+		if (isNeedButtonAndPageNum)
+		{
+			// 数据变化可能同时改变表格宽度、页码位置和两个分页按钮的位置。
+			// 必须在绘制新内容前完成三个内部控件的搬移，让 setX/setY 先回贴旧快照；
+			// 否则后移动的分页按钮会用旧背景覆盖已经画好的新页码。
+			pageNumtext = BuildPageNumberText(currentPage, totalPages);
+			initPageNum();
+			pageNum->textStyle = this->textStyle;
+			pageNum->setText(pageNumtext);
+			pageNum->setDirty(true);
+
+			if (isShowPageButton)
+				initButton();
+			else
+				isNeedButtonAndPageNum = false;
+		}
+
 		if (isNeedDrawHeaders)
 		{
 			// 重新设置表格样式
 			setfillcolor(tableBkClor);
 			setlinecolor(tableBorderClor);
-			settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.lpszFace,
+			settextstyle(textStyle.nHeight, textStyle.nWidth, textStyle.faceName.c_str(),
 				textStyle.nEscapement, textStyle.nOrientation, textStyle.nWeight,
 				textStyle.bItalic, textStyle.bUnderline, textStyle.bStrikeOut);
 			settextcolor(textStyle.color);
@@ -584,6 +663,7 @@ bool Table::clearTransientMouseState()
 
 RECT Table::getManagedRepaintCoverageRect() const
 {
+	// coverage 包含表体、页码和分页按钮的实际绘制范围，而不只包含表格本体。
 	RECT coverage = getBoundsRect();
 
 	if (pageNum && pageNum->IsVisible())

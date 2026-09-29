@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(StellarX VERSION 3.1.0 LANGUAGES CXX)
+project(StellarX VERSION 4.0.0 LANGUAGES CXX)
 
 option(STELLARX_BUILD_EXAMPLES "Build the standalone StellarX examples" OFF)
 option(STELLARX_USE_STATIC_MSVC_RUNTIME "Use the static MSVC runtime (/MT or /MTd)" OFF)
@@ -31,8 +31,16 @@ set(STELLARX_SOURCES
     src/Window.cpp
 )
 
-add_library(StellarX STATIC ${STELLARX_SOURCES})
-target_include_directories(StellarX PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/StellarX")
+set(STELLARX_PRIVATE_HEADERS
+    src/internal/SxEventLoopInternal.h
+    src/internal/SxTextInternal.h
+)
+
+add_library(StellarX STATIC ${STELLARX_SOURCES} ${STELLARX_PRIVATE_HEADERS})
+target_include_directories(StellarX
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/StellarX"
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/internal"
+)
 target_compile_features(StellarX PUBLIC cxx_std_17)
 
 if(MSVC)
