@@ -2,8 +2,7 @@ name: Mirror to GitCode
 on:
   push:
     branches: [ "**" ]        # 任意分支推送触发
-  create:
-    tags: [ "*" ]             # 新建 tag 触发
+    tags: [ "*" ]             # 标签推送同样触发
   workflow_dispatch:          # 支持手动触发
 
 permissions:
