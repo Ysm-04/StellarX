@@ -4,4 +4,6 @@
 
 展示两队分别加 1、2、3 分以及统一重置比分，适合学习多个按钮如何复用同一套回调逻辑。
 
+队名 TextBox 使用 v4.1.0 自绘编辑链路；各计分按钮可通过 `Tab` 获得焦点，并使用 `Space` 或 `Enter` 激活。
+
 源码为 `main.cpp`，预览程序为 `basketball-scoreboard.exe`。
