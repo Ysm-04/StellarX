@@ -22,7 +22,7 @@
 #include "Button.h"
 #include "Label.h"
 
- // === Table metrics (layout) ===
+// === 表格布局度量 ===
 #define TABLE_PAD_X                 10   // 单元格左右内边距
 #define TABLE_PAD_Y                  5   // 单元格上下内边距
 #define TABLE_COL_GAP               20   // 列间距（列与列之间）
@@ -36,19 +36,20 @@
 #define TABLE_FOOTER_BLANK           8   // 页脚顶部留白
 #define TABLE_PAGE_TEXT_OFFSET_X   (-40) // 页码文本的临时水平修正
 
-// === Table defaults (theme) ===
+// === 表格默认主题 ===
 #define TABLE_DEFAULT_ROWS_PER_PAGE  5
 #define TABLE_DEFAULT_BORDER_WIDTH   1
 #define TABLE_DEFAULT_BORDER_COLOR   RGB(0,0,0)
 #define TABLE_DEFAULT_BG_COLOR       RGB(255,255,255)
 
-// === Strings (i18n ready) ===
+// === 可本地化字符串 ===
 #define TABLE_STR_PREV             "上一页"
 #define TABLE_STR_NEXT             "下一页"
 #define TABLE_STR_PAGE_PREFIX      "第"
 #define TABLE_STR_PAGE_MID         "页/共"
 #define TABLE_STR_PAGE_SUFFIX      "页"
 
+/// 负责表头、分页数据、页码和真实分页按钮的单表格控件。
 class Table :public Control
 {
 private:
@@ -66,7 +67,7 @@ private:
 	int totalPages = 1;                         // 总页数
 
 	bool isShowPageButton = true;			    // 是否显示翻页按钮
-	bool isNeedDrawHeaders = true;              // 是否需要绘制表头(暂时废弃，单做保留，后期优化可能用到)
+	bool isNeedDrawHeaders = true;              // 是否在本轮绘制表头
 	bool isNeedCellSize = true;                 // 是否需要计算单元格尺寸
 	bool isNeedButtonAndPageNum = true;         // 是否需要计算翻页按钮和页码信息
 
@@ -87,6 +88,9 @@ private:
 
 	void initTextWaH();  // 初始化文本像素宽度和高度，并据此更新列宽/行高缓存
 	void initButton();   // 初始化或刷新上一页/下一页按钮
+	// 将分页可用性写回真实 Button；先启用新目标、再禁用失效目标，
+	// 让当前焦点失效时的回退可以看到同一 Table 内刚恢复的按钮。
+	void syncPageButtonStates();
 	void initPageNum();  // 初始化或刷新页码标签
 
 	void drawTable();    // 绘制当前页的数据行
@@ -108,7 +112,7 @@ public:
 	// 修改表格运行态宽度；当前支持横向拉伸。
 	// 会重新计算列宽、页脚控件位置和托管重绘 coverage。
 	void setWidth(int width) override;
-	// 修改表格运行态高度；当前版本作为行为边界明确忽略纵向 Stretch。
+	// 修改表格运行态高度；Table 不支持纵向 Stretch，因此该写入会被忽略。
 	// 表格高度由表头、行高、页脚和按钮布局共同计算，外部写入会被有意丢弃。
 	void setHeight(int height) override;
 public:
@@ -186,4 +190,35 @@ public:
 	int getTableWidth() const;
 	// 获取表格当前运行态高度。
 	int getTableHeight() const;
+protected:
+	// 以下接口把 Table 内真实分页 Button 纳入统一焦点与输入路由。
+	/// 查询 Table 本体或分页按钮的焦点参与快照。
+	bool queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+		StellarX::FocusTargetSnapshot& snapshot) const override;
+	/// 收集当前可见且启用的分页按钮焦点节点。
+	void collectFocusTargetSnapshots(
+		std::vector<StellarX::FocusTargetSnapshot>& snapshots) const override;
+	/// 对指定分页按钮应用焦点状态。
+	bool applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+		StellarX::FocusReason reason) override;
+	/// 把键盘事件定向投递到指定分页按钮。
+	bool dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+		StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result) override;
+	/// 尝试向内部目标投递正式文字；当前分页按钮不会接受文字。
+	bool dispatchTextInputEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextInputEvent& event) override;
+	/// 尝试向内部目标投递 IME 组合；当前分页按钮不会接受组合文字。
+	bool dispatchCompositionEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedCompositionEvent& event) override;
+	/// 尝试向内部目标投递文字选区手势；当前分页按钮不会接受该手势。
+	bool dispatchTextSelectionGestureToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextSelectionGestureEvent& event,
+		bool& accepted) override;
+	/// 通知指定分页按钮暂停键盘路由。
+	bool dispatchKeyboardSuspensionToTarget(
+		const StellarX::FocusTargetId& target) override;
+	/// 通知指定分页按钮恢复键盘路由。
+	bool dispatchKeyboardResumptionToTarget(
+		const StellarX::FocusTargetId& target) override;
 };

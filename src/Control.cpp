@@ -1,4 +1,5 @@
 ﻿#include "Control.h"
+#include "FocusManager.h"
 #include "SxLog.h"
 #include<assert.h>
 #include "Window.h"
@@ -201,6 +202,7 @@ void Control::setIsVisible(bool show)
 	{
 		// 隐藏：擦除自己在屏幕上的内容，并释放快照
 		discardBackground();
+		notifyFocusSubtreeStateChanged();
 		return;
 	}
 
@@ -208,6 +210,158 @@ void Control::setIsVisible(bool show)
 	// 仅向上标脏，让事件收口阶段由容器统一重绘。
 	if (parent)
 		parent->setDirty(true);
+	notifyFocusSubtreeStateChanged();
+}
+
+StellarX::FocusChangeResult Control::requestFocus(StellarX::FocusReason reason)
+{
+	if (auto* host = getHostWindow())
+		return host->getFocusManager().requestFocus({ handle, 0 }, reason);
+	return { false, StellarX::FocusError::InvalidTarget, {} };
+}
+
+void Control::setFocusPolicy(StellarX::FocusPolicy policy)
+{
+	if (focusPolicy == policy)
+		return;
+	focusPolicy = policy;
+	notifyFocusSubtreeStateChanged();
+}
+
+void Control::setTabIndex(std::int32_t value)
+{
+	if (tabIndex == value)
+		return;
+	tabIndex = value;
+	notifyFocusSubtreeStateChanged();
+}
+
+bool Control::isEffectivelyVisible() const
+{
+	const Control* cursor = this;
+	while (cursor)
+	{
+		if (!cursor->show)
+			return false;
+		cursor = cursor->parent;
+	}
+	return true;
+}
+
+bool Control::queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+	StellarX::FocusTargetSnapshot& snapshot) const
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	snapshot = {};
+	snapshot.id = target;
+	if (parent)
+		snapshot.logicalParent = { parent->getHandle(), 0 };
+	snapshot.policy = focusPolicy;
+	snapshot.visible = isEffectivelyVisible();
+	snapshot.enabled = isFocusEnabled();
+	snapshot.focusable = focusPolicy != StellarX::FocusPolicy::None;
+	snapshot.tabStop = StellarX::hasFocusPolicy(focusPolicy, StellarX::FocusPolicy::Tab);
+	snapshot.acceptsTextInput = acceptsTextInput();
+	snapshot.supportsInlineComposition = supportsInlineComposition();
+	snapshot.supportsTextSelection = supportsTextSelection();
+	snapshot.tabIndex = tabIndex;
+	return true;
+}
+
+void Control::collectFocusTargetSnapshots(
+	std::vector<StellarX::FocusTargetSnapshot>& snapshots) const
+{
+	StellarX::FocusTargetSnapshot snapshot;
+	if (queryFocusTargetSnapshot({ handle, 0 }, snapshot) && snapshot.focusable)
+		snapshots.push_back(snapshot);
+}
+
+bool Control::applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+	StellarX::FocusReason reason)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	if (logicalFocused == focused)
+		return true;
+	logicalFocused = focused;
+	dirty = true;
+	requestRepaint(parent);
+	// 这是本函数最后一次访问 this；回调可以排队删除当前控件。
+	onLogicalFocusChanged(focused, reason);
+	return true;
+}
+
+bool Control::dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+	StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	event.currentTarget = target;
+	// handleKeyEvent() 可排队删除 this；调用返回后不得再次读取任何成员。
+	result = handleKeyEvent(event);
+	return true;
+}
+
+bool Control::dispatchTextInputEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextInputEvent& event)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	// handleTextInputEvent() 可能把当前控件加入删除队列；回调返回后不能再读取成员。
+	handleTextInputEvent(event);
+	return true;
+}
+
+bool Control::dispatchCompositionEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedCompositionEvent& event)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	// 回调可能把当前控件加入删除队列；返回后不能再检查成员。
+	handleCompositionEvent(event);
+	return true;
+}
+
+bool Control::dispatchTextSelectionGestureToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextSelectionGestureEvent& event,
+	bool& accepted)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	// 回调可能把当前控件加入删除队列；返回后只把值结果写入调用方存储，
+	// 不能再读取对象成员。
+	accepted = handleTextSelectionGesture(event);
+	return true;
+}
+
+bool Control::dispatchKeyboardSuspensionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	// 回调可排队删除 this；调用后不再读取任何成员。
+	onKeyboardRoutingSuspended();
+	return true;
+}
+
+bool Control::dispatchKeyboardResumptionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (target.owner != handle || target.subNode != 0)
+		return false;
+	// 回调可排队删除 this；调用后不再读取任何成员。
+	onKeyboardRoutingResumed();
+	return true;
+}
+
+void Control::notifyFocusSubtreeStateChanged()
+{
+	if (auto* host = getHostWindow())
+		host->getFocusManager().notifySubtreeStateChanged(handle);
 }
 
 void Control::onWindowResize()
@@ -538,7 +692,11 @@ void Control::onRequestRepaintAsRoot()
 bool Control::shouldDeferManagedRepaint() const
 {
 	Window* host = getHostWindow();
-	return host && (host->isManagedDispatchActive() || host->isMutationTransactionActive());
+	// flushManagedRepaint() 是 Window 明确建立的绘制提交边界。即使它发生在
+	// 外层回调尚未退出的重入模态循环中，也必须允许 root 真正写屏；这里只
+	// 放开绘制，Window 的 mutation transaction 仍继续阻止结构队列提前提交。
+	return host && !host->isManagedRepaintCommitActive() &&
+		(host->isManagedDispatchActive() || host->isMutationTransactionActive());
 }
 
 void Control::beginMutationScope()

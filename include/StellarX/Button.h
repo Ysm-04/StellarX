@@ -19,7 +19,7 @@
  ******************************************************************************/
 #pragma once
 #include "Control.h"
-#include"label.h"
+#include "Label.h"
 
 #define DISABLEDCOLOUR RGB(96, 96, 96) //禁用状态颜色
 #define TEXTMARGINS_X 6
@@ -27,11 +27,16 @@
 constexpr int bordWith = 1;   //边框宽度，用于快照恢复时的偏移计算
 constexpr int bordHeight = 1; //边框高度，用于快照恢复时的偏移计算
 
+/// 可点击、切换或禁用的通用按钮控件，并内置可选工具提示。
 class Button : public Control
 {
+	friend class Dialog;
 	std::string text;             // 按钮上的文字
 	bool        click;            // 是否被点击
 	bool        hover;            // 是否被悬停
+	// 独立于 click：NORMAL 的 click 是鼠标瞬时态，TOGGLE 的 click 是持久态；
+	// 键盘 Space 的按下/释放生命周期不能复用它们。
+	bool        keyboardArmed = false;
 
 	std::string cutText;       // 切割后的文本
 	bool needCutText = true;   // 是否需要切割文本
@@ -67,7 +72,7 @@ class Button : public Control
 	int text_width = 0;
 	int text_height = 0;
 
-	// === Tooltip ===
+	// === 工具提示（Tooltip）状态 ===
 	bool        tipEnabled = false;           // 是否启用
 	bool        tipVisible = false;           // 当前是否显示
 	bool        tipFollowCursor = false;      // 是否跟随鼠标
@@ -104,6 +109,8 @@ class Button : public Control
 	void draw() override;
 	// 处理按钮点击、悬停、切换状态和 Tooltip 触发。
 	bool handleEvent(const ExMessage& msg) override;
+	// 定向键盘交互：Space 在按下时显示按压态、释放时激活；Enter 首次按下即激活。
+	StellarX::KeyRouteResult handleKeyEvent(StellarX::RoutedKeyEvent& event) override;
 	// 由窗口时钟推进 Tooltip 到期状态，即使没有新的鼠标消息也能触发显示。
 	void tick(ULONGLONG nowMs) override;
 	// 清理按钮的鼠标瞬时状态；用于父容器在 WM_MOUSEMOVE 短路后补做 hover/tooltip 收口。
@@ -121,7 +128,9 @@ class Button : public Control
 	// 设置 TOGGLE 模式下切换到关闭状态时的回调
 	void setOnToggleOffListener(std::function<void()> callback);
 	// 设置按钮模式（NORMAL / TOGGLE / DISABLED）
-	void setbuttonMode(StellarX::ButtonMode mode);
+	void setbuttonMode(StellarX::ButtonMode newMode);
+	// 隐藏会同步取消尚未释放的键盘按压态。
+	void setIsVisible(bool visible) override;
 	// 设置圆角矩形的圆角宽度
 	void setROUND_RECTANGLEwidth(int width);
 	// 设置圆角矩形的圆角高度
@@ -173,7 +182,7 @@ class Button : public Control
 	// 获取按钮文字样式。
 	StellarX::ControlText getButtonTextStyle() const;
 public:
-	// === Tooltip API===
+	// === 工具提示（Tooltip）公开接口 ===
 	// 开关 Tooltip；关闭时只修改内部启用/显示状态，不负责智能选位。
 	// Tooltip 是按钮内部临时浮层，会并入托管重绘 coverage，但不会成为持久背景快照的一部分。
 	void enableTooltip(bool on);
@@ -191,7 +200,22 @@ public:
 	void setTooltipText(const std::string& s) { tipTextClick = s; tipUserOverride = true; }
 	// 设置 TOGGLE 模式开/关两种状态下的 Tooltip 文本。
 	void setTooltipTextsForToggle(const std::string& onText, const std::string& offText);
+protected:
+	/// 仅启用状态的按钮允许获得逻辑焦点。
+	bool isFocusEnabled() const override
+	{
+		return mode != StellarX::ButtonMode::DISABLED;
+	}
+	/// 焦点变化时刷新焦点视觉，并在失焦时取消键盘按压态。
+	void onLogicalFocusChanged(bool focused, StellarX::FocusReason reason) override;
+	/// 窗口失活或键盘路由暂停时取消尚未释放的键盘按压态。
+	void onKeyboardRoutingSuspended() override;
 private:
+	// 返回状态是否发生变化；requestVisual=false 用于焦点/可见性/模式路径，
+	// 这些调用方已经负责整体失效或重绘。
+	bool setKeyboardArmed(bool armed, bool requestVisual);
+	// 执行一次 Button 命令。调用用户回调后不再访问成员。
+	void activateFromKeyboard(bool requireLogicalFocus = true);
 	// 初始化按钮内部状态、颜色和 Tooltip 默认样式
 	void initButton(const std::string text, StellarX::ButtonMode mode, StellarX::ControlShape shape, COLORREF ct, COLORREF cf, COLORREF ch);
 	// 判断鼠标是否在圆形按钮内

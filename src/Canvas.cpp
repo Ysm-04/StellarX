@@ -55,7 +55,7 @@ Canvas::Canvas()
 	:Control(0, 0, 100, 100)
 {
 	this->id = "Canvas";
-	// Canvas 是通用容器，当前阶段显式允许双轴 Stretch。
+	// Canvas 是通用容器，允许在水平和垂直方向使用 Stretch。
 	this->layoutCapability.allowStretchX = true;
 	this->layoutCapability.allowStretchY = true;
 }
@@ -351,6 +351,20 @@ bool Canvas::handleEvent(const ExMessage& msg)
 		}
 	}
 
+	// Canvas 背景本身也是一个明确的指针命中面：子控件均未处理、且左键
+	// 按在当前 Canvas 矩形内时，清除逻辑焦点并停止继续向更低层兄弟穿透。
+	// 模态 Dialog 继承自 Canvas，但其空白区域不应退出当前模态焦点作用域；
+	// 因此这里只对普通 Canvas 和非模态 Dialog 生效。
+	const bool insideCanvas =
+		msg.x >= x && msg.x <= x + width &&
+		msg.y >= y && msg.y <= y + height;
+	if (!consumed && msg.message == WM_LBUTTONDOWN && insideCanvas && !model())
+	{
+		if (Window* host = getHostWindow())
+			host->getFocusManager().clearFocus(StellarX::FocusReason::Pointer);
+		consumed = true;
+	}
+
 	if (firstConsumer && !SxIsNoisyMsg(msg.message))
 	{
 		SX_LOGD("Event") << SX_T("Canvas 消耗消息: ","Canvas consumed: ")
@@ -451,9 +465,11 @@ bool Canvas::removeControl(StellarX::ControlHandle handle)
 	if (!applyingControlMutations && (mutationScopeDepth > 0 || (host && host->isMutationTransactionActive())))
 	{
 		pendingControlMutations.push_back({ ControlMutationKind::Remove, handle, nullptr });
+		if (host) host->getFocusManager().notifySubtreePendingRemoval(handle);
 		return true;
 	}
 	pendingControlMutations.push_back({ ControlMutationKind::Remove, handle, nullptr });
+	if (host) host->getFocusManager().notifySubtreePendingRemoval(handle);
 	flushPendingMutations();
 	return true;
 }
@@ -462,6 +478,14 @@ void Canvas::clearControls()
 {
 	Window* host = getHostWindow();
 	pendingControlMutations.push_back({ ControlMutationKind::Clear, {}, nullptr });
+	if (host)
+	{
+		std::vector<StellarX::ControlHandle> removedHandles;
+		removedHandles.reserve(controls.size());
+		for (const auto& control : controls)
+			if (control) removedHandles.push_back(control->getHandle());
+		host->getFocusManager().notifySubtreesPendingRemoval(removedHandles);
+	}
 	if (!applyingControlMutations && mutationScopeDepth == 0 && (!host || !host->isMutationTransactionActive()))
 		flushPendingMutations();
 }
@@ -487,6 +511,99 @@ std::vector<StellarX::ControlHandle> Canvas::getControlHandles() const
 	for (const auto& control : controls)
 		if (control) handles.push_back(control->getHandle());
 	return handles;
+}
+
+bool Canvas::queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+	StellarX::FocusTargetSnapshot& snapshot) const
+{
+	if (Control::queryFocusTargetSnapshot(target, snapshot))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->queryFocusTargetSnapshot(target, snapshot)) return true;
+	return false;
+}
+
+void Canvas::collectFocusTargetSnapshots(
+	std::vector<StellarX::FocusTargetSnapshot>& snapshots) const
+{
+	Control::collectFocusTargetSnapshots(snapshots);
+	for (const auto& control : controls)
+		if (control) control->collectFocusTargetSnapshots(snapshots);
+}
+
+bool Canvas::applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+	StellarX::FocusReason reason)
+{
+	if (Control::applyFocusState(target, focused, reason))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->applyFocusState(target, focused, reason)) return true;
+	return false;
+}
+
+bool Canvas::dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+	StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result)
+{
+	if (Control::dispatchKeyEventToTarget(target, event, result))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchKeyEventToTarget(target, event, result)) return true;
+	return false;
+}
+
+bool Canvas::dispatchTextInputEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextInputEvent& event)
+{
+	if (Control::dispatchTextInputEventToTarget(target, event))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchTextInputEventToTarget(target, event)) return true;
+	return false;
+}
+
+bool Canvas::dispatchCompositionEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedCompositionEvent& event)
+{
+	if (Control::dispatchCompositionEventToTarget(target, event))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchCompositionEventToTarget(target, event)) return true;
+	return false;
+}
+
+bool Canvas::dispatchTextSelectionGestureToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextSelectionGestureEvent& event,
+	bool& accepted)
+{
+	if (Control::dispatchTextSelectionGestureToTarget(target, event, accepted))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchTextSelectionGestureToTarget(
+			target, event, accepted)) return true;
+	return false;
+}
+
+bool Canvas::dispatchKeyboardSuspensionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Control::dispatchKeyboardSuspensionToTarget(target))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchKeyboardSuspensionToTarget(target)) return true;
+	return false;
+}
+
+bool Canvas::dispatchKeyboardResumptionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Control::dispatchKeyboardResumptionToTarget(target))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+		if (*it && (*it)->dispatchKeyboardResumptionToTarget(target)) return true;
+	return false;
 }
 
 void Canvas::setShape(StellarX::ControlShape shape)
@@ -550,6 +667,9 @@ void Canvas::setIsVisible(bool visible)
 	}
 	if (!visible)
 		discardBackground();
+	// Canvas 覆盖 setIsVisible() 并把可见性传给后代；子树状态稳定后，仍必须履行
+	// Control 的焦点失效通知契约。
+	notifyFocusSubtreeStateChanged();
 }
 
 void Canvas::setDirty(bool dirty)
@@ -666,19 +786,19 @@ void Canvas::requestRepaint(Control* parent)
 			if (!child->IsVisible())
 				continue;
 
-			if (child->hasManagedDirtySubtree())
+			// 下层持久像素与当前上层兄弟相交时，必须优先完整重建上层兄弟。
+			// 即便上层自己的某个后代也同时变脏，也不能只提交那条脏子树；
+			// 否则下层刚写入的像素仍会覆盖上层背景和未变脏的兄弟内容。
+			const bool persistentHit = hasPaintCoverage && hasPersistentCoverage &&
+				SxCanvasRectsIntersect(child->getManagedRepaintCoverageRect(), paintCoverage) &&
+				SxCanvasRectsIntersect(child->getManagedRepaintPersistentCoverageRect(), persistentCoverage);
+			if (persistentHit)
+			{
+				commitManagedChild(child, SxCanvasOverlayRedrawMode::RefreshSnapshot);
+			}
+			else if (child->hasManagedDirtySubtree())
 			{
 				commitManagedChild(child, SxCanvasOverlayRedrawMode::None);
-			}
-			else if (hasPaintCoverage && SxCanvasRectsIntersect(child->getManagedRepaintCoverageRect(), paintCoverage))
-			{
-				// 位于本次累计 coverage 上方、且发生相交的兄弟控件，需要补画回最上层。
-				// 但只有下层“持久内容”影响到它时，才允许作废并重新抓背景快照；
-				// 如果只是被 Tooltip 等临时浮层覆盖，则跳过兄弟补画，避免透明控件回贴旧快照擦掉 Tooltip。
-				const bool persistentHit = hasPersistentCoverage &&
-					SxCanvasRectsIntersect(child->getManagedRepaintPersistentCoverageRect(), persistentCoverage);
-				if (persistentHit)
-					commitManagedChild(child, SxCanvasOverlayRedrawMode::RefreshSnapshot);
 			}
 		}
 

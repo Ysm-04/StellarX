@@ -31,6 +31,7 @@
 #define titleToTextMargin    10 //标题到文本的距离
 #define textToBorderMargin   10 //文本到边框的距离
 #define BorderWidth          3 //边框宽度
+/// 由宿主 Window 管理的模态或非模态标准对话框。
 class Dialog : public Canvas
 {
 	friend class Window;
@@ -58,17 +59,20 @@ class Dialog : public Canvas
 	COLORREF buttonHoverColor = RGB(224, 224, 224);	  //按钮悬浮颜色
 
 	Button* closeButton = nullptr;  //关闭按钮
+	// 当前 chrome 的显式默认功能按钮身份；重建时更新，禁止长期猜测 controls 下标。
+	StellarX::FocusTargetId defaultFocusTarget{};
 
 	StellarX::MessageBoxResult result = StellarX::MessageBoxResult::Cancel; // 对话框结果
 
 	bool isCleaning = false;               //是否正在清理
 	bool pendingCleanup = false;           //延迟清理
 public:
-	StellarX::ControlText textStyle;   // 字体样式
+	/// 标题和正文使用的字体样式；直接修改字段后需确保对话框重新绘制。
+	StellarX::ControlText textStyle;
 	// 在事件安全点执行延迟清理；用于非模态关闭后统一回收。
 	// Close() 只隐藏并标记待清理，真正释放内部按钮和快照要等到这里执行。
 	void performDelayedCleanup();
-	// 非模态工厂调用时用于回传结果；回调可能修改宿主控件树，因此 Close() 会在 mutation scope 内触发它。
+	/// 非模态工厂调用时用于回传结果；回调可能修改宿主控件树，因此 Close() 会在 mutation scope 内触发它。
 	std::function<void(StellarX::MessageBoxResult)> resultCallback;
 	// 设置非模态结果回调；仅在非模态 Dialog 关闭时异步调用。
 	void SetResultCallback(std::function<void(StellarX::MessageBoxResult)> cb);
@@ -119,8 +123,9 @@ private:
 	void splitMessageLines();
 	// 计算当前标题和正文所需的文本尺寸。
 	void getTextSize();
-	// 标记需要重新布局并按需清空旧控件
-	void invalidateLayout(bool clearChildren);
+	// 标记需要重新布局。现有 chrome 保留到下一次安全绘制阶段再统一退休，
+	// 禁止公开 setter 在任意控件回调栈内直接销毁子控件。
+	void invalidateLayout();
 	// 根据文本和按钮数量初始化对话框尺寸。
 	void initDialogSize();
 	// 依据当前 Dialog 的 x/y/width/height 重新创建标题和按钮
@@ -131,9 +136,12 @@ private:
 	bool canCommitManagedPartialRepaint() const override;
 	// 托管收口阶段执行 Dialog 的真正重绘。
 	void commitManagedRepaint() override;
+	// KeyboardRouter 冒泡后的框架默认动作；调用方已绑定原始 Dialog 身份。
+	bool handleFrameworkDefault(const StellarX::KeyEvent& key);
 
-	// 清除 Dialog 内部所有 chrome 控件。
-	void clearControls();
+	// 退休 Dialog 内部所有 chrome 控件。销毁前先批量通知 FocusManager，
+	// 保证旧句柄在物理释放之前已经从逻辑焦点树失效。
+	void retireChromeControls();
 	// 创建标准对话框功能按钮。
 	std::unique_ptr<Button> createDialogButton(int x, int y, const std::string& text);
 	// 请求宿主窗口重绘 Dialog root；非托管模式下立即更新内部按钮。

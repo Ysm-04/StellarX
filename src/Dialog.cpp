@@ -1,12 +1,37 @@
 ﻿#include "Dialog.h"
 #include "SxLog.h"
 #include "SxEventLoopInternal.h"
+#include "SxInputProbeInternal.h"
+#include "SxKeyboardRouterInternal.h"
+
+namespace
+{
+	class ScopedFocusScope
+	{
+		StellarX::FocusManager* manager = nullptr;
+		StellarX::FocusScopeId scope{};
+	public:
+		ScopedFocusScope(StellarX::FocusManager& focusManager,
+			StellarX::FocusScopeId focusScope) noexcept
+			: manager(&focusManager), scope(focusScope)
+		{
+		}
+		ScopedFocusScope(const ScopedFocusScope&) = delete;
+		ScopedFocusScope& operator=(const ScopedFocusScope&) = delete;
+		~ScopedFocusScope()
+		{
+			if (manager && scope && !manager->popScope(scope))
+				SX_LOGE("Dialog") << "failed to pop modal focus scope";
+		}
+		explicit operator bool() const noexcept { return static_cast<bool>(scope); }
+	};
+}
 
 Dialog::Dialog(Window& h, std::string text, std::string message, StellarX::MessageBoxType type, bool modal)
 	: Canvas(), message(message), type(type), modal(modal), hWnd(h), titleText(text)
 {
 	this->id = "Dialog";
-	// Dialog 当前阶段只做“居中 + 自管内部 chrome”，
+	// Dialog 采用“居中 + 自管内部 chrome”的布局方式，
 	// 不参与外部 Stretch；宿主窗口变化时只重新居中。
 	this->layoutCapability.allowStretchX = false;
 	this->layoutCapability.allowStretchY = false;
@@ -35,6 +60,8 @@ void Dialog::draw()
 		initDialogSize();
 		needsInitialization = false;
 	}
+	if (!modal)
+		hWnd.commitPendingNonModalDialogActivation(*this);
 
 	if (dirty && show)
 	{
@@ -124,19 +151,19 @@ bool Dialog::handleEvent(const ExMessage& msg)
 void Dialog::SetTitle(const std::string& title)
 {
 	this->titleText = title;
-	invalidateLayout(true);
+	invalidateLayout();
 }
 
 void Dialog::SetMessage(const std::string& message)
 {
 	this->message = message;
-	invalidateLayout(true);
+	invalidateLayout();
 }
 
 void Dialog::SetType(StellarX::MessageBoxType type)
 {
 	this->type = type;
-	invalidateLayout(true);
+	invalidateLayout();
 }
 
 void Dialog::SetModal(bool modal)
@@ -152,6 +179,32 @@ void Dialog::SetResult(StellarX::MessageBoxResult result)
 StellarX::MessageBoxResult Dialog::GetResult() const
 {
 	return this->result;
+}
+
+bool Dialog::handleFrameworkDefault(const StellarX::KeyEvent& key)
+{
+	if (!show || pendingCleanup || isCleaning ||
+		key.action != StellarX::KeyAction::Down || key.isAutoRepeat())
+		return false;
+
+	if (key.virtualKey == VK_ESCAPE)
+	{
+		SetResult(StellarX::MessageBoxResult::Cancel);
+		Close();
+		return true;
+	}
+
+	if (key.virtualKey != VK_RETURN || key.modifiers.control() ||
+		!defaultFocusTarget)
+		return false;
+
+	auto* button = dynamic_cast<Button*>(findControl(defaultFocusTarget.owner));
+	if (!button || defaultFocusTarget.subNode != 0)
+		return false;
+	// 默认按钮无需当前逻辑焦点。回调可能关闭/删除 Dialog；调用后不再访问
+	// button 或 this 的成员。
+	button->activateFromKeyboard(false);
+	return true;
 }
 
 bool Dialog::model() const
@@ -173,20 +226,86 @@ void Dialog::Show()
 
 	if (modal)
 	{
+		// 模态循环也是事件循环入口；开始排空 EasyX 消息前先锁定共享键盘管线。
+		StellarX::Internal::lockKeyboardPipeline(hWnd);
+		StellarX::Internal::lockPointerPipeline(hWnd);
+		if (StellarX::Internal::keyboardPipelineMode(hWnd) ==
+			StellarX::Internal::KeyboardPipelineMode::Routed)
+		{
+			// 在 scope 切换前先取消底层路径的键盘 armed 状态；随后真实焦点会
+			// 进入模态子树，底层逻辑焦点由 FocusScope 负责保存和恢复。
+			StellarX::Internal::KeyboardRouter::suspendFocusedPath(hWnd);
+		}
 		// 模态对话框需要阻塞当前线程直到对话框关闭
+		if (!hWnd.hasLiveNativeWindow())
+		{
+			show = false;
+			hWnd.dialogOpen = false;
+			return;
+		}
+
 		// 记录当前窗口客户区尺寸，供轮询对比
-		RECT rc0;
-		GetClientRect(hWnd.getHwnd(), &rc0);
+		RECT rc0{};
+		if (!GetClientRect(hWnd.getHwnd(), &rc0))
+		{
+			show = false;
+			hWnd.dialogOpen = false;
+			StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
+			return;
+		}
 		int lastW = rc0.right - rc0.left;
 		int lastH = rc0.bottom - rc0.top;
+		// 模态 Dialog 不在 Window::dialogs owning 树中。必须先建立完整 chrome，
+		// 再用受 Show() 生命周期约束的临时注册让 FocusManager 可以解析其身份。
+		if (needsInitialization)
+		{
+			initDialogSize();
+			needsInitialization = false;
+		}
+
+		{
+			auto modalRegistration = hWnd.registerModalDialog(*this);
+			const StellarX::FocusScopeId scopeId = modalRegistration
+				? hWnd.getFocusManager().pushScope(
+					{ getHandle(), 0 }, defaultFocusTarget)
+				: StellarX::FocusScopeId{};
+			ScopedFocusScope focusScope(hWnd.getFocusManager(), scopeId);
+			if (!modalRegistration || !focusScope)
+			{
+				SX_LOGE("Dialog") << "failed to activate modal focus scope";
+				show = false;
+				hWnd.dialogOpen = false;
+			}
 
 		while (show)
 		{
-			// 模态对话框保留自己的轮询循环，但消息同样批量处理并在每轮末尾统一绘制。
-			int processedMessages = 0;
+			if (!hWnd.drainNativeInputAtSafePoint(false, &show))
+			{
+				show = false;
+				hWnd.dialogOpen = false;
+				StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
+				break;
+			}
+			if (!show)
+				break;
+			if (!hWnd.hasLiveNativeWindow())
+			{
+				show = false;
+				hWnd.dialogOpen = false;
+				break;
+			}
+
+			// 模态对话框保留自己的轮询循环，但消息同样批量处理，并在每轮末尾
+			// 推进内部时钟、提交托管重绘，行为边界与 Window 主循环保持一致。
 			// ① 轮询窗口尺寸（不依赖 WM_SIZE）
-			RECT rc;
-			GetClientRect(hWnd.getHwnd(), &rc);
+			RECT rc{};
+			if (!GetClientRect(hWnd.getHwnd(), &rc))
+			{
+				show = false;
+				hWnd.dialogOpen = false;
+				StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
+				break;
+			}
 			const int cw = rc.right - rc.left;
 			const int ch = rc.bottom - rc.top;
 
@@ -208,15 +327,61 @@ void Dialog::Show()
 
 			// ② 处理这只对话框的鼠标/键盘（沿用原来 EX_MOUSE | EX_KEY）
 			ExMessage msg;
+			auto probeBatch = StellarX::Internal::inputProbeHostBatchBegin(hWnd.getHwnd(), true);
 			const auto batch = StellarX::Internal::drainMessageBatch(msg,
 				[](ExMessage& next) { return peekmessage(&next, EX_MOUSE | EX_KEY); },
 				[&](const ExMessage& next) {
-					handleEvent(next);
+					StellarX::Internal::inputProbeObserveEasyXMessage(hWnd.getHwnd(), probeBatch, next);
+					const bool easyXKeyboardMessage =
+						StellarX::Internal::isEasyXKeyboardMessage(next.message);
+					const bool easyXPointerMessage =
+						StellarX::Internal::isEasyXPointerMessage(next.message);
+					if (easyXKeyboardMessage)
+						++hWnd.easyXKeyboardMessagesDrained;
+					if (easyXPointerMessage)
+						++hWnd.easyXPointerMessagesDrained;
+					if (StellarX::Internal::shouldDeliverLegacyEasyXMessage(hWnd, next.message))
+					{
+						if (easyXKeyboardMessage)
+							++hWnd.legacyEasyXKeyboardBusinessDeliveries;
+						if (easyXPointerMessage)
+							++hWnd.legacyEasyXPointerBusinessDeliveries;
+						hWnd.dispatchManagedBusinessMessage(next);
+					}
 					return show;
 				});
-			processedMessages = static_cast<int>(batch.processed);
+			StellarX::Internal::inputProbeHostBatchEnd(
+				hWnd.getHwnd(), probeBatch, batch.processed, batch.stopped);
+			if (!show)
+				break;
+			if (!hWnd.drainNativeInputAtSafePoint(false, &show))
+			{
+				show = false;
+				hWnd.dialogOpen = false;
+				StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
+				break;
+			}
+			if (!show)
+				break;
+			if (!hWnd.hasLiveNativeWindow())
+			{
+				show = false;
+				hWnd.dialogOpen = false;
+				StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
+				break;
+			}
 
-			// ③ 最后一笔：只画这只模态，保证永远在最上层
+			// ③ 推进当前最内层模态的内部时钟。外层模态循环在嵌套 Show()
+			// 期间暂停，不应继续产生 Hover/Tooltip 等交互状态。
+			this->tick(GetTickCount64());
+
+			// ④ 提交本轮全部托管视觉变化。Window 使用完整 z-order，先提交
+			// 普通控件/非模态/外层模态，再把当前最内层模态补回最上层。
+			hWnd.collectDirtyRootsForManagedRepaint();
+			hWnd.flushManagedRepaint();
+
+			// ⑤ 防御性兜底：正常的子控件、焦点和 tick 变化已经由上面的托管
+			// flush 收口；这里只处理尚未登记为 managed root 的整 Dialog 脏状态。
 			if (dirty)
 			{
 				BeginBatchDraw();
@@ -224,17 +389,27 @@ void Dialog::Show()
 				EndBatchDraw();
 				dirty = false;
 			}
+			if (!hWnd.isMutationTransactionActive())
+				StellarX::Internal::inputProbeFlushAtSafePoint(hWnd.getHwnd());
 
 			if (batch.shouldSleep())
 				Sleep(1);
 		}
+		} // focus scope 先 pop，随后 modal registration 注销
 
-		if (pendingCleanup && !isCleaning)
+		hWnd.reconcileNonModalDialogScope();
+		hWnd.dialogOpen = false;
+		if (!controls.empty() && !isCleaning)
 			performDelayedCleanup();
 	}
 	else
+	{
+		// chrome 会在首次 draw 中物化；届时再 push scope，避免把尚不存在的
+		// 默认按钮身份写入焦点状态。
+		hWnd.requestNonModalDialogActivation(*this);
 		// 非模态对话框只需标记为可见，由主循环处理
 		dirty = true;
+	}
 }
 
 void Dialog::Close()
@@ -245,6 +420,9 @@ void Dialog::Close()
 	show = false;
 	dirty = true;
 	pendingCleanup = true;  // 只标记需要清理，不立即执行
+	if (!modal)
+		hWnd.onNonModalDialogClosed(getHandle());
+	notifyFocusSubtreeStateChanged();
 	hWnd.dialogClose = true;
 	hWnd.requestFullSceneRedraw();
 
@@ -271,16 +449,32 @@ void Dialog::recenterInHostWindow()
 
 	const int newX = (hWnd.getWidth() - width) / 2;
 	const int newY = (hWnd.getHeight() - height) / 2;
-	invalidateBackgroundSnapshot();
+	const int deltaX = newX - x;
+	const int deltaY = newY - y;
+	if (deltaX == 0 && deltaY == 0)
+		return;
 
+	invalidateBackgroundSnapshot();
 	x = newX;
 	y = newY;
-	rebuildChrome();
+
+	// 重居中不改变标题、正文、按钮组合或 Dialog 尺寸，因此只平移已有
+	// chrome。先丢弃子控件快照，避免 setX/setY 在新位置尚未完整合成时
+	// 触发单个按钮的立即提交；随后由 Dialog 整体重绘统一收口。
+	for (auto& control : controls)
+	{
+		if (!control)
+			continue;
+		control->invalidateBackgroundSnapshot();
+		control->setX(control->getX() + deltaX);
+		control->setY(control->getY() + deltaY);
+	}
 	dirty = true;
 }
 
 void Dialog::initButtons()
 {
+	defaultFocusTarget = {};
 	switch (this->type)
 	{
 	case StellarX::MessageBoxType::OK:  // 只有确定按钮
@@ -296,6 +490,7 @@ void Dialog::initButtons()
 				this->Close(); });
 
 		okbutton->textStyle = this->textStyle;
+		defaultFocusTarget = { okbutton->getHandle(), 0 };
 
 		this->addControl(std::move(okbutton));
 	}
@@ -326,6 +521,7 @@ void Dialog::initButtons()
 
 		okButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
+		defaultFocusTarget = { okButton->getHandle(), 0 };
 
 		this->addControl(std::move(okButton));
 		this->addControl(std::move(cancelButton));
@@ -357,6 +553,7 @@ void Dialog::initButtons()
 
 		yesButton->textStyle = this->textStyle;
 		noButton->textStyle = this->textStyle;
+		defaultFocusTarget = { yesButton->getHandle(), 0 };
 
 		this->addControl(std::move(yesButton));
 		this->addControl(std::move(noButton));
@@ -400,6 +597,7 @@ void Dialog::initButtons()
 		yesButton->textStyle = this->textStyle;
 		noButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
+		defaultFocusTarget = { yesButton->getHandle(), 0 };
 
 		this->addControl(std::move(yesButton));
 		this->addControl(std::move(noButton));
@@ -432,6 +630,7 @@ void Dialog::initButtons()
 
 		retryButton->textStyle = this->textStyle;
 		cancelButton->textStyle = this->textStyle;
+		defaultFocusTarget = { retryButton->getHandle(), 0 };
 
 		this->addControl(std::move(retryButton));
 		this->addControl(std::move(cancelButton));
@@ -476,6 +675,7 @@ void Dialog::initButtons()
 		abortButton->textStyle = this->textStyle;
 		retryButton->textStyle = this->textStyle;
 		ignoreButton->textStyle = this->textStyle;
+		defaultFocusTarget = { abortButton->getHandle(), 0 };
 
 		this->addControl(std::move(abortButton));
 		this->addControl(std::move(retryButton));
@@ -500,6 +700,9 @@ void Dialog::initCloseButton()
 		);
 	but.get()->setButtonFalseColor(this->backgroundColor);
 	but.get()->enableTooltip(false);
+	// 右上角 X 仍可鼠标命中和程序化聚焦，但不进入 Tab 顺序。
+	but->setFocusPolicy(StellarX::FocusPolicy::Pointer |
+		StellarX::FocusPolicy::Programmatic);
 	but->setOnClickListener([this]() {
 		this->SetResult(StellarX::MessageBoxResult::Cancel);
 		this->hWnd.dialogClose = true;
@@ -568,10 +771,20 @@ void Dialog::getTextSize()
 	restoreStyle();
 }
 
-void Dialog::invalidateLayout(bool clearChildren)
+void Dialog::invalidateLayout()
 {
-	if (clearChildren)
-		clearControls();
+	// 只登记重建请求。SetTitle/SetMessage/SetType 可能从任意控件回调中
+	// 调用；在 setter 内直接 clear 会让当前回调栈持有的 this/兄弟地址
+	// 立即失效。旧 chrome 在下一次 draw 的安全收口阶段才物理退休；但从
+	// 本调用返回起就必须停止命中和键盘路由，不能在同一消息批次继续工作。
+	std::vector<StellarX::ControlHandle> staleHandles;
+	staleHandles.reserve(controls.size());
+	for (const auto& control : controls)
+		if (control) staleHandles.push_back(control->getHandle());
+	if (!staleHandles.empty())
+		hWnd.getFocusManager().notifySubtreesPendingRemoval(staleHandles);
+	for (auto& control : controls)
+		if (control) control->setIsVisible(false);
 
 	this->textWidth = 0;
 	this->textHeight = 0;
@@ -582,7 +795,11 @@ void Dialog::invalidateLayout(bool clearChildren)
 
 void Dialog::rebuildChrome()
 {
-	clearControls();
+	// Dialog::draw() 在首次布局和内容变更时可能位于普通/模态两种循环。
+	// 显式事务保证“批量失效旧句柄 -> 释放旧对象 -> 建立新 chrome”只在
+	// 完整重建后提交，retireChromeControls() 自身不越权 flush 整棵 Window。
+	auto mutationScope = enterMutationScope();
+	retireChromeControls();
 	initButtons();
 	initCloseButton();
 }
@@ -661,19 +878,16 @@ void Dialog::performDelayedCleanup()
 	if (isCleaning) return;
 
 	isCleaning = true;
-
-	for (auto& control : controls)
-		control->invalidateBackgroundSnapshot();
-	controls.clear();
-
-	// 重置指针
-	closeButton = nullptr;
-	// 清理阶段不直接写屏；Window 会在安全点统一重绘剩余场景。
-	invalidateBackgroundSnapshot();
-	hWnd.requestFullSceneRedraw();
-	// 重置状态
-	needsInitialization = true;
-	pendingCleanup = false;
+	{
+		auto mutationScope = enterMutationScope();
+		retireChromeControls();
+		// 清理阶段不直接写屏；Window 会在安全点统一重绘剩余场景。
+		invalidateBackgroundSnapshot();
+		hWnd.requestFullSceneRedraw();
+		// 重置状态
+		needsInitialization = true;
+		pendingCleanup = false;
+	}
 	isCleaning = false;
 }
 
@@ -692,14 +906,22 @@ std::string Dialog::GetText() const
 	return message;
 }
 
-void Dialog::clearControls()
+void Dialog::retireChromeControls()
 {
+	std::vector<StellarX::ControlHandle> retiredHandles;
+	retiredHandles.reserve(controls.size());
+	for (const auto& control : controls)
+		if (control) retiredHandles.push_back(control->getHandle());
+
+	if (!retiredHandles.empty())
+		hWnd.getFocusManager().notifySubtreesPendingRemoval(retiredHandles);
+
 	for (auto& control : controls)
-		control->invalidateBackgroundSnapshot();
+		if (control) control->invalidateBackgroundSnapshot();
 
 	controls.clear();
-	// 重置按钮指针
 	closeButton = nullptr;
+	defaultFocusTarget = {};
 }
 
 std::unique_ptr<Button> Dialog::createDialogButton(int x, int y, const std::string& text)

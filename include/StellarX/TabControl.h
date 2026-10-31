@@ -24,6 +24,7 @@
 #include "Canvas.h"
 #define BUTMINHEIGHT 15   //页签按钮最小尺寸，过小会导致显示问题
 #define BUTMINWIDTH  30   //页签按钮最小尺寸，过小会导致显示问题
+/// 管理真实页签 Button 与对应 Canvas 页面的一体化选项卡容器。
 class TabControl :public Canvas
 {
 	int tabBarHeight = BUTMINWIDTH;   //页签栏高度
@@ -44,6 +45,10 @@ private:
 	inline void initTabPage();
 	// 统一刷新 TabControl 当前运行态下的页签栏和页面区布局。
 	void refreshRuntimeLayout();
+	// roving-tab-stop：活动页签优先成为唯一 Tab stop；无活动页时保留一个
+	// 可见、启用的页签作为键盘重新进入锚点。preferredIndex 用于优先保留
+	// 刚关闭的页签；没有可用页签时才允许全部退出 Tab 顺序。
+	void updateRovingTabStops(int preferredIndex);
 	// 立即加入一组已校验的页签按钮和页面 Canvas，并建立内部回调联动。
 	size_t addTabDirect(std::unique_ptr<Button> button, std::unique_ptr<Canvas> page);
 public:
@@ -67,6 +72,8 @@ public:
 	void draw() override;
 	// 处理页签按钮和当前页面的事件分发。
 	bool handleEvent(const ExMessage& msg) override;
+	// 只有原始焦点为本控件页签 Button 时，Left/Right 才切换并聚焦页签。
+	StellarX::KeyRouteResult handleKeyEvent(StellarX::RoutedKeyEvent& event) override;
 	// 只推进当前页按钮和页面中的时钟状态，避免不可见页签产生无效工作。
 	void tick(ULONGLONG nowMs) override;
 	// 只转发清理页签按钮和当前可见页面中的鼠标临时状态，不升级为整块 TabControl 重绘。
@@ -101,16 +108,48 @@ public:
 	// 设置 TabControl 及其当前页签/页面的脏状态。
 	void setDirty(bool dirty) override;
 	// 请求父控件重绘；托管模式下登记 TabControl 为 root。
-	void requestRepaint(Control* parent)override;          // 托管模式下登记为 root；非托管模式下局部更新脏按钮/脏页面
+	void requestRepaint(Control* parent)override;
 	// 判断页签栏或当前页面中是否存在待提交的脏内容。
 	bool hasManagedDirtySubtree() const override;
 	// 获取页签栏和当前页面的托管重绘覆盖范围。
 	RECT getManagedRepaintCoverageRect() const override;
 	// 获取页签栏和当前页面的持久绘制覆盖范围。
 	RECT getManagedRepaintPersistentCoverageRect() const override;
-	bool canCommitManagedPartialRepaint() const override;  // 判断当前 TabControl 是否可安全做局部提交
-	void commitManagedRepaint() override;                  // 托管收口阶段执行 TabControl 的真正重绘
+	// 判断当前 TabControl 是否可安全做局部提交。
+	bool canCommitManagedPartialRepaint() const override;
+	// 托管收口阶段执行 TabControl 的真正重绘。
+	void commitManagedRepaint() override;
 protected:
+	// 以下接口同时解析页签 Button 与活动页面子树；稳定身份之外的指针不得逃逸。
+	/// 查询 target 对应的焦点参与快照。
+	bool queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+		StellarX::FocusTargetSnapshot& snapshot) const override;
+	/// 收集可见页签与活动页面中的焦点参与节点。
+	void collectFocusTargetSnapshots(
+		std::vector<StellarX::FocusTargetSnapshot>& snapshots) const override;
+	/// 对页签或活动页面中的 target 应用焦点状态。
+	bool applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+		StellarX::FocusReason reason) override;
+	/// 把键盘事件定向投递到页签或活动页面目标。
+	bool dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+		StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result) override;
+	/// 把正式文字输入定向投递到活动页面目标。
+	bool dispatchTextInputEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextInputEvent& event) override;
+	/// 把 IME 临时组合事件定向投递到活动页面目标。
+	bool dispatchCompositionEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedCompositionEvent& event) override;
+	/// 把文字选区手势定向投递到活动页面目标。
+	bool dispatchTextSelectionGestureToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextSelectionGestureEvent& event,
+		bool& accepted) override;
+	/// 通知页签或活动页面目标暂停键盘路由。
+	bool dispatchKeyboardSuspensionToTarget(
+		const StellarX::FocusTargetId& target) override;
+	/// 通知页签或活动页面目标恢复键盘路由。
+	bool dispatchKeyboardResumptionToTarget(
+		const StellarX::FocusTargetId& target) override;
 	// 将回调期间加入的页签和页内控件在外层事务结束时一次性提交。
 	void flushPendingMutations() override;
 	// 外层统一解算后，TabControl 需要同步刷新其内部页签栏和页面区。

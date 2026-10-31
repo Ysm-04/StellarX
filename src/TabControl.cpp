@@ -145,10 +145,63 @@ void TabControl::refreshRuntimeLayout()
 	initTabPage();
 }
 
+void TabControl::updateRovingTabStops(int preferredIndex)
+{
+	const StellarX::FocusPolicy inactivePolicy =
+		StellarX::FocusPolicy::Programmatic | StellarX::FocusPolicy::Pointer;
+	const StellarX::FocusPolicy activePolicy =
+		inactivePolicy | StellarX::FocusPolicy::Tab;
+	auto eligible = [&](int index)
+		{
+			return index >= 0 && index < static_cast<int>(controls.size()) &&
+				controls[index].first && controls[index].first->IsVisible() &&
+				controls[index].first->getButtonMode() != StellarX::ButtonMode::DISABLED;
+		};
+
+	// 选中页签始终是首选 roving 目标。若所有页面都已关闭，则保留刚关闭
+	// 的页签；没有显式首选项时先沿用已有锚点，最后退到第一个可用页签。
+	// 这样关闭页面不会让整个 TabControl 从键盘 Tab 顺序中永久消失。
+	int rovingIndex = getActiveIndex();
+	if (!eligible(rovingIndex))
+	{
+		rovingIndex = eligible(preferredIndex) ? preferredIndex : -1;
+	}
+	if (rovingIndex < 0)
+	{
+		for (std::size_t index = 0; index < controls.size(); ++index)
+		{
+			if (eligible(static_cast<int>(index)) &&
+				StellarX::hasFocusPolicy(controls[index].first->getFocusPolicy(),
+					StellarX::FocusPolicy::Tab))
+			{
+				rovingIndex = static_cast<int>(index);
+				break;
+			}
+		}
+	}
+	if (rovingIndex < 0)
+	{
+		for (std::size_t index = 0; index < controls.size(); ++index)
+		{
+			if (eligible(static_cast<int>(index)))
+			{
+				rovingIndex = static_cast<int>(index);
+				break;
+			}
+		}
+	}
+	for (std::size_t index = 0; index < controls.size(); ++index)
+	{
+		if (controls[index].first)
+			controls[index].first->setFocusPolicy(
+				static_cast<int>(index) == rovingIndex ? activePolicy : inactivePolicy);
+	}
+}
+
 TabControl::TabControl() :Canvas()
 {
 	this->id = "TabControl";
-	// TabControl 作为外层容器，当前阶段显式允许双轴 Stretch；
+	// TabControl 作为外层容器，允许在水平和垂直方向使用 Stretch；
 	// 内部页签栏和页面区仍由自己的专用布局逻辑管理。
 	this->layoutCapability.allowStretchX = true;
 	this->layoutCapability.allowStretchY = true;
@@ -337,6 +390,39 @@ bool TabControl::handleEvent(const ExMessage& msg)
 	return consume;
 }
 
+StellarX::KeyRouteResult TabControl::handleKeyEvent(StellarX::RoutedKeyEvent& event)
+{
+	const auto& key = event.key;
+	if (key.action != StellarX::KeyAction::Down || key.modifiers.control() ||
+		(key.virtualKey != VK_LEFT && key.virtualKey != VK_RIGHT) || controls.empty())
+		return {};
+
+	int originalIndex = -1;
+	for (std::size_t index = 0; index < controls.size(); ++index)
+	{
+		if (controls[index].first &&
+			event.originalTarget == StellarX::FocusTargetId{
+				controls[index].first->getHandle(), 0 })
+		{
+			originalIndex = static_cast<int>(index);
+			break;
+		}
+	}
+	if (originalIndex < 0)
+		return {};
+
+	const int count = static_cast<int>(controls.size());
+	const int nextIndex = key.virtualKey == VK_RIGHT
+		? (originalIndex + 1) % count
+		: (originalIndex + count - 1) % count;
+	// setActiveIndex() 进入 onToggleOn 时会先更新 roving 策略，再隐藏旧页；
+	// 随后用独立 TabRoving reason 把逻辑焦点移动到新页签。
+	if (!setActiveIndex(nextIndex))
+		return {};
+	controls[nextIndex].first->requestFocus(StellarX::FocusReason::TabRoving);
+	return { false, true };
+}
+
 bool TabControl::clearTransientMouseState()
 {
 	bool changed = false;
@@ -349,6 +435,127 @@ bool TabControl::clearTransientMouseState()
 			changed = true;
 	}
 	return changed;
+}
+
+bool TabControl::queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+	StellarX::FocusTargetSnapshot& snapshot) const
+{
+	if (Canvas::queryFocusTargetSnapshot(target, snapshot))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->queryFocusTargetSnapshot(target, snapshot)) return true;
+		if (it->second && it->second->queryFocusTargetSnapshot(target, snapshot)) return true;
+	}
+	return false;
+}
+
+void TabControl::collectFocusTargetSnapshots(
+	std::vector<StellarX::FocusTargetSnapshot>& snapshots) const
+{
+	Canvas::collectFocusTargetSnapshots(snapshots);
+	for (const auto& tab : controls)
+	{
+		if (tab.first) tab.first->collectFocusTargetSnapshots(snapshots);
+		if (tab.second) tab.second->collectFocusTargetSnapshots(snapshots);
+	}
+}
+
+bool TabControl::applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+	StellarX::FocusReason reason)
+{
+	if (Canvas::applyFocusState(target, focused, reason))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->applyFocusState(target, focused, reason)) return true;
+		if (it->second && it->second->applyFocusState(target, focused, reason)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+	StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result)
+{
+	if (Canvas::dispatchKeyEventToTarget(target, event, result))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchKeyEventToTarget(target, event, result)) return true;
+		if (it->second && it->second->dispatchKeyEventToTarget(target, event, result)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchTextInputEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextInputEvent& event)
+{
+	if (Canvas::dispatchTextInputEventToTarget(target, event))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchTextInputEventToTarget(target, event)) return true;
+		if (it->second && it->second->dispatchTextInputEventToTarget(target, event)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchCompositionEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedCompositionEvent& event)
+{
+	if (Canvas::dispatchCompositionEventToTarget(target, event))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchCompositionEventToTarget(target, event)) return true;
+		if (it->second && it->second->dispatchCompositionEventToTarget(target, event)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchTextSelectionGestureToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextSelectionGestureEvent& event,
+	bool& accepted)
+{
+	if (Canvas::dispatchTextSelectionGestureToTarget(target, event, accepted))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchTextSelectionGestureToTarget(
+			target, event, accepted)) return true;
+		if (it->second && it->second->dispatchTextSelectionGestureToTarget(
+			target, event, accepted)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchKeyboardSuspensionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Canvas::dispatchKeyboardSuspensionToTarget(target))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchKeyboardSuspensionToTarget(target)) return true;
+		if (it->second && it->second->dispatchKeyboardSuspensionToTarget(target)) return true;
+	}
+	return false;
+}
+
+bool TabControl::dispatchKeyboardResumptionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Canvas::dispatchKeyboardResumptionToTarget(target))
+		return true;
+	for (auto it = controls.rbegin(); it != controls.rend(); ++it)
+	{
+		if (it->first && it->first->dispatchKeyboardResumptionToTarget(target)) return true;
+		if (it->second && it->second->dispatchKeyboardResumptionToTarget(target)) return true;
+	}
+	return false;
 }
 
 size_t TabControl::addTab(std::unique_ptr<Button> button, std::unique_ptr<Canvas> page)
@@ -379,10 +586,18 @@ size_t TabControl::addTabDirect(std::unique_ptr<Button> button, std::unique_ptr<
 	controls[idx].first->setParent(this);
 	controls[idx].first->enableTooltip(true);
 	controls[idx].first->setbuttonMode(StellarX::ButtonMode::TOGGLE);
+	int rovingIndex = getActiveIndex();
+	if (rovingIndex < 0 && defaultActivation >= 0 &&
+		defaultActivation < static_cast<int>(controls.size()))
+		rovingIndex = defaultActivation;
+	updateRovingTabStops(rovingIndex);
 
 	controls[idx].first->setOnToggleOnListener([this, idx]()
 		{
 			int prevIdx = -1;
+			// 新活动页签先成为唯一 Tab stop，再隐藏旧页面。这样旧页焦点
+			// 失效回退时已经能看到正确的新页签目标。
+			updateRovingTabStops(static_cast<int>(idx));
 			for (size_t i = 0; i < controls.size(); ++i)
 			{
 				if (controls[i].second->IsVisible())
@@ -412,6 +627,9 @@ size_t TabControl::addTabDirect(std::unique_ptr<Button> button, std::unique_ptr<
 				<< " text=" << controls[idx].first->getButtonText();
 
 			controls[idx].second->setIsVisible(false);
+			// 切换到其它页签时，getActiveIndex() 会让新活动页签继续获胜；
+			// 真正关闭最后活动页时，idx 则成为无活动页面状态的重新进入锚点。
+			updateRovingTabStops(static_cast<int>(idx));
 			dirty = true;
 		});
 	controls[idx].second->setParent(this);
@@ -552,6 +770,8 @@ bool TabControl::setActiveIndex(int idx)
 	if (IsFirstDraw)
 	{
 		defaultActivation = idx;
+		if (idx < static_cast<int>(controls.size()))
+			updateRovingTabStops(idx);
 		return true;
 	}
 	else

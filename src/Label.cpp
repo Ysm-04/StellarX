@@ -73,7 +73,7 @@ Label::Label()
 	:Control(0, 0, 0, 0)
 {
 	this->id = "Label";
-	// Label 当前阶段明确走“内容驱动尺寸”语义：
+	// Label 采用“内容驱动尺寸”语义：
 	// 外部布局器只安置位置，不通过 Stretch 改写它的宽高。
 	this->layoutCapability.allowStretchX = false;
 	this->layoutCapability.allowStretchY = false;
@@ -189,7 +189,7 @@ void Label::setText(std::string text)
 void Label::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
 {
 	// 通用布局器给出的 rect.width/rect.height 只代表“外部几何解算结果”。
-	// Label 当前阶段的语义是内容驱动尺寸，因此这里只接位置，不接外部宽高，
+	// Label 的尺寸由内容决定，因此这里只接收位置，不接收外部宽高，
 	// 宽高继续由 refreshContentDrivenRuntimeGeometry() 按文本和字体样式刷新。
 	refreshContentDrivenRuntimeGeometry();
 	applyRuntimeRectDirect(rect.worldX, rect.worldY, this->width, this->height);

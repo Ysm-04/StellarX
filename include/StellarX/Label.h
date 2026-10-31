@@ -19,6 +19,7 @@
 #pragma once
 #include "Control.h"
 
+/// 使用内容驱动尺寸显示静态文本的标签控件。
 class Label : public Control
 {
 	std::string text;         //标签文本
@@ -39,27 +40,26 @@ class Label : public Control
 	// - 只更新运行态宽高，不自动提交设计基线 local*
 	void refreshContentDrivenRuntimeGeometry();
 public:
-	// 标签字体样式保持公开，便于用户直接改字段。
-	// 但直接修改 textStyle 后，必须显式调用 setDirty(true)，
-	// 才会触发内容驱动尺寸刷新并让新的运行态宽高生效。
+	/// 标签字体样式。直接修改字段后必须调用 setDirty(true)，才能重新测量
+	/// 内容并使新的运行态宽高生效。
 	StellarX::ControlText   textStyle;   //标签文本样式
 public:
-	// 默认构造：创建一个内容驱动尺寸的标签
+	/// 创建使用默认文本和样式、由内容驱动尺寸的标签。
 	Label();
-	// 指定位置、文本和基础样式构造标签
+	/// 在指定位置创建标签，并设置初始文本、文字颜色和背景颜色。
 	Label(int x, int y, std::string text = "标签", COLORREF textcolor = BLACK, COLORREF bkColor = RGB(255, 255, 255));
 
-	// 绘制标签文本
+	/// 按当前文本、样式和透明背景设置绘制标签。
 	void draw() override;
-	// 隐藏 Label 并恢复背景；主要供 Button Tooltip 关闭时复用。
+	/// 隐藏标签并恢复其背景；Button Tooltip 关闭时也复用该入口。
 	void hide();
 	// Label 的内容尺寸由文本和字体样式共同决定。
 	// 因此只要进入 dirty 状态，就在绘制前先刷新一次运行态尺寸，
 	// 避免 draw() 阶段继续承担新的几何决策。
 	void setDirty(bool dirty) override;
-	// 设置标签背景是否透明
+	/// 设置背景是否透明；true 表示绘制时不填充标签背景。
 	void setTextdisap(bool key);
-	// 设置标签背景颜色
+	/// 设置非透明模式下使用的标签背景颜色。
 	void setTextBkColor(COLORREF color);
 	// 设置标签文本，并触发内容驱动尺寸刷新。
 	// Label 的布局系统只负责位置；运行态宽高仍由文本和 textStyle 测量结果决定。

@@ -21,6 +21,7 @@
 #include "Control.h"
 #include"Table.h"
 
+/// 拥有子控件并负责递归布局、事件分发和托管重绘的画布容器。
 class Canvas : public Control
 {
 	friend class TabControl;
@@ -118,6 +119,36 @@ public:
 	// 托管收口阶段执行 Canvas 的真正重绘
 	void commitManagedRepaint() override;
 protected:
+	// 以下接口递归解析并投递稳定焦点身份；借用的 Control* 不得逃逸当前调用栈。
+	/// 查询 target 对应的焦点参与快照。
+	bool queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+		StellarX::FocusTargetSnapshot& snapshot) const override;
+	/// 递归收集当前已提交且有效的焦点参与节点。
+	void collectFocusTargetSnapshots(
+		std::vector<StellarX::FocusTargetSnapshot>& snapshots) const override;
+	/// 对 target 应用或清除逻辑焦点状态。
+	bool applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+		StellarX::FocusReason reason) override;
+	/// 把键盘事件定向投递到 target，并返回该节点的路由裁决。
+	bool dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+		StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result) override;
+	/// 把正式文字输入定向投递到 target。
+	bool dispatchTextInputEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextInputEvent& event) override;
+	/// 把 IME 临时组合事件定向投递到 target。
+	bool dispatchCompositionEventToTarget(const StellarX::FocusTargetId& target,
+		const StellarX::RoutedCompositionEvent& event) override;
+	/// 把文字选区手势定向投递到 target，并通过 accepted 返回控件裁决。
+	bool dispatchTextSelectionGestureToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextSelectionGestureEvent& event,
+		bool& accepted) override;
+	/// 通知 target 暂停键盘路由并清理瞬时按键状态。
+	bool dispatchKeyboardSuspensionToTarget(
+		const StellarX::FocusTargetId& target) override;
+	/// 通知 target 恢复键盘路由。
+	bool dispatchKeyboardResumptionToTarget(
+		const StellarX::FocusTargetId& target) override;
 	// 进入 Canvas 子树 mutation transaction；会向父容器/Window 传播事务深度。
 	void beginMutationScope() override;
 	// 离开 Canvas 子树 mutation transaction；最外层结束时提交子控件队列。

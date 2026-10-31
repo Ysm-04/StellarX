@@ -166,6 +166,8 @@ void Button::initButton(const std::string text, StellarX::ButtonMode mode, Stell
 	this->buttonHoverColor = ch;
 	this->click = false;
 	this->hover = false;
+	this->focusPolicy = StellarX::FocusPolicy::Programmatic |
+		StellarX::FocusPolicy::Pointer | StellarX::FocusPolicy::Tab;
 
 	// === Tooltip 默认：文本=按钮文本；白底黑字；不透明；用当前按钮字体样式 ===
 	tipTextClick = tipTextOn = tipTextOff = this->text;
@@ -194,8 +196,10 @@ void Button::draw()
 	}
 	else
 	{
-		// 点击状态优先级最高，然后是悬停状态，最后是默认状态
-		COLORREF col = click ? buttonTrueColor : (hover ? buttonHoverColor : buttonFalseColor);
+		// 鼠标/Toggle 的 click 与键盘 Space armed 相互独立，只在绘制层合并。
+		// 焦点框仍在按钮本体之后绘制，不会被按压色覆盖。
+		COLORREF col = (click || keyboardArmed)
+			? buttonTrueColor : (hover ? buttonHoverColor : buttonFalseColor);
 		setfillcolor(col);
 	}
 	//
@@ -285,6 +289,13 @@ void Button::draw()
 		break;
 	}
 
+	if (logicalFocused && width > 6 && height > 6)
+	{
+		setlinecolor(RGB(32, 32, 32));
+		setlinestyle(PS_DOT, 1);
+		rectangle(x + 3, y + 3, x + width - 3, y + height - 3);
+	}
+
 	restoreStyle();//恢复默认字体样式和颜色
 	dirty = false;     //标记按钮不需要重绘
 
@@ -339,6 +350,7 @@ bool Button::handleEvent(const ExMessage& msg)
 	// 处理鼠标点击事件
 	if (msg.message == WM_LBUTTONDOWN && hover && mode != StellarX::ButtonMode::DISABLED)
 	{
+		requestFocus(StellarX::FocusReason::Pointer);
 		if (mode == StellarX::ButtonMode::NORMAL)
 		{
 			click = true;
@@ -447,6 +459,100 @@ bool Button::handleEvent(const ExMessage& msg)
 		requestRepaint(parent);
 
 	return consume;
+}
+
+StellarX::KeyRouteResult Button::handleKeyEvent(StellarX::RoutedKeyEvent& event)
+{
+	auto mutationScope = enterMutationScope();
+	const StellarX::KeyEvent& key = event.key;
+
+	// FocusManager 通常会阻止事件投向无资格按钮；这里仍保留本地门控，让自定义或
+	// 直接分发路径也按 fail-closed 处理。
+	if (!show || mode == StellarX::ButtonMode::DISABLED || !logicalFocused)
+	{
+		setKeyboardArmed(false, true);
+		return {};
+	}
+
+	if (key.virtualKey == VK_ESCAPE && key.action == StellarX::KeyAction::Down)
+	{
+		// Escape 只取消本地按压态，仍需继续冒泡，也不能阻止后续 Dialog/Window 默认动作。
+		setKeyboardArmed(false, true);
+		return {};
+	}
+
+	if (key.virtualKey == VK_SPACE)
+	{
+		if (key.action == StellarX::KeyAction::Down)
+		{
+			if (!key.isAutoRepeat())
+				setKeyboardArmed(true, true);
+			// 即使重复按键被忽略，Space 仍归当前焦点 Button 所有。祖先可以观察该事件，
+			// 但框架默认动作不能再次处理它。
+			return { false, true };
+		}
+
+		if (!keyboardArmed)
+			return {};
+		setKeyboardArmed(false, true);
+		activateFromKeyboard();
+		return { false, true };
+	}
+
+	if (key.virtualKey == VK_RETURN && key.action == StellarX::KeyAction::Down)
+	{
+		if (!key.isAutoRepeat())
+			activateFromKeyboard();
+		// Enter 重复按键仍由按钮认领，但不会重复执行命令。
+		return { false, true };
+	}
+
+	return {};
+}
+
+bool Button::setKeyboardArmed(bool armed, bool requestVisual)
+{
+	if (keyboardArmed == armed)
+		return false;
+	keyboardArmed = armed;
+	dirty = true;
+	markEventVisualChanged(true);
+	if (requestVisual)
+		requestRepaint(parent);
+	return true;
+}
+
+void Button::activateFromKeyboard(bool requireLogicalFocus)
+{
+	if (!show || mode == StellarX::ButtonMode::DISABLED ||
+		(requireLogicalFocus && !logicalFocused))
+		return;
+
+	hideTooltip();
+	if (mode == StellarX::ButtonMode::NORMAL)
+	{
+		SX_LOGI("Button") << "keyboard click: id=" << id
+			<< " callback=" << (onClickCallback ? "Y" : "N");
+		// 回调可能把当前 Button 加入删除队列；调用后不能再访问任何成员。
+		if (onClickCallback) onClickCallback();
+		return;
+	}
+
+	click = !click;
+	dirty = true;
+	markEventVisualChanged(true);
+	refreshTooltipTextForState();
+	requestRepaint(parent);
+	const bool toggledOn = click;
+	SX_LOGI("Button") << "keyboard toggle: id=" << id
+		<< " state=" << (toggledOn ? 1 : 0);
+	// 选中的回调可能排队删除当前对象，因此回调后不再访问成员。
+	if (toggledOn)
+	{
+		if (onToggleOnCallback) onToggleOnCallback();
+		return;
+	}
+	if (onToggleOffCallback) onToggleOffCallback();
 }
 
 void Button::tick(ULONGLONG nowMs)
@@ -561,11 +667,32 @@ void Button::setOnToggleOffListener(std::function<void()> callback)
 	this->onToggleOffCallback = std::move(callback);
 }
 
-void Button::setbuttonMode(StellarX::ButtonMode mode)
+void Button::setbuttonMode(StellarX::ButtonMode newMode)
 {
 	//取值范围参考 buttMode的枚举注释
-	this->mode = mode;
+	if (this->mode != newMode)
+		setKeyboardArmed(false, false);
+	this->mode = newMode;
 	dirty = true; // 标记需要重绘
+	notifyFocusSubtreeStateChanged();
+}
+
+void Button::setIsVisible(bool visible)
+{
+	if (!visible)
+		setKeyboardArmed(false, false);
+	Control::setIsVisible(visible);
+}
+
+void Button::onLogicalFocusChanged(bool focused, StellarX::FocusReason)
+{
+	if (!focused)
+		setKeyboardArmed(false, false);
+}
+
+void Button::onKeyboardRoutingSuspended()
+{
+	setKeyboardArmed(false, true);
 }
 
 void Button::setROUND_RECTANGLEwidth(int width)

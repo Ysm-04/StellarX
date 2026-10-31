@@ -262,6 +262,7 @@ void Table::initButton()
 			if (currentPage > 1)
 			{
 				--currentPage;
+				syncPageButtonStates();
 				SX_LOGI("Table")
 					<< SX_T("翻页：id=", "page change: id=") << id
 					<< " " << oldPage << "->" << currentPage
@@ -279,6 +280,7 @@ void Table::initButton()
 			if (currentPage < totalPages)
 			{
 				++currentPage;
+				syncPageButtonStates();
 				SX_LOGI("Table")
 					<< SX_T("翻页：id=", "page change: id=") << id
 					<< " " << oldPage << "->" << currentPage
@@ -289,7 +291,60 @@ void Table::initButton()
 				if (pageNum) pageNum->setDirty(true);
 			}
 		});
+	syncPageButtonStates();
 	isNeedButtonAndPageNum = false;
+}
+
+void Table::syncPageButtonStates()
+{
+	if (!prevButton || !nextButton)
+		return;
+
+	const bool visible = isShowPageButton;
+	const bool prevEnabled = visible && currentPage > 1;
+	const bool nextEnabled = visible && currentPage < totalPages;
+
+	// 先恢复可见性，确保后续焦点回退能解析到即将重新启用的真实 Button。
+	if (visible)
+	{
+		if (!prevButton->IsVisible())
+			prevButton->setIsVisible(true);
+		if (!nextButton->IsVisible())
+			nextButton->setIsVisible(true);
+	}
+
+	// 必须先启用新近可用的目标，再禁用当前失效目标。
+	// 例如“下一页”在末页失效时，FocusManager 才能回退到“上一页”。
+	if (prevEnabled && prevButton->getButtonMode() != StellarX::ButtonMode::NORMAL)
+		prevButton->setbuttonMode(StellarX::ButtonMode::NORMAL);
+	if (nextEnabled && nextButton->getButtonMode() != StellarX::ButtonMode::NORMAL)
+		nextButton->setbuttonMode(StellarX::ButtonMode::NORMAL);
+
+	// 分页区是一个复合焦点单元。通用 FocusManager 的失效回退按整棵
+	// 焦点树“先向后、再向前”搜索；若 Table 后面还有其它 Tab stop，
+	// 末页禁用 nextButton 时会越过分页区，而不是回到 prevButton。
+	// 对向 Button 必须先完成上面的启用，再在当前 Button 禁用前显式
+	// 转移焦点；两页 Table 的对向按钮正是在这次翻页中恢复可用。
+	// 请求失败或处于重入回合时，后续禁用仍会触发通用回退。
+	if (prevButton->hasLogicalFocus() && !prevEnabled && nextEnabled)
+		nextButton->requestFocus(StellarX::FocusReason::InvalidationFallback);
+	else if (nextButton->hasLogicalFocus() && !nextEnabled && prevEnabled)
+		prevButton->requestFocus(StellarX::FocusReason::InvalidationFallback);
+
+	if (!prevEnabled && prevButton->getButtonMode() != StellarX::ButtonMode::DISABLED)
+		prevButton->setbuttonMode(StellarX::ButtonMode::DISABLED);
+	if (!nextEnabled && nextButton->getButtonMode() != StellarX::ButtonMode::DISABLED)
+		nextButton->setbuttonMode(StellarX::ButtonMode::DISABLED);
+
+	// 隐藏最后执行：禁用先撤销键盘 armed 状态，随后可见性变化再统一
+	// 触发焦点树失效与回退；相同状态不重复写，避免无意义标脏。
+	if (!visible)
+	{
+		if (prevButton->IsVisible())
+			prevButton->setIsVisible(false);
+		if (nextButton->IsVisible())
+			nextButton->setIsVisible(false);
+	}
 }
 
 void Table::initPageNum()
@@ -430,7 +485,7 @@ void Table::setWidth(int width)
 
 void Table::setHeight(int height)
 {
-	// 当前阶段 Table 明确不支持纵向 Stretch。
+	// Table 不支持纵向 Stretch。
 	// 高度链路依赖表头、表体、页脚、按钮和页码计算，
 	// 因此这里保持空实现，避免被通用布局层错误拉高/压缩。
 }
@@ -439,8 +494,7 @@ Table::Table(int x, int y)
 	:Control(x, y, 0, 0)
 {
 	this->id = "Table";
-	// Table 当前正式能力边界：
-	// 仅允许 X 轴 Stretch，Y 轴固定尺寸。
+	// Table 只允许 X 轴 Stretch，Y 轴保持固定尺寸。
 	this->layoutCapability.allowStretchX = true;
 	this->layoutCapability.allowStretchY = false;
 }
@@ -451,7 +505,7 @@ void Table::applyResolvedLayoutRect(const StellarX::ResolvedLayoutRect& rect)
 {
 	// Table 不能像普通控件那样直接写入 width/height：
 	// 它的 setWidth() 内部会联动列宽与页脚布局，因此这里必须复用原有 setter 副作用。
-	// 同时 Table 的 Y Fixed 是当前版本的正式行为边界：
+	// Table 的 Y Fixed 是公开布局约定的一部分：
 	// 即便统一解算器给出了新的 rect.height，这里也不会接收该高度。
 	if (this->x != rect.worldX)
 		setX(rect.worldX);
@@ -639,7 +693,7 @@ bool Table::handleEvent(const ExMessage& msg)
 		}
 	}
 
-	// Table 当前还没有像 TabControl 那样把分页按钮做成可独立提交的内部绘制单元。
+	// Table 的分页按钮不是可独立提交的内部绘制单元。
 	// 因此只要内部按钮的 hover / click / leave 造成视觉变化，就必须把整张 Table 设脏，
 	// 让父容器通过现有的 Table::draw() 链把页脚区域正确重画出来。
 	if (anyVisualChanged)
@@ -659,6 +713,129 @@ bool Table::clearTransientMouseState()
 	if (prevButton && prevButton->clearTransientMouseState())
 		changed = true;
 	return changed;
+}
+
+bool Table::queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+	StellarX::FocusTargetSnapshot& snapshot) const
+{
+	if (Control::queryFocusTargetSnapshot(target, snapshot))
+		return true;
+	if (prevButton && prevButton->queryFocusTargetSnapshot(target, snapshot))
+		return true;
+	if (nextButton && nextButton->queryFocusTargetSnapshot(target, snapshot))
+		return true;
+	return false;
+}
+
+void Table::collectFocusTargetSnapshots(
+	std::vector<StellarX::FocusTargetSnapshot>& snapshots) const
+{
+	Control::collectFocusTargetSnapshots(snapshots);
+	StellarX::FocusTargetSnapshot snapshot;
+	if (prevButton && queryFocusTargetSnapshot({ prevButton->getHandle(), 0 }, snapshot))
+		snapshots.push_back(snapshot);
+	if (nextButton && queryFocusTargetSnapshot({ nextButton->getHandle(), 0 }, snapshot))
+		snapshots.push_back(snapshot);
+}
+
+bool Table::applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+	StellarX::FocusReason reason)
+{
+	if (Control::applyFocusState(target, focused, reason))
+		return true;
+	if (prevButton && prevButton->applyFocusState(target, focused, reason))
+	{
+		// 分页 Button 是 Table 的内部绘制单元，不能独立提交到屏幕。
+		// 焦点框出现或消失时必须把变化提升为整张 Table 重绘；否则只有
+		// Button 自己变脏，外层 Canvas 看不到 Table 的脏子树，焦点视觉会
+		// 一直等到下一次 hover/翻页等事件才刷新。
+		dirty = true;
+		requestRepaint(parent);
+		return true;
+	}
+	if (nextButton && nextButton->applyFocusState(target, focused, reason))
+	{
+		dirty = true;
+		requestRepaint(parent);
+		return true;
+	}
+	return false;
+}
+
+bool Table::dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+	StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result)
+{
+	if (Control::dispatchKeyEventToTarget(target, event, result))
+		return true;
+	if (prevButton && prevButton->dispatchKeyEventToTarget(target, event, result))
+		return true;
+	if (nextButton && nextButton->dispatchKeyEventToTarget(target, event, result))
+		return true;
+	return false;
+}
+
+bool Table::dispatchTextInputEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextInputEvent& event)
+{
+	if (Control::dispatchTextInputEventToTarget(target, event))
+		return true;
+	if (prevButton && prevButton->dispatchTextInputEventToTarget(target, event))
+		return true;
+	if (nextButton && nextButton->dispatchTextInputEventToTarget(target, event))
+		return true;
+	return false;
+}
+
+bool Table::dispatchCompositionEventToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedCompositionEvent& event)
+{
+	if (Control::dispatchCompositionEventToTarget(target, event))
+		return true;
+	if (prevButton && prevButton->dispatchCompositionEventToTarget(target, event))
+		return true;
+	if (nextButton && nextButton->dispatchCompositionEventToTarget(target, event))
+		return true;
+	return false;
+}
+
+bool Table::dispatchTextSelectionGestureToTarget(
+	const StellarX::FocusTargetId& target,
+	const StellarX::RoutedTextSelectionGestureEvent& event,
+	bool& accepted)
+{
+	if (Control::dispatchTextSelectionGestureToTarget(target, event, accepted))
+		return true;
+	if (prevButton && prevButton->dispatchTextSelectionGestureToTarget(
+		target, event, accepted)) return true;
+	if (nextButton && nextButton->dispatchTextSelectionGestureToTarget(
+		target, event, accepted)) return true;
+	return false;
+}
+
+bool Table::dispatchKeyboardSuspensionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Control::dispatchKeyboardSuspensionToTarget(target))
+		return true;
+	if (prevButton && prevButton->dispatchKeyboardSuspensionToTarget(target))
+		return true;
+	if (nextButton && nextButton->dispatchKeyboardSuspensionToTarget(target))
+		return true;
+	return false;
+}
+
+bool Table::dispatchKeyboardResumptionToTarget(
+	const StellarX::FocusTargetId& target)
+{
+	if (Control::dispatchKeyboardResumptionToTarget(target))
+		return true;
+	if (prevButton && prevButton->dispatchKeyboardResumptionToTarget(target))
+		return true;
+	if (nextButton && nextButton->dispatchKeyboardResumptionToTarget(target))
+		return true;
+	return false;
 }
 
 RECT Table::getManagedRepaintCoverageRect() const
@@ -696,7 +873,7 @@ RECT Table::getManagedRepaintCoverageRect() const
 
 RECT Table::getManagedRepaintPersistentCoverageRect() const
 {
-	// Table 当前仍按整表绘制保证正确性；分页按钮 Tooltip 属于临时浮层，
+	// Table 通过整表绘制保证一致性；分页按钮 Tooltip 属于临时浮层，
 	// 不能进入持久 coverage，否则可能污染外层兄弟控件快照。
 	RECT coverage = getBoundsRect();
 
@@ -749,6 +926,7 @@ void Table::setHeaders(std::initializer_list<std::string> headers)
 	isNeedDrawHeaders = true; // 标记需要重新绘制表头
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	syncPageButtonStates();
 
 }
 
@@ -765,6 +943,7 @@ void Table::setData(std::vector<std::string> data)
 	isNeedCellSize = true;
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	syncPageButtonStates();
 
 	SX_LOGI("Table")
 		<< SX_T("新增Data：id=", "appendRow: id=") << id
@@ -789,6 +968,7 @@ void Table::setData(std::initializer_list<std::vector<std::string>> data)
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	syncPageButtonStates();
 	SX_LOGI("Table")
 		<< SX_T("新增多行Data：id=", "appendRows: id=") << id
 		<< SX_T(" 新增行数=", " addedRows=") << addedRows
@@ -809,12 +989,15 @@ void Table::setRowsPerPage(int rows)
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedButtonAndPageNum = true;
 	dirty = true;
+	syncPageButtonStates();
 }
 
 void Table::showPageButton(bool isShow)
 {
 	this->isShowPageButton = isShow;
+	this->isNeedButtonAndPageNum = true;
 	this->dirty = true;
+	syncPageButtonStates();
 }
 
 void Table::setTableBorder(COLORREF color)
@@ -868,6 +1051,7 @@ void Table::clearHeaders()
 	isNeedDrawHeaders = true; // 标记需要重新绘制表头
 	isNeedButtonAndPageNum = true;// 标记需要重新计算翻页按钮和页码信息
 	dirty = true;
+	notifyFocusSubtreeStateChanged();
 	SX_LOGI("Table") << SX_T("清除表头：id=","clearHeaders: id=" )<< id;
 
 }
@@ -880,6 +1064,7 @@ void Table::clearData()
 	isNeedCellSize = true; // 标记需要重新计算单元格尺寸
 	isNeedButtonAndPageNum = true;// 标记需要重新计算翻页按钮和页码信息
 	dirty = true;
+	syncPageButtonStates();
 	SX_LOGI("Table") << SX_T("清除表格数据：id=","clearData: id=") << id;
 }
 

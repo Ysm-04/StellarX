@@ -64,7 +64,7 @@ namespace StellarX
         if (rotateBytes > 0) rotateIfNeeded();
     }
 
-    // flush 文件缓冲
+    // 刷新文件缓冲区。
     void FileSink::flush()
     {
         if (ofs.is_open()) ofs.flush();

@@ -33,13 +33,24 @@
 #include <functional>
 #include <atomic>
 #include "CoreTypes.h"
+#include "KeyboardRouting.h"
+#include "TextInputRouting.h"
+#include "TextSelectionRouting.h"
 
 class Window;
 
+namespace StellarX
+{
+	class FocusManager;
+}
+
+/// 所有 StellarX 控件的抽象基类，定义几何、布局、输入、焦点和重绘协议。
 class Control
 {
 	friend class Window;
 	friend class Canvas;
+	friend class Table;
+	friend class TabControl;
 protected:
 	inline static std::atomic<std::uint64_t> nextHandleValue{ 1 };
 	// 句柄随控件构造生成，容器只通过句柄排队删除，避免遍历期间直接持有失效指针。
@@ -52,12 +63,15 @@ protected:
 	bool dirty = true; // 是否重绘
 	bool show = true; // 是否显示
 	bool eventVisualChanged = false; // 最近一次 handleEvent 是否真的引发了视觉变化（用于上层判断是否需要登记重绘）
+	StellarX::FocusPolicy focusPolicy = StellarX::FocusPolicy::None; // 逻辑焦点入口能力
+	std::int32_t tabIndex = 0; // 同一作用域内的显式 Tab 顺序；相同时保持树顺序
+	bool logicalFocused = false; // 仅由 FocusManager 提交，控件不得自行切换
 
 	/* == 布局模式 == */
 	StellarX::LayoutMode layoutMode = StellarX::LayoutMode::Fixed;  // 布局模式
-	StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 旧版兼容锚点 1
-	StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 旧版兼容锚点 2
-	// 新布局模型：内部统一使用“水平轴 + 垂直轴”的规格描述，不再直接依赖旧锚点求解。
+	StellarX::Anchor anchor_1 = StellarX::Anchor::Top; // 双锚点兼容值 1
+	StellarX::Anchor anchor_2 = StellarX::Anchor::Right; // 双锚点兼容值 2
+	// 统一布局模型使用“水平轴 + 垂直轴”的规格描述；双锚点接口会先映射到此结构再参与解算。
 	StellarX::LayoutSpec layoutSpec{
 		{ false, true, StellarX::AxisSizePolicy::FixedSize, StellarX::AxisAlignPolicy::End },
 		{ true, false, StellarX::AxisSizePolicy::FixedSize, StellarX::AxisAlignPolicy::Start }
@@ -185,10 +199,25 @@ public:
 	// 绘制入口。实现应只在 dirty/show 条件满足时写屏，并在完成后清理 dirty。
 	virtual void draw() = 0;
 	// 事件入口。返回 true 表示事件已消费；若事件造成视觉变化，应设置 eventVisualChanged 并请求重绘。
+	// Pointer 事件会转换为等价 ExMessage 后进入此接口；EasyX EX_MOUSE/EX_KEY
+	// 原始队列只负责排空，不直接向控件交付业务消息。
+	// 派生控件的键盘逻辑应实现 handleKeyEvent()；handleEvent(EX_KEY) 不会被调用。
 	virtual bool handleEvent(const ExMessage& msg) = 0;
+	// 定向键盘入口。默认空实现让不处理键盘的派生控件无需额外实现；
+	// KeyboardRouter 在句柄解析与 mutation 边界内逐节点调用。
+	virtual StellarX::KeyRouteResult handleKeyEvent(StellarX::RoutedKeyEvent&) { return {}; }
+	// 定向文字入口。文字只投递给一个焦点叶子且不冒泡；
+	// 默认空实现与默认 acceptsTextInput()==false 保证普通控件不会误收文字。
+	virtual void handleTextInputEvent(const StellarX::RoutedTextInputEvent&) {}
+	// IME 临时组合串只定向投递到组合轮次绑定的稳定焦点叶节点。
+	// 它属于瞬时视图状态，不得写入正式编辑模型。
+	virtual void handleCompositionEvent(const StellarX::RoutedCompositionEvent&) {}
+	// 定向选区手势入口。返回 true 表示目标接受该手势阶段。
+	virtual bool handleTextSelectionGesture(
+		const StellarX::RoutedTextSelectionGestureEvent&) { return false; }
 	// 轻量清理接口：仅用于“没有机会收到本次 WM_MOUSEMOVE”的兄弟分支，
 	// 清掉 hover / tooltip / 临时按下态等鼠标瞬时状态。
-	// 该接口不是事件分发入口，不参与新的命中判断，也不允许回写设计基线。
+	// 该接口不是事件分发入口，不执行额外命中判断，也不允许回写设计基线。
 	virtual bool clearTransientMouseState();
 	// 由 Window 驱动的单调时钟更新；动画、延时提示等不得依赖额外鼠标消息。
 	virtual void tick(ULONGLONG) {}
@@ -196,10 +225,12 @@ public:
 	virtual void setIsVisible(bool show);
 	// 设置父容器指针；通常由容器接管子控件时调用。
 	void setParent(Control* newParent) { parent = newParent; }
-	//设置宿主窗口（通常仅由顶层 Window/对话框注入）
+	// 设置宿主窗口（通常仅由顶层 Window/对话框注入）。
 	virtual void setHostWindow(Window* host) { this->hostWindow = host; }
-	Window* getHostWindow() const;                         // 获取宿主 Window；子控件可沿 parent 向上回溯
-	RECT getBoundsRect() const;                           // 获取当前控件外接矩形，用于覆盖/相交判断
+	// 获取宿主 Window；子控件可沿 parent 向上回溯。
+	Window* getHostWindow() const;
+	// 获取当前控件外接矩形，用于覆盖和相交判断。
+	RECT getBoundsRect() const;
 	// 获取本控件“本轮实际可能写到屏幕上的覆盖范围”。
 	// 默认等于控件本体矩形；像 Button 这类会额外绘制 Tooltip 的控件，可 override 后扩大范围。
 	// 托管重绘 coverage、overlay 相交判断统一走这个接口，而不再默认使用控件本体 bounds。
@@ -226,6 +257,19 @@ public:
 	std::string getId() const { return id; }
 	// 返回稳定句柄而非对象地址；调用方不得据此推断控件当前仍在容器中。
 	StellarX::ControlHandle getHandle() const noexcept { return handle; }
+	// 申请逻辑焦点。回调重入时请求会进入 FocusManager 当前回合的单槽 pending。
+	StellarX::FocusChangeResult requestFocus(
+		StellarX::FocusReason reason = StellarX::FocusReason::Programmatic);
+	// 设置焦点入口策略；修改后若当前焦点不再有效，会立即进入焦点回退。
+	void setFocusPolicy(StellarX::FocusPolicy policy);
+	// 获取当前焦点入口策略。
+	StellarX::FocusPolicy getFocusPolicy() const noexcept { return focusPolicy; }
+	// 设置同一作用域内的显式 Tab 顺序；值相同时继续保持稳定树顺序。
+	void setTabIndex(std::int32_t value);
+	// 获取当前显式 Tab 顺序。
+	std::int32_t getTabIndex() const noexcept { return tabIndex; }
+	// 查询本控件当前是否持有逻辑焦点。
+	bool hasLogicalFocus() const noexcept { return logicalFocused; }
 	// 检查控件当前是否处于待重绘状态。
 	bool isDirty() { return dirty; }
 	//获取控件最近一次事件处理是否引发了视觉变化
@@ -233,17 +277,17 @@ public:
 	// 判断控件是否为模态对话框；普通控件应返回 false。
 	virtual bool model()const = 0;
 	//布局
-	// 设置旧版布局模式（兼容入口）
+	// 设置布局模式的兼容入口。
 	void setLayoutMode(StellarX::LayoutMode layoutMode_);
-	// 设置旧版双锚点输入，并映射到内部统一 LayoutSpec
+	// 设置双锚点兼容值，并映射到内部统一 LayoutSpec。
 	void setAnchor(StellarX::Anchor anchor_1, StellarX::Anchor anchor_2);
 	// 直接设置水平轴布局规格。
 	// 调用该接口后会自动切换到 AnchorToEdges 布局模式；
-	// 这是新布局模型的公开入口，后设置者会覆盖旧 setAnchor() 对水平轴的映射结果。
+	// 若晚于 setAnchor() 调用，将覆盖双锚点映射出的水平轴规则。
 	void setHorizontalLayoutSpec(const StellarX::AxisLayoutSpec& spec);
 	// 直接设置垂直轴布局规格。
 	// 调用该接口后会自动切换到 AnchorToEdges 布局模式；
-	// 这是新布局模型的公开入口，后设置者会覆盖旧 setAnchor() 对垂直轴的映射结果。
+	// 若晚于 setAnchor() 调用，将覆盖双锚点映射出的垂直轴规则。
 	void setVerticalLayoutSpec(const StellarX::AxisLayoutSpec& spec);
 	// 设置水平轴锚定边集合（left / right）。
 	void setHorizontalAnchors(bool left, bool right);
@@ -257,15 +301,15 @@ public:
 	void setHorizontalAlignPolicy(StellarX::AxisAlignPolicy policy);
 	// 设置垂直轴固定尺寸位移策略（Start / End / Center / Proportional）。
 	void setVerticalAlignPolicy(StellarX::AxisAlignPolicy policy);
-	// 获取旧版锚点 1（兼容读取入口）
+	// 读取第一个双锚点兼容值。
 	StellarX::Anchor getAnchor_1() const;
-	// 获取旧版锚点 2（兼容读取入口）
+	// 读取第二个双锚点兼容值。
 	StellarX::Anchor getAnchor_2() const;
-	// 获取旧版布局模式
+	// 读取兼容布局模式。
 	StellarX::LayoutMode getLayoutMode() const;
-	// 获取水平轴布局规格；返回的是当前生效的新模型状态，不要求可逆回旧 anchor 语义。
+	// 获取当前生效的水平轴布局规格；结果不保证可还原为双锚点表示。
 	StellarX::AxisLayoutSpec getHorizontalLayoutSpec() const;
-	// 获取垂直轴布局规格；返回的是当前生效的新模型状态，不要求可逆回旧 anchor 语义。
+	// 获取当前生效的垂直轴布局规格；结果不保证可还原为双锚点表示。
 	StellarX::AxisLayoutSpec getVerticalLayoutSpec() const;
 	// 获取内部统一布局规格；供 Window / Canvas 等统一解算入口使用。
 	const StellarX::LayoutSpec& getLayoutSpec() const;
@@ -278,6 +322,58 @@ public:
 	// - 仅用于少数需要把当前结果固化为新设计基线的场景
 	void commitCurrentGeometryAsDesignRect();
 protected:
+	// 焦点参与协议：默认节点只解析 {本控件句柄, 0}；复合控件递归转发给真实子 Control。
+	virtual bool queryFocusTargetSnapshot(const StellarX::FocusTargetId& target,
+		StellarX::FocusTargetSnapshot& snapshot) const;
+	// 收集本节点或受管理子树中的焦点参与快照。
+	virtual void collectFocusTargetSnapshots(
+		std::vector<StellarX::FocusTargetSnapshot>& snapshots) const;
+	// 对稳定目标身份应用或清除逻辑焦点状态。
+	virtual bool applyFocusState(const StellarX::FocusTargetId& target, bool focused,
+		StellarX::FocusReason reason);
+	// 键盘路由按稳定身份逐节点重新解析；返回 true 仅表示本次找到并调用了目标。
+	// 实现不得把解析得到的 Control* 暴露到当前调用之外，回调返回后也不得再次访问目标。
+	virtual bool dispatchKeyEventToTarget(const StellarX::FocusTargetId& target,
+		StellarX::RoutedKeyEvent& event, StellarX::KeyRouteResult& result);
+	// 文字路由按稳定身份递归解析，但只调用身份完全匹配的叶子一次。
+	virtual bool dispatchTextInputEventToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextInputEvent& event);
+	// IME 组合路由按稳定身份递归解析，并只投递给身份完全匹配的叶子。
+	virtual bool dispatchCompositionEventToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedCompositionEvent& event);
+	// 选区手势与文字相同按稳定身份单点投递，但通过独立动态能力允许
+	// READONLY TextBox 选择文本而不接受文字修改。
+	virtual bool dispatchTextSelectionGestureToTarget(
+		const StellarX::FocusTargetId& target,
+		const StellarX::RoutedTextSelectionGestureEvent& event,
+		bool& accepted);
+	// 失活或模态隔离时按稳定身份取消键盘瞬时交互；Button 会覆盖
+	// onKeyboardRoutingSuspended()，清理自身的 keyboard armed 状态。
+	virtual bool dispatchKeyboardSuspensionToTarget(
+		const StellarX::FocusTargetId& target);
+	// 当前控件成为活动焦点路径时，清理不应跨窗口失活保留的瞬时键盘状态。
+	virtual void onKeyboardRoutingSuspended() {}
+	// 窗口重新激活时按稳定身份恢复只属于活动焦点路径的瞬时状态。
+	virtual bool dispatchKeyboardResumptionToTarget(
+		const StellarX::FocusTargetId& target);
+	// 当前控件在窗口恢复激活后重新建立只属于活动焦点路径的瞬时状态。
+	virtual void onKeyboardRoutingResumed() {}
+	// 各控件动态提供 enabled 语义；Button 会根据 DISABLED 模式覆盖。
+	virtual bool isFocusEnabled() const { return true; }
+	// 动态文字能力；普通控件默认不接收文字。
+	virtual bool acceptsTextInput() const { return false; }
+	// 动态内联组合能力；普通控件默认继续使用系统组合界面。
+	virtual bool supportsInlineComposition() const { return false; }
+	// 动态文本选择能力；普通控件默认不接收选区手势。
+	virtual bool supportsTextSelection() const { return false; }
+	// 派生控件可响应焦点变化；回调允许安全地请求焦点或排队修改控件树。
+	virtual void onLogicalFocusChanged(bool, StellarX::FocusReason) {}
+	// 返回本控件及其全部祖先当前是否有效可见。
+	bool isEffectivelyVisible() const;
+	// 通知 FocusManager 重新验证本子树的可见、启用和焦点策略状态。
+	void notifyFocusSubtreeStateChanged();
 	// 容器和窗口在事件、绘制、tick 期间进入事务；具体容器在最外层结束时提交队列。
 	MutationScope enterMutationScope() { return MutationScope(this); }
 	// 进入子树结构变更事务。默认向父容器或宿主 Window 传播，使整棵树共享同一提交边界。

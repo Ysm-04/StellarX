@@ -10,7 +10,7 @@
  *       - 命中时构造 SxLogLine，使用 operator<< 拼接内容
  *       - 语句结束时 SxLogLine 析构，统一提交到 SxLogger::logLine 输出
  *
- *     输出通道（Sink）目前提供：
+ *     输出通道（Sink）包括：
  *       - ConsoleSink: 写入 std::cout（不走 WinAPI 调试输出通道）
  *       - FileSink: 写入文件，支持按字节阈值滚动
  *
@@ -34,8 +34,8 @@
  * @作者: 我在人间做废物
  ********************************************************************************/
 
- // SxLog.h - header-only interface (implementation in SxLog.cpp)
- // Pure standard library: std::cout and optional file sink.
+// SxLog.h 只提供公开接口，实现位于 SxLog.cpp。
+// 输出层仅依赖标准库：std::cout 与可选文件输出通道。
 
 #include <atomic>
 #include <chrono>
@@ -82,9 +82,9 @@ namespace StellarX
     };
 
     /* ========================= Tag 过滤模式 ========================= */
-    // None      : 不过滤，全部输出
-    // Whitelist : 只输出 tagList 中包含的 tag
-    // Blacklist : 输出除 tagList 以外的 tag
+    // None（不过滤）：全部输出
+    // Whitelist（白名单）：只输出 tagList 中包含的标签
+    // Blacklist（黑名单）：输出 tagList 以外的标签
     enum class SxTagFilterMode : int
     {
         None = 0,
@@ -121,6 +121,7 @@ namespace StellarX
     class ILogSink
     {
     public:
+        /// 通过基类安全释放具体输出通道。
         virtual ~ILogSink() = default;
 
         // 返回 Sink 名称，用于调试识别（例如 "console"/"file"）
@@ -166,8 +167,8 @@ namespace StellarX
         const char* name() const override { return "file"; }
 
         // 打开文件
-        // path   : 文件路径
-        // append : true 追加写；false 清空重写
+        // path 参数：文件路径
+        // append 参数：true 表示追加写入，false 表示清空后重写
         bool open(const std::string& path, bool append);
 
         // 关闭文件（安全可重复调用）
@@ -230,8 +231,8 @@ namespace StellarX
         SxLogLanguage getLanguage() const;
 
         // 设置 Tag 过滤
-        // mode: None/Whitelist/Blacklist
-        // tags: 过滤列表（精确匹配）
+        // mode 参数：选择不过滤、白名单或黑名单模式
+        // tags 参数：参与精确匹配的过滤列表
         void setTagFilter(SxTagFilterMode mode, const std::vector<std::string>& tags);
 
         // 清空 Tag 过滤（恢复 None）
@@ -241,9 +242,9 @@ namespace StellarX
         void enableConsole(bool enable);
 
         // 开启文件输出
-        // path       : 文件路径
-        // append     : 追加写/清空写
-        // rotateBytes: 滚动阈值（0 不滚动）
+        // path 参数：文件路径
+        // append 参数：选择追加写入或清空后写入
+        // rotateBytes 参数：滚动阈值，0 表示不滚动
         // 返回值：是否打开成功
         bool enableFile(const std::string& path, bool append = true, std::size_t rotateBytes = 0);
 
@@ -381,7 +382,7 @@ namespace StellarX
     private:
         bool enabled = false;    // 是否启用（未启用则析构无输出）
         SxLogLevel lvl = SxLogLevel::Trace;  // 级别（通常用 Trace）
-        const char* tg = nullptr;            // Tag
+        const char* tg = nullptr;            // 日志 Tag
         const char* srcFile = nullptr;       // 源文件
         int srcLine = 0;                     // 行号
         const char* srcFunc = nullptr;       // 函数
@@ -389,7 +390,7 @@ namespace StellarX
         std::chrono::steady_clock::time_point t0; // 起始时间点
     };
 
-} // namespace StellarX
+} // StellarX 命名空间
 
 #if SX_LOG_ENABLE
 

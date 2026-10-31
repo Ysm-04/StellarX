@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 
-project(StellarX VERSION 4.0.0 LANGUAGES CXX)
+project(StellarX VERSION 4.1.0 LANGUAGES CXX)
 
 option(STELLARX_BUILD_EXAMPLES "Build the standalone StellarX examples" OFF)
 option(STELLARX_USE_STATIC_MSVC_RUNTIME "Use the static MSVC runtime (/MT or /MTd)" OFF)
@@ -22,21 +22,67 @@ set(STELLARX_SOURCES
     src/Canvas.cpp
     src/Control.cpp
     src/Dialog.cpp
+    src/FocusManager.cpp
+    src/KeyboardRouter.cpp
     src/Label.cpp
     src/MessageBox.cpp
+    src/SxImeCaretAnchor.cpp
+    src/SxInputProbe.cpp
     src/SxLog.cpp
+    src/SxNativeInput.cpp
+    src/SxTextEditController.cpp
+    src/SxTextEditModel.cpp
+    src/SxTextSelectionGesture.cpp
+    src/SxUnicode.cpp
+    src/SxWideTextView.cpp
     src/TabControl.cpp
     src/Table.cpp
     src/TextBox.cpp
+    src/TextInputRouter.cpp
     src/Window.cpp
+)
+
+set(STELLARX_PUBLIC_HEADERS
+    include/StellarX/Button.h
+    include/StellarX/Canvas.h
+    include/StellarX/Control.h
+    include/StellarX/CoreTypes.h
+    include/StellarX/Dialog.h
+    include/StellarX/FocusManager.h
+    include/StellarX/InputEvents.h
+    include/StellarX/KeyboardRouting.h
+    include/StellarX/Label.h
+    include/StellarX/MessageBox.h
+    include/StellarX/StellarX.h
+    include/StellarX/SxLog.h
+    include/StellarX/TabControl.h
+    include/StellarX/Table.h
+    include/StellarX/TextBox.h
+    include/StellarX/TextInputRouting.h
+    include/StellarX/TextSelectionRouting.h
+    include/StellarX/Window.h
 )
 
 set(STELLARX_PRIVATE_HEADERS
     src/internal/SxEventLoopInternal.h
+    src/internal/SxImeCaretAnchorInternal.h
+    src/internal/SxInputProbeInternal.h
+    src/internal/SxKeyboardRouterInternal.h
+    src/internal/SxNativeInputInternal.h
+    src/internal/SxTextEditControllerInternal.h
+    src/internal/SxTextEditModelInternal.h
+    src/internal/SxTextInputRouterInternal.h
     src/internal/SxTextInternal.h
+    src/internal/SxTextSelectionGestureInternal.h
+    src/internal/SxUnicodeInternal.h
+    src/internal/SxWideTextViewInternal.h
 )
 
-add_library(StellarX STATIC ${STELLARX_SOURCES} ${STELLARX_PRIVATE_HEADERS})
+add_library(StellarX STATIC
+    ${STELLARX_SOURCES}
+    ${STELLARX_PUBLIC_HEADERS}
+    ${STELLARX_PRIVATE_HEADERS}
+)
 target_include_directories(StellarX
     PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/StellarX"
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/internal"
@@ -70,7 +116,13 @@ if(MSVC)
         message(FATAL_ERROR "EasyXa.lib not found. Install EasyX for Visual Studio or set EASYX_ROOT.")
     endif()
 
-    target_link_libraries(StellarX PUBLIC "${STELLARX_EASYX_LIBRARY}" user32 gdi32 shell32)
+    target_link_libraries(StellarX PUBLIC
+        "${STELLARX_EASYX_LIBRARY}"
+        user32
+        gdi32
+        shell32
+        imm32
+    )
 endif()
 
 if(STELLARX_BUILD_EXAMPLES)

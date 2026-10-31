@@ -6,10 +6,16 @@
  *     这是框架的类型系统基础，所有控件都依赖于此文件中定义的类型。
  *
  * @作者: 我在人间做废物
- * @日期: September 2025
+ * @日期: 2025 年 9 月
  ******************************************************************************/
 #pragma once
 
+#ifndef _WIN32_WINNT
+#define _WIN32_WINNT 0x0600
+#endif
+#ifndef WINVER
+#define WINVER _WIN32_WINNT
+#endif
 #include "easyx.h"
 #include <cstdint>
 #include <string>
@@ -54,6 +60,7 @@ namespace StellarX
 	 */
 	struct ControlHandle
 	{
+		/// 进程内单调分配的原始身份值；0 表示无效句柄。
 		std::uint64_t value = 0;
 
 		// 判断句柄是否有效；value 为 0 时返回 false。
@@ -62,6 +69,182 @@ namespace StellarX
 		bool operator==(const ControlHandle& other) const noexcept { return value == other.value; }
 		// 比较两个句柄是否指向不同控件身份。
 		bool operator!=(const ControlHandle& other) const noexcept { return value != other.value; }
+	};
+
+	/**
+	 * @结构体名称: FocusTargetId
+	 * @功能描述: 表示一个逻辑焦点参与节点的稳定身份
+	 *
+	 * @详细说明:
+	 * owner 指向拥有该焦点节点的 Control。subNode 为 0 表示 Control 本身；框架
+	 * 当前公开的焦点节点都使用该形式，调用方不应自行构造非 0 的内部节点编号。
+	 * ControlHandle 在进程内单调分配且不复用，因此本结构不额外复制 generation。
+	 */
+	struct FocusTargetId
+	{
+		/// 拥有该焦点节点的控件句柄。
+		ControlHandle owner{};
+		/// 控件内部轻量节点编号；0 表示控件本身。
+		std::uint32_t subNode = 0;
+
+		/// 判断焦点身份是否有效。
+		explicit operator bool() const noexcept { return static_cast<bool>(owner); }
+		/// 比较两个焦点身份是否完全一致。
+		bool operator==(const FocusTargetId& other) const noexcept
+		{
+			return owner == other.owner && subNode == other.subNode;
+		}
+		/// 比较两个焦点身份是否不同。
+		bool operator!=(const FocusTargetId& other) const noexcept { return !(*this == other); }
+	};
+
+	// 标识一个 Window 内的逻辑焦点作用域。0 表示无效，根作用域由 FocusManager 创建。
+	struct FocusScopeId
+	{
+		/// Window 内单调分配的作用域值；0 表示无效作用域。
+		std::uint64_t value = 0;
+
+		/// 判断作用域身份是否有效。
+		explicit operator bool() const noexcept { return value != 0; }
+		/// 比较两个作用域身份是否相同。
+		bool operator==(const FocusScopeId& other) const noexcept { return value == other.value; }
+		/// 比较两个作用域身份是否不同。
+		bool operator!=(const FocusScopeId& other) const noexcept { return value != other.value; }
+	};
+
+	// 控件声明自己允许通过哪些入口获得逻辑焦点。
+	enum class FocusPolicy : std::uint8_t
+	{
+		None = 0,              ///< 不允许获得逻辑焦点。
+		Programmatic = 1u << 0, ///< 允许程序主动申请焦点。
+		Pointer = 1u << 1,     ///< 允许通过 Pointer 点击获得焦点。
+		Tab = 1u << 2          ///< 允许进入 Tab 遍历顺序。
+	};
+
+	/// 合并两组焦点入口策略。
+	constexpr FocusPolicy operator|(FocusPolicy left, FocusPolicy right) noexcept
+	{
+		return static_cast<FocusPolicy>(static_cast<std::uint8_t>(left) |
+			static_cast<std::uint8_t>(right));
+	}
+
+	/// 计算两组焦点入口策略的交集。
+	constexpr FocusPolicy operator&(FocusPolicy left, FocusPolicy right) noexcept
+	{
+		return static_cast<FocusPolicy>(static_cast<std::uint8_t>(left) &
+			static_cast<std::uint8_t>(right));
+	}
+
+	/// 判断 value 是否包含指定焦点入口策略。
+	constexpr bool hasFocusPolicy(FocusPolicy value, FocusPolicy flag) noexcept
+	{
+		return (value & flag) != FocusPolicy::None;
+	}
+
+	/// 一次焦点变化请求的来源。
+	enum class FocusReason : std::uint8_t
+	{
+		Programmatic,       ///< 程序主动申请。
+		Pointer,            ///< Pointer 点击命中。
+		TabTraversal,       ///< 普通 Tab 顺序遍历。
+		TabRoving,          ///< 复合控件内部 roving-tab-stop 移动。
+		ScopeActivation,    ///< 新焦点作用域激活。
+		ScopeRestore,       ///< 作用域退出后的焦点恢复。
+		InvalidationFallback ///< 当前焦点失效后的回退。
+	};
+
+	// FocusManager 的可断言结果；ReentrancyLimit 是独立错误，不依赖日志判断。
+	enum class FocusError : std::uint8_t
+	{
+		None,              ///< 没有错误。
+		InvalidTarget,     ///< 目标身份无效或已失效。
+		NotFocusable,      ///< 目标策略不允许本次入口获得焦点。
+		NotVisible,        ///< 目标或其祖先不可见。
+		Disabled,          ///< 目标当前禁用。
+		OutsideActiveScope, ///< 目标不在活动焦点作用域中。
+		InvalidScope,      ///< 作用域身份或层级无效。
+		ReentrancyLimit    ///< 焦点重入事务超过活性保护上限。
+	};
+
+	/// 焦点变化请求的可断言结果。
+	struct FocusChangeResult
+	{
+		/// 本次请求是否实际改变了焦点身份。
+		bool changed = false;
+		/// 请求结果错误码。
+		FocusError error = FocusError::None;
+		/// 请求处理完成后的当前焦点身份。
+		FocusTargetId focused{};
+	};
+
+	/**
+	 * 当前焦点叶子发布给原生 IME 的最小 caret 锚点值。
+	 *
+	 * 坐标均为宿主 HWND 客户区坐标；clientPoint 是 caret 底部落点，
+	 * clientLineRect 是当前单行文字区域，供 CFS_EXCLUDE 避让候选窗；
+	 * clientEditRect 是完整文本编辑命中区，供属主线程判断 Pointer 是否
+	 * 离开旧文本叶子。
+	 * publicationGeneration 由 Window 的跨线程发布器填写，控件只提供
+	 * target/scope、布局代次和几何。该结构不拥有控件、视图或 HDC。
+	 */
+	struct ImeCaretAnchorSnapshot
+	{
+		/// 发布该锚点的焦点目标。
+		FocusTargetId target{};
+		/// 发布时目标所属焦点作用域。
+		FocusScopeId scope{};
+		/// HWND 客户区中的候选窗定位点，通常为 caret 底端。
+		POINT clientPoint{};
+		/// HWND 客户区中的当前文字行矩形。
+		RECT clientLineRect{};
+		// 焦点文字叶节点拥有的完整客户区编辑表面。WndProc 只使用这份不可变
+		// 几何区分“同一编辑器内点击”和“Pointer 离开”；HWND 属主线程绝不
+		// 解析 target 背后的 Control。
+		RECT clientEditRect{};
+		/// 控件文字布局发生变化时递增的代次。
+		std::uint64_t layoutGeneration = 0;
+		/// Window 每次跨线程发布锚点时递增的代次。
+		std::uint64_t publicationGeneration = 0;
+		/// 当前快照是否可用于原生 IME 定位。
+		bool valid = false;
+	};
+
+	/**
+	 * 焦点参与协议的瞬时快照。
+	 * 所有布尔值只对采集时刻有效；任何用户回调结束后都必须重新解析并拉取新快照。
+	 */
+	struct FocusTargetSnapshot
+	{
+		/// 当前焦点节点的稳定身份。
+		FocusTargetId id{};
+		/// 当前节点的逻辑父焦点身份。
+		FocusTargetId logicalParent{};
+		/// 当前节点所属焦点作用域。
+		FocusScopeId scope{};
+		/// 当前节点允许的焦点入口集合。
+		FocusPolicy policy = FocusPolicy::None;
+		/// 采集时节点及其祖先是否有效可见。
+		bool visible = false;
+		/// 采集时节点是否启用。
+		bool enabled = false;
+		/// 采集时节点是否允许通过任一入口获得焦点。
+		bool focusable = false;
+		/// 采集时节点是否进入普通 Tab 遍历顺序。
+		bool tabStop = false;
+		// 定向 TextInputEvent 路由使用的动态叶节点能力。只读或非文字控件
+		// 返回 false，但不会因此丢失逻辑焦点。
+		bool acceptsTextInput = false;
+		// 只有能够自行绘制 IME 临时组合串的叶节点才返回 true。仅当焦点目标
+		// 发布该能力时，WndProc 才能抑制系统默认组合窗。
+		bool supportsInlineComposition = false;
+		// 选区能力与文字修改能力独立：只读文本可支持 caret/选区，同时拒绝
+		// TextInputEvent 投递。
+		bool supportsTextSelection = false;
+		/// 同一作用域内的显式 Tab 顺序。
+		std::int32_t tabIndex = 0;
+		// 焦点文字叶节点提供的可选客户区 IME 锚点。FocusManager 会在发布前
+		// 把 target/scope 重新绑定到当前新鲜快照。
+		ImeCaretAnchorSnapshot imeCaretAnchor{};
 	};
 
 	/**
@@ -554,8 +737,8 @@ namespace StellarX
 	 * @摘要: 控件能力边界，声明控件在哪些轴上允许 Stretch
 	 * @详细说明:
 	 *   规则表负责定义“某种组合如何解算”，LayoutCapability 负责声明
-	 *   “该控件是否允许采用这种组合”。例如 Table 当前阶段仅允许 X 轴拉伸，
-	 *   因此 allowStretchY 会被显式关闭。
+	 *   “该控件是否允许采用这种组合”。Table 只支持 X 轴拉伸，因此会显式
+	 *   关闭 allowStretchY。
 	 *
 	 * @成员说明:
 	 * bool allowStretchX - 是否允许该控件在水平轴使用 Stretch 尺寸策略。
