@@ -7,6 +7,55 @@ StellarX 项目所有显著的变化都将被记录在这个文件中。
 
 [English document](CHANGELOG.en.md)
 
+## [v4.1.0] - 2026-10-31
+
+v4.1.0 建立统一的焦点与输入路由，并将 TextBox 从外部 InputBox 交互替换为 UTF-16 单行自绘编辑器。本版本对自定义控件的键盘接入方式和二进制布局有兼容性影响，升级前请阅读“兼容性与迁移”。
+
+### 新增
+
+- 新增 `FocusTargetId`、`FocusTargetSnapshot`、`FocusManager` 与焦点作用域，支持点击聚焦、Tab/Shift+Tab 遍历、重入请求、控件删除回退、窗口失活暂停和 Dialog 隔离。
+- 新增 `KeyEvent`、`TextInputEvent`、`CompositionEvent`、Pointer 事件及严格递增的统一输入序列；跨线程队列在分配失败时显式 fail-stop，不静默丢弃输入。
+- 新增 `KeyboardRouter`、`TextInputRouter`、组合串路由和文字选区手势管理器；按键可冒泡，文字、组合串和选区手势按稳定身份单点投递。
+- 新增 TextBox UTF-16 编辑模型、宽字符布局、caret、鼠标拖选、水平滚动、剪贴板命令和 Unicode scalar 安全的移动/删除。
+- 新增 `TextBox::setTextUtf16()`、`getTextUtf16()`、`tryGetText()`；原有 `std::string` API 继续作为 Windows ACP 兼容边界。
+- 新增 IME caret/文本行锚点发布与属主线程定位链，支持系统候选窗预定位、组合串内联绘制和跨 TextBox 取消。
+
+### 变更
+
+- 生产键盘与 Pointer 业务源切换到规范化原生输入队列；EasyX `EX_KEY` / `EX_MOUSE` 仍会排空，但不再直接投递业务输入。
+- `Control` 新增焦点、键盘、文字、组合串、选区和路由暂停/恢复虚接口；自定义控件的键盘逻辑应放入 `handleKeyEvent()`。
+- Button 支持焦点视觉、`Space` 松开激活、`Enter` 按下激活，以及失活、焦点变化和 Escape 时取消按压态。
+- TextBox 改为单行宽字符自绘；最大长度按 Unicode scalar 计数，只读模式允许选择/复制，密码模式阻止敏感剪贴板操作。
+- Table 分页按钮和 TabControl 页签以真实 Button 句柄进入焦点树；TabControl 支持 roving tab stop、方向键切换和页面作用域隔离。
+- 模态与非模态 Dialog 使用独立焦点作用域；模态循环继续驱动输入、重绘和 hover/按下视觉反馈。
+- 源码分发扩展为 18 个公共头、12 个内部头和 22 个实现文件，必须作为同一版本整体集成。
+
+### 修复
+
+- 修复原生 EasyX 窗口销毁后宿主事件循环未退出的问题。
+- 修复焦点框切换后不立即重绘、旧焦点框残留，以及 Window/Canvas 空白点击不清焦点的问题。
+- 修复 Table 与 TabControl 焦点切换、分页边界回退和上下层重绘覆盖问题。
+- 修复模态 Dialog 内 Tab 无法遍历、按钮 hover/按下态不重绘和非模态 Dialog 焦点进入顺序异常。
+- 修复 IME 第一次输入候选窗出现在窗口外、跨 TextBox 后旧候选窗残留或闪烁、只读 TextBox 错误保留输入资格，以及候选窗与实际 caret 垂直偏移。
+- 修复 TextBox 选区在焦点变化后错误显示、失焦长文本滚动位置未归位，以及高频同步调试日志导致中文输入明显卡顿。
+- 修复 Pointer/键盘事件重复投递、窗口失活后队列旧事件继续激活控件，以及候选数字键误触发 Button 的问题。
+
+### 兼容性与迁移
+
+- `Control` 虚表、`Window` 与多个控件的对象布局已变化；所有静态库、二进制派生控件和应用程序必须使用同一版本头文件与源码重新编译。
+- `handleEvent(EX_KEY)` 不再接收业务键盘消息。自定义控件应覆盖 `handleKeyEvent()`；文字控件还需声明文字能力并实现专用文字/组合串入口。
+- TextBox 不再弹出 EasyX `InputBox`。无损 Unicode 代码应迁移到 UTF-16 API；旧窄字符串 API 保留，但转换失败时遵守显式失败或空结果语义。
+- Window、Canvas、Button、TextBox、Table、TabControl 与 Dialog 现在参与统一焦点协议。自定义控件若不需要焦点，应保持默认 `FocusPolicy::None`。
+- 直接源码集成必须同时更新 18 个公共头、12 个内部头和 22 个 `.cpp`，不能只复制新增文件。
+
+### 验证
+
+- 开发仓 Debug x64、Debug x64 ASan、Release x64、Debug Win32 四种配置均为 149/149 单元测试通过，ASan 无报告。
+- KEY1 至 KEY7 均完成编译链接；键盘、焦点、Dialog、复合控件、Pointer、TextBox、微软拼音与搜狗拼音经过分阶段人工回归。
+- 阶段 6A 在单显示器 100%、125%、150% 缩放下完成六轮无干扰几何与 IME 兼容性验收；多显示器混合 DPI 未测试。
+- 发布仓使用 Visual Studio 2022、C++17、x64 Release、静态运行库 `/MT` 构建完整框架和 9 个示例，结果为 0 警告、0 错误。
+- 发布仓 9 个示例均完成逐项启动、主要交互和正常关闭人工冒烟，未发现发布迁移引入的运行问题。
+
 ## [v4.0.0] - 2026-09-30
 
 v4.0.0 包含控件所有权、文本样式和 TabControl API 的破坏性调整。升级前请先阅读本节“兼容性与迁移”。

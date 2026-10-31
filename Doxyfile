@@ -3,7 +3,7 @@
 # 项目相关配置
 DOXYFILE_ENCODING      = UTF-8
 PROJECT_NAME           = "星垣 (StellarX) GUI Framework"
-PROJECT_NUMBER         = 4.0.0
+PROJECT_NUMBER         = 4.1.0
 PROJECT_BRIEF          = "A lightweight, modular C++ GUI framework for Windows"
 PROJECT_LOGO           = 
 OUTPUT_DIRECTORY       = docs

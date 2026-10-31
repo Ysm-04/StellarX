@@ -1,93 +1,81 @@
 # 为 StellarX 做贡献
 
-感谢您有兴趣为 StellarX 做出贡献！本文档提供了贡献的指南和步骤。
+感谢你愿意改进 StellarX。StellarX 是面向 Windows、基于 EasyX 的 C++17 GUI 框架。提交改动前，请先确认问题边界，并尽量让代码、示例和文档保持一致。
 
-StellarX 是一个为 **Windows 平台**打造的 C++ GUI 框架，基于 EasyX 图形库。
+## 开发环境
 
-## 开发环境设置
+- Visual Studio 2019 或更高版本，并安装“使用 C++ 的桌面开发”工作负载
+- 与 Visual Studio 对应的 EasyX；CMake 找不到 `EasyXa.lib` 时需设置 `EASYX_ROOT`
+- CMake 3.15 或更高版本
+- Git
 
-1. 安装 Visual Studio 2019 或更高版本
-2. 安装对应版本的 EasyX 图形库
-3. 安装 CMake 3.12 或更高版本
-4. 克隆项目仓库
-5. 使用 CMake 生成解决方案并编译
+推荐使用独立构建目录：
 
-## 如何贡献
-
-### 报告错误
-1.  检查 [Issues](../../issues) 看看这个错误是否已经被报告过。
-2.  如果没有，请创建一个新的 Issue。
-3.  使用 "Bug 报告" 模板。
-4.  提供**清晰的标题和描述**。
-5.  包括相关的代码片段、截图或重现问题的步骤。
-
-### 建议功能增强
-1.  检查现有的 Issue 中是否有你的想法。
-2.  使用 "功能请求" 模板创建一个新的 Issue。
-3.  清晰地描述新功能，并解释它为何有用。
-
-### 提交代码更改 (拉取请求 Pull Requests)
-1.  **Fork** GitHub 上的仓库。
-2.  **Clone** 你 fork 的仓库到本地机器。
-3.  为你的功能或错误修复创建一个**新分支** (`git checkout -b my-feature-branch`)。
-4.  **进行你的更改**。确保你的代码遵循项目的风格（见下文）。
-5.  **提交你的更改**，并附上清晰描述性的提交信息。
-6.  **Push** 你的分支到你 fork 的 GitHub 仓库 (`git push origin my-feature-branch`)。
-7.  针对原始 StellarX 仓库的 `main` 分支发起一个**拉取请求 (Pull Request)**。
-
-## 代码风格指南
-
-*   遵循项目中现有的代码格式和命名约定。
-*   为变量、函数和类使用有意义的名称。
-*   在必要时注释你的代码，特别是复杂的逻辑。
-*   确保你的代码编译时没有警告。
-*   彻底测试你的更改。
-*   使用 **4个空格** 进行缩进（不要使用制表符）
-- 类名使用 **PascalCase**（如 `ClassName`）
-- 函数和变量使用 **camelCase**（如 `functionName`, `variableName`）
-- 常量使用 **UPPER_CASE**（如 `CONSTANT_VALUE`）
-- 成员变量以 **m_** 前缀（如 `m_memberVariable`）
-- 控件属性使用有意义的名称，避免缩写
-- 为所有公共接口添加详细的注释
-- 遵循 RAII 原则管理资源
-
-##  示例代码风格
-
-```c++
-
-// 好的示例
-class MyControl : public Control {
-public:
-    MyControl(int x, int y, int width, int height) 
-        : Control(x, y, width, height), m_isActive(false) {}
-    
-    void draw() override {
-        // 绘制逻辑
-    }
-    
-private:
-    bool m_isActive;
-};
-
-// 不好的示例
-class my_control: public Control{
-public:
-    my_control(int x,int y,int w,int h):Control(x,y,w,h),active(false){}
-    void Draw() override{
-        // 绘制逻辑
-    }
-private:
-    bool active;
-};
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DSTELLARX_BUILD_EXAMPLES=ON `
+  -DSTELLARX_USE_STATIC_MSVC_RUNTIME=ON `
+  -DEASYX_ROOT="D:/path/to/EasyX"
+cmake --build build --config Release
 ```
 
-## 项目结构
+如使用 Visual Studio 2019，请把生成器改为对应版本。不要提交本机生成的 CMake 缓存、临时测试结果或调试日志。
 
-请遵循项目的目录结构：
-- 头文件放在 `include/StellarX/` 目录
-- 实现文件放在 `src/` 目录
-- 示例代码放在 `examples/` 目录
+## 报告问题与提出建议
 
-## 问题？
+提交 Issue 前请先搜索是否已有相同问题。错误报告应尽量包含：
 
-如果你有任何问题，可以随时开一个 Issue 或联系维护者。
+- StellarX、Visual Studio、EasyX 和 Windows 版本；
+- 可复现的最小代码、操作步骤与预期结果；
+- 实际结果、错误信息、截图或日志；
+- 与输入法相关的问题，还应注明输入法名称、显示缩放和是否使用多显示器。
+
+功能建议请说明使用场景、现有行为的不足，以及希望保持的兼容性边界。
+
+## 提交拉取请求
+
+1. Fork 仓库并从最新 `master` 创建独立分支。
+2. 只修改与本次问题有关的内容，避免把无关格式化或生成文件混入提交。
+3. 编译受影响的目标，并运行与改动相称的自动测试和人工检查。
+4. 同步更新示例、README、API 文档或变更日志中受影响的内容。
+5. 使用清晰的提交信息，并向原仓库的 `master` 分支发起 Pull Request。
+
+Pull Request 说明中请写明改动动机、行为变化、验证结果、未覆盖的环境，以及是否涉及源码或二进制兼容性。
+
+## 源码结构
+
+- `include/StellarX/`：用户可包含的公共头文件；新增或变更公共接口时必须同步更新 API 文档。
+- `src/`：框架实现文件。
+- `src/internal/`：实现专用私有头；业务代码不得直接包含。
+- `examples/`：可独立编译的示例及其说明。
+- `CMakeLists.txt`：框架源文件、头文件和构建选项的权威清单。
+
+新增、删除或重命名框架源码时，应同时更新 CMake 清单，并在 Windows 的大小写不敏感文件系统上检查 Git 是否正确记录了文件名大小写。
+
+## 代码与注释风格
+
+- 以相邻代码的格式和命名为准，不对无关文件做整片重排。
+- 类型使用 PascalCase，函数和局部变量通常使用 camelCase；既有公共 API 的历史命名保持兼容，不为统一外观擅自改名。
+- 缩进、换行和大括号遵循所在文件的现有风格；项目并不强制把所有文件改为四空格或统一成员前缀。
+- 优先使用 RAII、拥有型字符串、智能指针和稳定句柄表达所有权与生命周期。
+- 公共接口必须在声明处用中文说明用途、参数或关键语义；复杂实现应解释原因、约束和不变量，避免复述代码或保留“某阶段临时处理”一类施工口吻。
+- 面向用户的注释要说明可观察行为；内部注释要说明线程、重入、焦点、IME、延迟变更等容易误用的边界。
+- 不要在控件回调之后继续使用未经重新解析的裸指针；长期身份应保存 `ControlHandle` 或 `FocusTargetId`。
+- 键盘业务逻辑实现于 `handleKeyEvent()` 等定向路由入口，不要重新依赖 `handleEvent(EX_KEY)`。
+- 文本编辑内部使用 UTF-16；Windows ACP 接口仅作为兼容边界，不应成为新的文本存储模型。
+
+## 验证要求
+
+至少应完成：
+
+- Release 配置编译通过，且没有新增编译警告；
+- 受影响的示例能够启动、交互并正常关闭；
+- 焦点、键盘、Pointer、TextBox 或 IME 改动执行相应的自动测试与人工输入法回归；
+- 中英文文档中的版本、接口名称、命令和限制保持一致；
+- 提交前运行 `git diff --check`，并确认没有意外的二进制文件或本机路径。
+
+无法覆盖的测试环境应在 Pull Request 中明确写出，不要把“未测试”表述为“已通过”。
+
+## 需要帮助？
+
+如果接口边界或验证方法不明确，请先创建 Issue 讨论，再开始较大范围的实现。

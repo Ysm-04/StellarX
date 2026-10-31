@@ -7,6 +7,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 [中文文档](CHANGELOG.md)
 
+## [v4.1.0] - 2026-10-31
+
+v4.1.0 establishes unified focus and input routing and replaces the external InputBox interaction with a self-rendered UTF-16 single-line TextBox. This release changes the keyboard integration contract for custom controls and changes binary layouts; read Compatibility and Migration before upgrading.
+
+### Added
+
+- Added `FocusTargetId`, `FocusTargetSnapshot`, `FocusManager`, and focus scopes with click focus, Tab/Shift+Tab traversal, reentrant requests, removal fallback, activation suspension, and Dialog isolation.
+- Added `KeyEvent`, `TextInputEvent`, `CompositionEvent`, Pointer events, and one strictly increasing native-input sequence. Allocation failure becomes an explicit fail-stop instead of silently losing input.
+- Added `KeyboardRouter`, `TextInputRouter`, composition routing, and text-selection gesture management. Keys may bubble; text, composition, and selection gestures are directed to one stable identity.
+- Added a UTF-16 TextBox edit model, wide-character layout, caret, mouse drag selection, horizontal scrolling, clipboard commands, and Unicode-scalar-safe movement/deletion.
+- Added `TextBox::setTextUtf16()`, `getTextUtf16()`, and `tryGetText()`. Existing `std::string` methods remain a Windows ACP compatibility boundary.
+- Added IME caret/text-line publication and owner-thread positioning for candidate priming, inline composition, and cross-TextBox cancellation.
+
+### Changed
+
+- Production keyboard and Pointer business delivery now comes from the normalized native-input queue. EasyX `EX_KEY` / `EX_MOUSE` records are still drained but are no longer delivered directly as business input.
+- `Control` gains virtual focus, keyboard, text, composition, selection, and routing suspension/resumption hooks. Custom keyboard behavior belongs in `handleKeyEvent()`.
+- Button now provides focus feedback, Space activation on key-up, Enter activation on key-down, and armed-state cancellation on deactivation, focus change, or Escape.
+- TextBox is now a self-rendered single-line wide-character editor. Limits count Unicode scalars; read-only mode allows selection/copy, while password mode blocks sensitive clipboard actions.
+- Table pagination buttons and TabControl tabs enter the focus tree with their real Button handles. TabControl supports roving tab stops, arrow navigation, and inactive-page isolation.
+- Modal and modeless Dialogs use dedicated focus scopes. Modal loops continue to drive input, repaint, hover, and pressed-state feedback.
+- The source distribution now contains 18 public headers, 12 private headers, and 22 implementation files and must be integrated as one versioned unit.
+
+### Fixed
+
+- Fixed the host event loop remaining alive after the native EasyX window was destroyed.
+- Fixed delayed focus-ring repaint, stale focus rings, and Window/Canvas empty-space clicks failing to clear focus.
+- Fixed Table and TabControl focus transitions, pagination-boundary fallback, and redraws that covered controls in a higher layer.
+- Fixed Tab traversal inside modal Dialogs, missing hover/pressed repaint, and modeless Dialog focus-entry ordering.
+- Fixed first-use IME candidates appearing outside the window, stale or flashing candidates after a TextBox switch, read-only TextBox retaining input eligibility, and vertical candidate/caret offset.
+- Fixed stale TextBox selection visuals after focus changes, unfocused long text retaining its scrolled offset, and synchronous high-volume diagnostic logging causing severe Chinese-input stalls.
+- Fixed duplicate Pointer/keyboard delivery, queued keys activating controls after deactivation, and IME candidate number keys activating Buttons.
+
+### Compatibility and Migration
+
+- The `Control` vtable plus `Window` and several control layouts have changed. Rebuild all static libraries, binary derived controls, and applications from one matching source/header version.
+- `handleEvent(EX_KEY)` no longer receives business keyboard messages. Override `handleKeyEvent()` instead; text controls must also advertise text capability and implement the dedicated text/composition entries.
+- TextBox no longer opens EasyX `InputBox`. Use the UTF-16 APIs for lossless Unicode. The narrow-string APIs remain, with explicit failure or empty-result behavior when ACP conversion fails.
+- Window, Canvas, Button, TextBox, Table, TabControl, and Dialog now participate in one focus protocol. Keep the default `FocusPolicy::None` when a custom control should not receive focus.
+- Direct source integration must update all 18 public headers, 12 private headers, and 22 `.cpp` files together; copying only the new files is unsupported.
+
+### Validation
+
+- Debug x64, Debug x64 ASan, Release x64, and Debug Win32 each passed 149/149 development-repository unit tests; ASan reported no errors.
+- KEY1 through KEY7 all compiled and linked. Keyboard, focus, Dialog, composite control, Pointer, TextBox, Microsoft Pinyin, and Sogou Pinyin behavior received staged manual regression coverage.
+- Stage 6A completed six undisturbed geometry/IME acceptance rounds on one monitor at 100%, 125%, and 150% scaling. Mixed-DPI multi-monitor behavior was not tested.
+- The release repository built the complete framework and all nine examples with Visual Studio 2022, C++17, x64 Release, and static `/MT` runtime with 0 warnings and 0 errors.
+- All nine release examples passed individual manual smoke checks covering startup, primary interaction, and normal shutdown; no runtime issue caused by the release migration was found.
+
 ## [v4.0.0] - 2026-09-30
 
 v4.0.0 contains breaking changes to control ownership, text styles, and TabControl APIs. Read the Compatibility and Migration section before upgrading.

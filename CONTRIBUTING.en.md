@@ -1,94 +1,81 @@
 # Contributing to StellarX
 
-Thank you for your interest in contributing to StellarX! This document provides guidelines and steps for contributing.
+Thank you for helping improve StellarX. StellarX is a C++17 GUI framework for Windows built on EasyX. Before changing code, identify the behavioral boundary and keep source, examples, and documentation consistent.
 
-StellarX is a C++ GUI framework built for the **Windows platform**, based on the EasyX graphics library.
+## Development Environment
 
-## Development Environment Setup
+- Visual Studio 2019 or later with the Desktop development with C++ workload
+- An EasyX installation matching Visual Studio; set `EASYX_ROOT` if CMake cannot find `EasyXa.lib`
+- CMake 3.15 or later
+- Git
 
-1. Install Visual Studio 2019 or later
-2. Install the corresponding version of EasyX graphics library
-3. Install CMake 3.12 or later
-4. Clone the project repository
-5. Use CMake to generate the solution and compile
+Use an out-of-source build directory:
 
-## How to Contribute
-
-### Reporting Bugs
-1.  Check [Issues](../../issues) to see if the bug has already been reported.
-2.  If not, create a new Issue.
-3.  Use the "Bug Report" template.
-4.  Provide a **clear title and description**.
-5.  Include relevant code snippets, screenshots, or steps to reproduce the issue.
-
-### Suggesting Enhancements
-1.  Check existing Issues to see if your idea has been suggested.
-2.  Create a new Issue using the "Feature Request" template.
-3.  Clearly describe the new feature and explain why it would be useful.
-
-### Submitting Code Changes (Pull Requests)
-1.  **Fork** the repository on GitHub.
-2.  **Clone** your forked repository to your local machine.
-3.  Create a **new branch** for your feature or bug fix (`git checkout -b my-feature-branch`).
-4.  **Make your changes**. Ensure your code follows the project's style (see below).
-5.  **Commit your changes** with clear, descriptive commit messages.
-6.  **Push** your branch to your forked GitHub repository (`git push origin my-feature-branch`).
-7.  Open a **Pull Request** against the original StellarX repository's `main` branch.
-
-## Code Style Guide
-
-*   Follow the existing code formatting and naming conventions in the project.
-*   Use meaningful names for variables, functions, and classes.
-*   Comment your code when necessary, especially for complex logic.
-*   Ensure your code compiles without warnings.
-*   Test your changes thoroughly.
-*   Use **4 spaces** for indentation (no tabs)
-*   Class names use **PascalCase** (e.g., `ClassName`)
-*   Functions and variables use **camelCase** (e.g., `functionName`, `variableName`)
-*   Constants use **UPPER_CASE** (e.g., `CONSTANT_VALUE`)
-*   Member variables use **m_** prefix (e.g., `m_memberVariable`)
-*   Use meaningful names for control properties, avoid abbreviations
-*   Add detailed comments for all public interfaces
-*   Follow RAII principles for resource management
-
-## Example Code Style
-
-```c++
-// Good Example
-class MyControl : public Control {
-public:
-    MyControl(int x, int y, int width, int height) 
-        : Control(x, y, width, height), m_isActive(false) {}
-    
-    void draw() override {
-        // Drawing logic
-    }
-    
-private:
-    bool m_isActive;
-};
-
-// Bad Example
-class my_control: public Control{
-public:
-    my_control(int x,int y,int w,int h):Control(x,y,w,h),active(false){}
-    void Draw() override{
-        // Drawing logic
-    }
-private:
-    bool active;
-};
+```powershell
+cmake -S . -B build -G "Visual Studio 17 2022" -A x64 `
+  -DSTELLARX_BUILD_EXAMPLES=ON `
+  -DSTELLARX_USE_STATIC_MSVC_RUNTIME=ON `
+  -DEASYX_ROOT="D:/path/to/EasyX"
+cmake --build build --config Release
 ```
 
-## Project Structure
+Select the matching generator when using Visual Studio 2019. Do not commit local CMake caches, temporary test results, or debug logs.
 
-Please follow the project's directory structure:
+## Reporting Issues and Suggesting Changes
 
-- Header files go in the `include/StellarX/` directory
-- Implementation files go in the `src/` directory
-- Example code goes in the `examples/` directory
+Search existing Issues before filing a new one. A useful bug report includes:
 
-## Questions?
+- StellarX, Visual Studio, EasyX, and Windows versions;
+- minimal reproducible code, exact steps, and expected behavior;
+- actual behavior, diagnostics, screenshots, or logs;
+- for input-method issues, the IME name, display scaling, and multi-monitor setup.
 
-If you have any questions, feel free to open an Issue or contact the maintainers.
+Feature proposals should explain the use case, the limitation of current behavior, and the compatibility boundary that should be preserved.
 
+## Submitting a Pull Request
+
+1. Fork the repository and create a focused branch from the latest `master`.
+2. Keep the change scoped; avoid unrelated formatting and generated files.
+3. Build affected targets and run proportional automated and manual checks.
+4. Update affected examples, README files, API documentation, or changelog entries.
+5. Use descriptive commits and open the Pull Request against the original `master` branch.
+
+The Pull Request description should state the motivation, observable behavior changes, verification performed, untested environments, and any source or binary compatibility impact.
+
+## Source Layout
+
+- `include/StellarX/`: public headers available to applications; public API changes must be reflected in the API documentation.
+- `src/`: framework implementation files.
+- `src/internal/`: implementation-only private headers; applications must not include them.
+- `examples/`: independently buildable examples and their documentation.
+- `CMakeLists.txt`: authoritative source, header, and build-option inventory.
+
+When adding, removing, or renaming framework sources, update the CMake inventory and verify that Git recorded filename case changes correctly on case-insensitive Windows filesystems.
+
+## Code and Comment Style
+
+- Follow the formatting and naming used by surrounding code; do not reformat unrelated files.
+- Types use PascalCase, while functions and local variables generally use camelCase. Preserve historical public API names for compatibility instead of renaming them solely for consistency.
+- Follow the indentation, line-break, and brace style of the file. The project does not require a repository-wide four-space conversion or a uniform member prefix.
+- Prefer RAII, owning strings, smart pointers, and stable handles for ownership and lifetime.
+- Every public interface must have a Chinese declaration comment describing its purpose, parameters, or important semantics. Complex implementation comments should explain rationale, constraints, and invariants rather than restating code or referring to temporary development phases.
+- User-facing comments describe observable behavior; internal comments describe threading, reentrancy, focus, IME, and deferred-mutation boundaries that are easy to misuse.
+- Do not retain an unvalidated raw pointer across a control callback. Store long-lived identity as `ControlHandle` or `FocusTargetId`.
+- Implement keyboard behavior through directed routing APIs such as `handleKeyEvent()`; do not reintroduce `handleEvent(EX_KEY)` as a business-input path.
+- Text editing uses UTF-16 internally. Windows ACP APIs are compatibility boundaries, not a new storage model.
+
+## Verification
+
+At minimum:
+
+- build the Release configuration without introducing warnings;
+- launch, interact with, and close affected examples;
+- run relevant automated tests and manual IME checks for focus, keyboard, pointer, TextBox, or IME changes;
+- keep version numbers, API names, commands, and limitations aligned across Chinese and English documentation;
+- run `git diff --check` and confirm that no accidental binaries or machine-specific paths are included.
+
+State any untested environment explicitly in the Pull Request. Do not report an untested path as passing.
+
+## Need Help?
+
+If an API boundary or verification method is unclear, open an Issue for discussion before beginning a broad implementation.

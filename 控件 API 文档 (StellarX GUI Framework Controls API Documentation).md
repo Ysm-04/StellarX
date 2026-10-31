@@ -1,11 +1,11 @@
 # StellarX GUI Framework 控件 API 文档 / Controls API Documentation
 
-版本 / Version: v4.0.0
-日期 / Date: 2026-09-30
+版本 / Version: v4.1.0
+日期 / Date: 2026-10-31
 
-本文档基于当前最新源码与旧版 API 文档全量审校后整理，覆盖 StellarX v4.0.0 的核心类型、控件所有权、布局语义、托管重绘、日志系统和当前限制。
+本文档以 StellarX v4.1.0 发布源码为准，覆盖核心类型、控件所有权、布局与托管重绘、逻辑焦点、原生输入路由、UTF-16 TextBox、IME、日志系统和当前限制。
 
-This document is revised from a full audit of the current source code and the previous API documentation. It covers core types, control ownership, layout semantics, managed repaint, logging utilities, and current limitations in StellarX v4.0.0.
+This document follows the StellarX v4.1.0 release source. It covers core types, control ownership, layout and managed repaint, logical focus, native input routing, the UTF-16 TextBox and IME pipeline, logging, and current limitations.
 
 ## 1. 全局约定 / Global Conventions
 
@@ -15,13 +15,13 @@ This document is revised from a full audit of the current source code and the pr
 #include "StellarX.h"
 ```
 
-`StellarX.h` 是推荐的主入口头文件。当前源码实际包含 `CoreTypes.h`、`SxLog.h`、`Control.h`、`Canvas.h`、`Window.h`、`Button.h`、`Label.h`、`TextBox.h`、`Table.h`、`Dialog.h`、`MessageBox.h`、`TabControl.h`；该顺序属于框架内部实现，用户代码不应依赖内部包含顺序。
+`StellarX.h` 是推荐的主入口头文件。v4.1.0 发布 18 个公共头：`Button.h`、`Canvas.h`、`Control.h`、`CoreTypes.h`、`Dialog.h`、`FocusManager.h`、`InputEvents.h`、`KeyboardRouting.h`、`Label.h`、`MessageBox.h`、`StellarX.h`、`SxLog.h`、`TabControl.h`、`Table.h`、`TextBox.h`、`TextInputRouting.h`、`TextSelectionRouting.h` 和 `Window.h`。业务代码通常只包含 `StellarX.h`，不应依赖其内部包含顺序。
 
-`StellarX.h` is the recommended main include header. The current source includes `CoreTypes.h`, `SxLog.h`, `Control.h`, `Canvas.h`, `Window.h`, `Button.h`, `Label.h`, `TextBox.h`, `Table.h`, `Dialog.h`, `MessageBox.h`, and `TabControl.h`; this order is an internal implementation detail and user code should not depend on it.
+`StellarX.h` is the recommended entry header. v4.1.0 ships 18 public headers: `Button.h`, `Canvas.h`, `Control.h`, `CoreTypes.h`, `Dialog.h`, `FocusManager.h`, `InputEvents.h`, `KeyboardRouting.h`, `Label.h`, `MessageBox.h`, `StellarX.h`, `SxLog.h`, `TabControl.h`, `Table.h`, `TextBox.h`, `TextInputRouting.h`, `TextSelectionRouting.h`, and `Window.h`. Applications normally include only `StellarX.h` and must not depend on its internal include order.
 
-`src/internal/SxEventLoopInternal.h` 和 `src/internal/SxTextInternal.h` 是实现专用私有头。直接集成源码时必须随 `src/*.cpp` 保留并配置给框架实现，但业务代码不得包含它们。
+发布源码还包含 22 个 `src/*.cpp` 和 12 个 `src/internal/*.h`。私有头只供框架实现使用；直接集成源码时必须完整保留这些文件并配置私有包含目录，业务代码不得包含它们。更新版本时应整体替换这三组源码，不要只覆盖新增文件。
 
-`src/internal/SxEventLoopInternal.h` and `src/internal/SxTextInternal.h` are implementation-only private headers. Keep them available to framework `.cpp` files when integrating source, but do not include them from application code.
+The source release also contains 22 `src/*.cpp` files and 12 `src/internal/*.h` files. Private headers are implementation-only. Keep the complete set and configure the private include directory when integrating source, but never include them from application code. Replace all three source groups as a unit when upgrading instead of copying only newly added files.
 
 ### 1.2 坐标与几何 / Coordinates and Geometry
 
@@ -39,16 +39,20 @@ This document is revised from a full audit of the current source code and the pr
 - Normal resize, parent relayout, and unified layout solving do not write back to `local*` by default.
 - Call `commitCurrentGeometryAsDesignRect()` explicitly when the current runtime rectangle should become the new design baseline.
 
-### 1.3 事件与绘制 / Events and Drawing
+### 1.3 事件、输入与绘制 / Events, Input, and Drawing
 
-- 每个控件实现 `draw()` 和 `handleEvent(const ExMessage&)`。
-- `handleEvent()` 返回 `true` 表示事件已被消费，父容器不应继续向下层分发。
-- v4.0.0 采用托管重绘与延迟结构变更：事件阶段优先修改状态、登记脏区并排队控件树变更，`Window` 在安全点统一提交。
+- 每个具体控件实现 `draw()` 和 Pointer 兼容入口 `handleEvent(const ExMessage&)`。
+- 键盘、正式文字、IME 临时组合和文字选区分别通过 `handleKeyEvent()`、`handleTextInputEvent()`、`handleCompositionEvent()` 和 `handleTextSelectionGesture()` 定向投递。
+- WndProc 采集并规范化原生输入，`NativeInputQueue` 按严格序号跨线程交付；EasyX `EX_KEY` / `EX_MOUSE` 队列继续排空，但不再作为业务输入源。
+- 键盘沿逻辑焦点父链冒泡；正式文字和 IME 组合只投递给绑定的焦点叶节点。窗口失活时暂停键盘业务投递，但保留可恢复的逻辑焦点。
+- v4.1.0 继续采用托管重绘与延迟结构变更：事件阶段优先修改状态、登记脏区并排队控件树变更，`Window` 在安全点统一提交。
 - `discardBackground()` 表示回贴并释放背景快照；`invalidateBackgroundSnapshot()` 表示仅作废快照，不回贴旧背景。
 
-- Every control implements `draw()` and `handleEvent(const ExMessage&)`.
-- `handleEvent()` returns `true` when the event is consumed.
-- v4.0.0 uses managed repaint and deferred structural mutation: event handling mutates state, records dirty coverage, and queues control-tree changes; `Window` commits them at a safe point.
+- Every concrete control implements `draw()` and the Pointer-compatible `handleEvent(const ExMessage&)` entry.
+- Keyboard, committed text, transient IME composition, and text-selection gestures use the directed `handleKeyEvent()`, `handleTextInputEvent()`, `handleCompositionEvent()`, and `handleTextSelectionGesture()` entries.
+- WndProc normalizes native input and `NativeInputQueue` delivers it across threads in strict sequence. EasyX `EX_KEY` / `EX_MOUSE` queues are still drained but are no longer business-input sources.
+- Keyboard events bubble through the logical focus-parent chain; committed text and IME composition are delivered only to the bound focus leaf. Window deactivation suspends keyboard business routing while preserving restorable logical focus.
+- v4.1.0 retains managed repaint and deferred structural mutation: event handling mutates state, records dirty coverage, and queues control-tree changes; `Window` commits them at a safe point.
 - `discardBackground()` restores and releases the snapshot; `invalidateBackgroundSnapshot()` only invalidates the snapshot.
 
 ## 2. CoreTypes 基础类型 / Core Types
@@ -133,7 +137,7 @@ enum class LayoutMode { Fixed, AnchorToEdges };
 enum class Anchor { NoAnchor = 0, Left = 1, Right, Top, Bottom };
 ```
 
-v4.0.0 推荐接口：
+自 v4.0.0 起推荐的接口：
 
 ```cpp
 enum class AxisSizePolicy
@@ -195,6 +199,97 @@ Notes:
 - `Proportional` is a positioning strategy, not a scaling strategy.
 - `LayoutCapability` is a hard capability boundary, not the default strategy.
 
+### 2.6 焦点身份与焦点结果 / Focus Identity and Results
+
+```cpp
+struct FocusTargetId
+{
+    ControlHandle owner{};
+    std::uint32_t subNode = 0;
+    explicit operator bool() const noexcept;
+};
+
+struct FocusScopeId
+{
+    std::uint64_t value = 0;
+    explicit operator bool() const noexcept;
+};
+
+enum class FocusPolicy : std::uint8_t
+{
+    None = 0,
+    Programmatic = 1u << 0,
+    Pointer = 1u << 1,
+    Tab = 1u << 2
+};
+
+enum class FocusReason : std::uint8_t
+{
+    Programmatic,
+    Pointer,
+    TabTraversal,
+    TabRoving,
+    ScopeActivation,
+    ScopeRestore,
+    InvalidationFallback
+};
+
+enum class FocusError : std::uint8_t
+{
+    None,
+    InvalidTarget,
+    NotFocusable,
+    NotVisible,
+    Disabled,
+    OutsideActiveScope,
+    InvalidScope,
+    ReentrancyLimit
+};
+
+struct FocusChangeResult
+{
+    bool changed = false;
+    FocusError error = FocusError::None;
+    FocusTargetId focused{};
+};
+```
+
+- `FocusTargetId` 是焦点参与节点的稳定身份；v4.1.0 内置控件均使用 `subNode == 0`，调用方不应自行发明非零节点编号。
+- `FocusTargetSnapshot` 是采集时刻的可见性、启用状态、策略、Tab 顺序、文字能力和 IME caret 锚点快照。任何用户回调结束后都必须重新解析，不能长期缓存其中的状态或裸指针。
+- `FocusScopeId` 用于 Dialog 等受限焦点区域。焦点请求返回可断言的 `FocusChangeResult`；重入活性保护会报告 `FocusError::ReentrancyLimit`。
+
+- `FocusTargetId` is stable focus-node identity. All built-in v4.1.0 controls use `subNode == 0`; applications must not invent nonzero node numbers.
+- `FocusTargetSnapshot` captures visibility, enabled state, policy, Tab order, text capabilities, and IME caret geometry at one instant. It must be re-resolved after user callbacks; never retain snapshot state or borrowed pointers.
+- `FocusScopeId` identifies constrained focus regions such as Dialogs. Focus requests return an assertable `FocusChangeResult`; reentrancy liveliness protection reports `FocusError::ReentrancyLimit`.
+
+### 2.7 规范化原生输入 / Normalized Native Input
+
+`InputEvents.h` 定义 `KeyEvent`、`TextInputEvent`、`CompositionEvent`、`WindowActivationEvent`、`PointerEvent` 和 `NativeInputEvent`。关键语义如下：
+
+- `NativeInputEvent::sequence` 在所有输入类型之间严格递增，消费者按该顺序处理。
+- `KeyEvent` 同时保留原始 `virtualKey`、物理左右修饰键和采集时 IME 状态。`VK_PROCESSKEY` 表示单键归 IME 所有，不能据此伪造一个持久组合生命周期。
+- `TextInputEvent::text` 与 `CompositionEvent::compositionText` 均为 `std::u16string`。正式文字和临时组合视图是两条独立路径。
+- `CompositionStage` 包含 `Start`、`Update`、`Commit`、`Cancel`、`End`；正式提交仍由 `TextInputEvent` 写入编辑模型。
+- 每个事件携带采集时的窗口激活快照，防止排队输入跨越失活/恢复边界后误投递。
+
+`InputEvents.h` defines `KeyEvent`, `TextInputEvent`, `CompositionEvent`, `WindowActivationEvent`, `PointerEvent`, and `NativeInputEvent`:
+
+- `NativeInputEvent::sequence` is strictly increasing across all input kinds and defines consumer order.
+- `KeyEvent` preserves the raw `virtualKey`, physical left/right modifiers, and capture-time IME state. `VK_PROCESSKEY` denotes ownership of one key and must not fabricate persistent composition state.
+- `TextInputEvent::text` and `CompositionEvent::compositionText` use `std::u16string`. Committed text and transient composition view are separate paths.
+- `CompositionStage` contains `Start`, `Update`, `Commit`, `Cancel`, and `End`; committed text still enters the model through `TextInputEvent`.
+- Each event carries a capture-time activation snapshot so delayed input cannot cross a deactivate/reactivate boundary.
+
+### 2.8 定向路由事件 / Directed Routing Events
+
+- `RoutedKeyEvent` 携带规范化按键、原始焦点和当前冒泡节点；`KeyRouteResult::stopBubble` 与 `preventFrameworkDefault` 是彼此独立的裁决。
+- `RoutedTextInputEvent` 和 `RoutedCompositionEvent` 只在同步回调期间借用 UTF-16 视图；需要保留时必须复制。
+- `RoutedTextSelectionGestureEvent` 使用 HWND 客户区坐标，并以 `Begin`、`Update`、`End`、`Cancel` 表达完整拖选生命周期。
+
+- `RoutedKeyEvent` carries the normalized key, original focus leaf, and current bubbling node. `KeyRouteResult::stopBubble` and `preventFrameworkDefault` are independent decisions.
+- `RoutedTextInputEvent` and `RoutedCompositionEvent` borrow UTF-16 views only for the synchronous callback; copy data that must outlive the call.
+- `RoutedTextSelectionGestureEvent` uses HWND client coordinates and models a complete drag-selection lifecycle with `Begin`, `Update`, `End`, and `Cancel`.
+
 ## 3. Control 控件基类 / Base Control
 
 `Control` 是所有控件的抽象基类，不直接实例化。
@@ -209,7 +304,36 @@ virtual bool handleEvent(const ExMessage& msg) = 0;
 virtual bool model() const = 0;
 ```
 
-### 3.2 几何读取 / Geometry Getters
+`handleEvent()` 现在承接由定向 Pointer 管线转换出的兼容 `ExMessage`；EasyX `EX_KEY` 不再投递到该入口。派生控件的键盘业务应实现下面的定向接口。
+
+`handleEvent()` now receives compatibility `ExMessage` values translated by the directed Pointer pipeline. EasyX `EX_KEY` is no longer delivered here; derived controls implement keyboard behavior through the directed APIs below.
+
+### 3.2 焦点与定向输入 / Focus and Directed Input
+
+```cpp
+virtual StellarX::KeyRouteResult handleKeyEvent(
+    StellarX::RoutedKeyEvent& event);
+virtual void handleTextInputEvent(
+    const StellarX::RoutedTextInputEvent& event);
+virtual void handleCompositionEvent(
+    const StellarX::RoutedCompositionEvent& event);
+virtual bool handleTextSelectionGesture(
+    const StellarX::RoutedTextSelectionGestureEvent& event);
+
+StellarX::FocusChangeResult requestFocus(
+    StellarX::FocusReason reason = StellarX::FocusReason::Programmatic);
+void setFocusPolicy(StellarX::FocusPolicy policy);
+StellarX::FocusPolicy getFocusPolicy() const noexcept;
+void setTabIndex(std::int32_t value);
+std::int32_t getTabIndex() const noexcept;
+bool hasLogicalFocus() const noexcept;
+```
+
+默认定向处理器不消费输入。可聚焦控件通过 `setFocusPolicy()` 声明程序、Pointer 和 Tab 入口；`requestFocus()` 由所属 `Window` 的 `FocusManager` 执行。键盘路由沿稳定焦点身份的逻辑父链冒泡，文字与组合事件不冒泡。派生复合控件如需暴露内部焦点节点，应重写受保护的焦点查询、收集、应用与定向投递协议，且不得让解析得到的裸指针逃逸同步调用。
+
+Directed handlers do nothing by default. Focusable controls declare programmatic, Pointer, and Tab entry paths with `setFocusPolicy()`; `requestFocus()` is executed by the owning Window's `FocusManager`. Keyboard routes bubble through the stable logical focus-parent chain, while text and composition do not bubble. Composite controls exposing internal focus nodes override the protected query, collection, application, and directed-dispatch protocol without allowing resolved raw pointers to escape the synchronous call.
+
+### 3.3 几何读取 / Geometry Getters
 
 ```cpp
 int getX() const;
@@ -228,7 +352,7 @@ int getLocalBottom() const;
 RECT getBoundsRect() const;
 ```
 
-### 3.3 公开几何 setter / Public Geometry Setters
+### 3.4 公开几何 setter / Public Geometry Setters
 
 ```cpp
 virtual void setX(int x);
@@ -241,7 +365,7 @@ virtual void setHeight(int height);
 
 Public setters are user-facing runtime geometry APIs. They do not automatically write back to `local*`. Containers and specialized controls may override them to keep their runtime subtree consistent.
 
-### 3.4 可见性、dirty 与事件瞬时状态 / Visibility, Dirty State, Transient Mouse State
+### 3.5 可见性、dirty 与事件瞬时状态 / Visibility, Dirty State, Transient Mouse State
 
 ```cpp
 virtual void setIsVisible(bool show);
@@ -263,7 +387,7 @@ virtual void tick(ULONGLONG nowMs);
 
 `getHandle()` returns stable control identity. `tick()` is driven by Window with a monotonic clock; its default implementation is empty and timed controls may override it.
 
-### 3.5 父子关系和宿主窗口 / Parent and Host Window
+### 3.6 父子关系和宿主窗口 / Parent and Host Window
 
 ```cpp
 void setParent(Control* parent);
@@ -271,7 +395,7 @@ virtual void setHostWindow(Window* host);
 Window* getHostWindow() const;
 ```
 
-### 3.6 布局接口 / Layout APIs
+### 3.7 布局接口 / Layout APIs
 
 ```cpp
 void setLayoutMode(StellarX::LayoutMode layoutMode_);
@@ -300,7 +424,7 @@ void commitCurrentGeometryAsDesignRect();
 
 Legacy APIs are compatibility inputs. New code should prefer the `setHorizontal*` / `setVertical*` APIs.
 
-### 3.7 托管重绘相关 / Managed Repaint APIs
+### 3.8 托管重绘相关 / Managed Repaint APIs
 
 ```cpp
 virtual RECT getManagedRepaintCoverageRect() const;
@@ -343,7 +467,10 @@ int runEventLoop();
 ```
 
 - `draw()` 初始化或重绘窗口全场景。
-- `runEventLoop()` 驱动消息循环、事件分发、resize 收口和托管重绘提交。
+- `runEventLoop()` 驱动消息循环、严格有序的原生输入排空、焦点与路由、resize 收口和托管重绘提交。
+
+- `draw()` initializes or redraws the full scene.
+- `runEventLoop()` drives the message loop, strictly ordered native-input drain, focus and routing, resize consolidation, and managed repaint commits.
 
 ### 4.3 背景与标题 / Background and Title
 
@@ -362,6 +489,8 @@ void clearControls();
 Control* findControl(StellarX::ControlHandle handle);
 const Control* findControl(StellarX::ControlHandle handle) const;
 std::vector<StellarX::ControlHandle> getControlHandles() const;
+StellarX::FocusManager& getFocusManager();
+const StellarX::FocusManager& getFocusManager() const;
 void addDialog(std::unique_ptr<Control> dialogs);
 bool hasNonModalDialogWithCaption(const std::string& caption, const std::string& message) const;
 ```
@@ -374,7 +503,37 @@ bool hasNonModalDialogWithCaption(const std::string& caption, const std::string&
 - `removeControl()` reports whether the target was found and its removal was queued/committed. `clearControls()` is also deferred during transactions.
 - `getControlHandles()` returns a snapshot of committed handles without exposing container ownership.
 
-### 4.5 查询 / Getters
+### 4.5 FocusManager
+
+每个 `Window` 唯一拥有一个 `FocusManager`：
+
+```cpp
+StellarX::FocusManager& focus = window.getFocusManager();
+
+focus.requestFocus(target, StellarX::FocusReason::Programmatic);
+focus.clearFocus();
+focus.focusedTarget();
+focus.hasFocus(target);
+focus.collectTabStops();
+focus.advanceTabFocus(false); // false: forward, true: reverse
+
+StellarX::FocusScopeId scope = focus.pushScope(scopeRoot, initialFocus);
+focus.popScope(scope);
+```
+
+- 焦点管理器只长期保存稳定身份，不拥有 `Control`，也不缓存可跨回调使用的裸指针。
+- 焦点回调中的重入请求使用当前事务回合的 latest-wins 单槽；超过 64 轮会返回 `ReentrancyLimit`。
+- Tab 遍历每次重新收集当前作用域内的有效停靠点，不缓存首次绘制前的空结果。
+- 控件进入待删除队列时，所属子树会在物理析构前立即从焦点模型失效。
+- `pushScope()` / `popScope()` 为 Dialog 等受限区域提供焦点约束；普通业务通常通过 Dialog 自动管理作用域。
+
+- The manager stores only stable identity, owns no Controls, and never retains raw pointers across callbacks.
+- Reentrant focus requests use a latest-wins single slot for the current transaction round. More than 64 rounds returns `ReentrancyLimit`.
+- Tab traversal recollects valid stops in the active scope on every call and does not cache an empty pre-draw result.
+- A subtree becomes logically invalid as soon as removal is queued, before physical destruction.
+- `pushScope()` / `popScope()` constrain focus for regions such as Dialogs; ordinary applications normally let Dialog manage the scope.
+
+### 4.6 查询 / Getters
 
 ```cpp
 HWND getHwnd() const;
@@ -392,7 +551,7 @@ std::string getBkImageFile() const;
 
 `getWidth()` / `getHeight()` return the effective client size. `getPendingWidth()` / `getPendingHeight()` return pending size values recorded before resize consolidation.
 
-### 4.6 resize 与托管重绘 / Resize and Managed Repaint
+### 4.7 resize 与托管重绘 / Resize and Managed Repaint
 
 ```cpp
 void pumpResizeIfNeeded();
@@ -452,7 +611,24 @@ void setOnToggleOnListener(std::function<void()> callback);
 void setOnToggleOffListener(std::function<void()> callback);
 ```
 
-### 5.3 外观和状态 / Appearance and State
+### 5.3 焦点与键盘 / Focus and Keyboard
+
+```cpp
+StellarX::KeyRouteResult handleKeyEvent(
+    StellarX::RoutedKeyEvent& event) override;
+```
+
+- 启用状态的 Button 支持程序、Pointer 和 Tab 聚焦；`DISABLED` 模式会使当前焦点立即失效并触发同作用域回退。
+- Space 按下时显示键盘按压态，抬起且焦点仍有效时激活；Enter 首次按下立即激活，不显示持续按压态。
+- 自动重复的 Enter 不重复激活；窗口失活、焦点离开或控件禁用会清理尚未释放的 Space 按压态。
+- 键盘按压态与 NORMAL 鼠标瞬时态、TOGGLE 持久状态相互独立。
+
+- Enabled Buttons support programmatic, Pointer, and Tab focus. `DISABLED` invalidates current focus and triggers in-scope fallback.
+- Space shows an armed state on key-down and activates on key-up while focus remains valid. Enter activates on the first key-down without a sustained pressed visual.
+- Enter auto-repeat does not reactivate. Window deactivation, focus loss, or disabling clears an outstanding Space armed state.
+- Keyboard armed state is independent from the NORMAL mouse transient state and the TOGGLE persistent state.
+
+### 5.4 外观和状态 / Appearance and State
 
 ```cpp
 void setbuttonMode(StellarX::ButtonMode mode);
@@ -473,7 +649,7 @@ void setButtonClick(BOOL click);
 
 `setButtonClick(TRUE)` triggers `onClickCallback` in NORMAL mode. In TOGGLE mode, callbacks are fired only when the state actually changes: `onToggleOnCallback` / `onToggleOffCallback`; no repeated callback is emitted when the state is unchanged.
 
-### 5.4 查询 / Getters
+### 5.5 查询 / Getters
 
 ```cpp
 bool isClicked() const;
@@ -489,7 +665,7 @@ COLORREF getButtonTextColor() const;
 StellarX::ControlText getButtonTextStyle() const;
 ```
 
-### 5.5 Tooltip
+### 5.6 Tooltip
 
 ```cpp
 void enableTooltip(bool on);
@@ -551,9 +727,9 @@ void setText(std::string text);
 
 ## 7. TextBox 文本框 / TextBox
 
-TextBox 支持输入、只读和密码模式。当前输入仍基于 EasyX `InputBox`。
+TextBox 是单行 UTF-16 自绘编辑器，支持输入、只读和密码模式。文字、caret、选区、临时组合串与水平滚动均在控件表面绘制，不再弹出 EasyX `InputBox`。
 
-TextBox supports input, read-only, and password modes. Current input still relies on EasyX `InputBox`.
+TextBox is a self-rendered single-line UTF-16 editor with input, read-only, and password modes. Text, caret, selection, transient composition, and horizontal scrolling are drawn on the control surface; EasyX `InputBox` is no longer used.
 
 ### 7.1 构造 / Constructor
 
@@ -569,32 +745,68 @@ TextBox(int x, int y, int width, int height,
 ```cpp
 void draw() override;
 bool handleEvent(const ExMessage& msg) override;
+StellarX::KeyRouteResult handleKeyEvent(
+    StellarX::RoutedKeyEvent& event) override;
+void handleTextInputEvent(
+    const StellarX::RoutedTextInputEvent& event) override;
+void handleCompositionEvent(
+    const StellarX::RoutedCompositionEvent& event) override;
+bool handleTextSelectionGesture(
+    const StellarX::RoutedTextSelectionGestureEvent& event) override;
+void tick(ULONGLONG nowMs) override;
+void onWindowResize() override;
+
 void setMode(StellarX::TextBoxmode mode);
 void setMaxCharLen(size_t len);
 void setTextBoxshape(StellarX::ControlShape shape);
 void setTextBoxBorder(COLORREF color);
 void setTextBoxBk(COLORREF color);
+
+[[nodiscard]] bool setTextUtf16(std::u16string text);
+const std::u16string& getTextUtf16() const noexcept;
+
 void setText(std::string text);
 std::string getText() const;
+bool tryGetText(std::string& output) const;
 ```
 
-`setMaxCharLen()` 当前按 `std::string::size()` / 输入缓冲区字节长度处理，不等同于 Unicode 字符数；中文和其他多字节文本会按底层编码占用多个字节计算。
+`setTextUtf16()` / `getTextUtf16()` 是无损 Unicode 接口。`setText(std::string)`、`getText()` 和 `tryGetText()` 保留为 Windows ACP 兼容边界：设置转换失败时不修改原值；`getText()` 转换失败返回空串；`tryGetText()` 转换失败返回 `false` 且保持输出参数不变。
 
-`setMaxCharLen()` currently uses `std::string::size()` / input-buffer byte length, not Unicode code-point count. Chinese and other multibyte text count by their encoded byte length.
+`setTextUtf16()` / `getTextUtf16()` are lossless Unicode APIs. `setText(std::string)`, `getText()`, and `tryGetText()` remain Windows ACP compatibility boundaries: failed input conversion preserves the old value; `getText()` returns an empty string on failed output conversion; `tryGetText()` returns `false` without changing its output argument.
+
+`setMaxCharLen()` 按 Unicode scalar 数量限制正式文本，移动、删除和选区不会拆开代理项对；传入 0 时保持当前限制不变。
+
+`setMaxCharLen()` limits committed text by Unicode scalar count. Movement, deletion, and selection never split a surrogate pair; passing zero keeps the current limit.
 
 `setTextBoxshape()` 当前只支持 `RECTANGLE`、`B_RECTANGLE`、`ROUND_RECTANGLE`、`B_ROUND_RECTANGLE`；传入圆形或椭圆形状会回退为 `RECTANGLE`。
 
 `setTextBoxshape()` currently supports only `RECTANGLE`, `B_RECTANGLE`, `ROUND_RECTANGLE`, and `B_ROUND_RECTANGLE`; circle or ellipse shapes fall back to `RECTANGLE`.
 
-### 7.3 当前边界 / Current Boundary
+### 7.3 编辑、选区与剪贴板 / Editing, Selection, and Clipboard
 
-- 当前版本未引入焦点系统。
-- 当前版本未引入键盘事件系统。
-- TextBox 自绘输入体系尚未重写。
+- 支持 Left/Right、Home/End、Backspace、Delete、Shift 扩展选区和 `Ctrl+A/C/X/V`。
+- 鼠标按下、拖动和释放通过定向选区手势处理；选区和 caret 位置使用 Unicode scalar 安全边界。
+- 只读模式允许聚焦、定位 caret、选择和复制，但拒绝正式文字、删除、剪切和粘贴修改。
+- 密码模式使用掩码绘制，并阻止复制和剪切真实内容；程序仍可通过公开文本接口读取或设置值。
+- 焦点离开会取消旧的临时编辑视觉并收口选区显示；再次获得焦点时以当前正式模型重新建立 caret 与水平滚动。
 
-- Focus system is not implemented yet.
-- Keyboard event system is not implemented yet.
-- The self-rendered TextBox input pipeline is not rewritten yet.
+- Left/Right, Home/End, Backspace, Delete, Shift selection extension, and `Ctrl+A/C/X/V` are supported.
+- Pointer press, drag, and release use directed selection gestures; selection and caret positions observe Unicode-scalar-safe boundaries.
+- Read-only mode remains focusable and allows caret positioning, selection, and copy while rejecting committed text, deletion, cut, and paste mutations.
+- Password mode renders a mask and blocks copying or cutting the real content. Applications may still read or set the value through public APIs.
+- Focus loss retires transient editing visuals and selection display; focus gain rebuilds caret and horizontal scroll from the current committed model.
+
+### 7.4 IME 与当前边界 / IME and Current Boundaries
+
+- TextBox 内联绘制 IME 临时组合串；正式结果只由 `TextInputEvent` 提交一次。
+- caret 与当前文本行以 HWND 客户区物理像素发布给窗口属主线程，用于微软拼音、搜狗拼音候选窗定位。
+- 焦点转移、窗口失活、输入资格丢失或目标删除会取消旧组合，旧组合轮次不得惰性绑定到新的 TextBox。
+- 当前只提供单行编辑，不包含多行排版、撤销/重做、富文本或 TSF 编辑器能力。
+
+- TextBox renders transient IME composition inline; committed results are applied exactly once through `TextInputEvent`.
+- Caret and current-line geometry are published in HWND client physical pixels for Microsoft Pinyin and Sogou Pinyin candidate positioning.
+- Focus transfer, window deactivation, loss of input eligibility, or target removal cancels the old composition. An old composition session is never rebound lazily to a new TextBox.
+- The current editor is single-line and does not provide multiline layout, undo/redo, rich text, or TSF editor services.
 
 ## 8. Canvas 容器 / Canvas
 
@@ -666,6 +878,12 @@ void commitManagedRepaint() override;
 
 Note: the current version still keeps the historical Canvas fallback special case for Table. It will be removed only after Table internal partial repaint is completed.
 
+### 8.5 焦点与路由 / Focus and Routing
+
+Canvas 自身默认不成为 Tab stop，但会递归暴露当前已提交、可见且有效的子焦点节点。焦点查询和键盘、文字、组合、选区投递都按 `FocusTargetId` 重新解析；`findControl()` 只查直接子级，不能替代这套递归协议。单击 Canvas 内未命中任何子控件的空白区域会清除当前逻辑焦点。
+
+Canvas is not a Tab stop by default, but recursively exposes committed, visible, valid child focus nodes. Focus queries and keyboard, text, composition, and selection dispatch re-resolve `FocusTargetId`; direct-child-only `findControl()` is not a substitute for this recursive protocol. Clicking blank Canvas space clears logical focus.
+
 ## 9. TabControl 选项卡 / TabControl
 
 TabControl 管理“页签按钮 + 页面 Canvas”。外层接入统一布局，内部页签栏和页面区仍由自身专用逻辑管理。
@@ -717,7 +935,19 @@ int indexOf(const std::string& tabText) const;
 
 Before the first draw, `setActiveIndex()` records the default index. At runtime it returns `true` for a valid index or the already-active page and `false` for an invalid index. `indexOf()` returns `-1` when not found.
 
-### 9.4 dirty 与托管重绘 / Dirty State and Managed Repaint
+### 9.4 焦点与键盘 / Focus and Keyboard
+
+- 页签 Button 与活动页面内控件使用各自真实 `ControlHandle` 进入同一焦点树，不创建重复身份。
+- Tab 从当前作用域进入一个页签停靠点；Left/Right 仅在原始焦点位于页签 Button 时切换页签并移动焦点。
+- 页签切换后，非活动页面不接收键盘、文字、组合或选区事件；当前页每次按最新控件树重新解析。
+- 首次 `draw()` 前页签和页面的内部几何尚未完全物化；调用方不应缓存这一时刻的空遍历结果。
+
+- Tab buttons and controls on the active page enter one focus tree with their real `ControlHandle` values; no duplicate identity is created.
+- Tab enters one tab-strip stop for the composite control. Left/Right switches tabs and focus only when the original focus is a tab Button.
+- After switching, inactive pages receive no keyboard, text, composition, or selection events; the active page is re-resolved from the latest tree.
+- Internal tab/page geometry is not fully materialized before the first `draw()`; callers must not cache an empty traversal result from that moment.
+
+### 9.5 dirty 与托管重绘 / Dirty State and Managed Repaint
 
 ```cpp
 void setDirty(bool dirty) override;
@@ -814,7 +1044,13 @@ int getTableWidth() const;
 int getTableHeight() const;
 ```
 
-### 10.6 当前边界 / Current Boundaries
+### 10.6 焦点与分页按钮 / Focus and Pagination Buttons
+
+上一页和下一页是 Table 内部持有的真实 Button，并以各自句柄参与 Tab 遍历和 Space/Enter 激活。到达首页或尾页后，被禁用按钮会立即失去焦点资格；FocusManager 优先在当前 Table/作用域中寻找仍有效的遍历回退目标。分页按钮在首次绘制完成后才物化，Tab 遍历因此每次重新收集，不保存旧的空快照。
+
+Previous and Next are real Button objects owned by Table and participate in Tab traversal and Space/Enter activation with their own handles. At the first or last page, a disabled button immediately loses focus eligibility; FocusManager searches for a still-valid traversal fallback in the current Table/scope. Pagination buttons materialize after first draw, so Tab traversal recollects targets instead of retaining an old empty snapshot.
+
+### 10.7 当前边界 / Current Boundaries
 
 - X 轴可拉伸，Y 轴固定。
 - 当前仍以整表正确性优先，未实现内部局部重绘体系。
@@ -870,7 +1106,21 @@ void recenterInHostWindow();
 void performDelayedCleanup();
 ```
 
-### 11.4 当前语义 / Current Semantics
+### 11.4 焦点、键盘与模态循环 / Focus, Keyboard, and Modal Loop
+
+- 模态与非模态 Dialog 都建立独立焦点作用域，Tab/Shift+Tab 只在 Dialog 内部功能按钮间循环，不会进入底层窗口。
+- 显式默认功能按钮可用 Enter 激活；聚焦按钮也支持 Space。Escape 执行对话框取消/关闭默认动作，但控件可通过路由裁决阻止框架默认动作。
+- 模态循环持续排空原生输入、推进时钟和提交托管重绘，因此 Button 的 hover、按下态和焦点框保持更新。
+- Dialog 关闭或重建内部 chrome 时，会先让旧焦点身份失效，再延迟释放控件，避免悬空焦点。
+- 当前公开 Dialog 只管理标准标题、正文和功能按钮，不提供任意自定义控件挂载接口。
+
+- Modal and modeless Dialogs create independent focus scopes. Tab/Shift+Tab cycles only through Dialog function buttons and never enters the underlying window.
+- Enter activates the explicit default function button; focused buttons also support Space. Escape performs the Dialog cancel/close default, unless a control prevents the framework default through routing.
+- The modal loop continues draining native input, advancing timers, and committing managed repaints so Button hover, pressed visuals, and focus rings remain current.
+- Closing a Dialog or rebuilding its chrome invalidates old focus identity before deferred control destruction.
+- The public Dialog currently manages standard title, message, and function buttons only; it does not expose arbitrary custom-control mounting.
+
+### 11.5 当前语义 / Current Semantics
 
 - Dialog 在宿主窗口 resize、最大化、还原时只重新居中，不参与拉伸。
 - Dialog 标题由自身直接绘制，不再依赖独立 Label 子控件。
@@ -1023,7 +1273,31 @@ label->textStyle.color = RGB(200, 0, 0);
 label->setDirty(true); // 触发内容驱动尺寸刷新 / refresh content-driven runtime size
 ```
 
-### 14.4 MessageBox
+### 14.4 焦点与 UTF-16 TextBox / Focus and UTF-16 TextBox
+
+```cpp
+auto input = std::make_unique<TextBox>(20, 80, 260, 36);
+input->setTabIndex(10);
+input->setMaxCharLen(64);
+input->setTextUtf16(u"初始文本");
+
+TextBox* inputView = input.get(); // 只在构造阶段临时使用
+const StellarX::ControlHandle inputHandle = window.addControl(std::move(input));
+
+window.getFocusManager().requestFocus(
+    { inputHandle, 0 },
+    StellarX::FocusReason::Programmatic);
+
+std::u16string value;
+if (auto* control = dynamic_cast<TextBox*>(window.findControl(inputHandle)))
+    value = control->getTextUtf16();
+```
+
+长期保存句柄或 `FocusTargetId`，需要访问时重新查询。不要跨控件回调保留 `inputView` 这类裸指针。新 Unicode 代码优先使用 UTF-16 接口；窄字符串接口只用于兼容既有 Windows ACP 数据。
+
+Store handles or `FocusTargetId` values long-term and resolve the control when needed. Do not retain raw pointers such as `inputView` across control callbacks. New Unicode code should use the UTF-16 APIs; narrow-string APIs exist for existing Windows ACP data.
+
+### 14.5 MessageBox
 
 ```cpp
 auto result = StellarX::MessageBox::showModal(
@@ -1045,13 +1319,10 @@ StellarX::MessageBox::showAsync(
 
 ## 15. 当前限制与技术债 / Current Limitations and Technical Debt
 
-以下事项属于后续版本专题，不在 v4.0.0 中实现：
+以下事项属于后续版本专题，不在 v4.1.0 中实现：
 
-The following items are deferred to future versions and are not implemented in v4.0.0:
+The following items are deferred to future versions and are not implemented in v4.1.0:
 
-- 焦点系统 / focus system.
-- 键盘事件系统 / keyboard event system.
-- TextBox 自绘输入体系 / self-rendered TextBox input pipeline.
 - Table 内部局部重绘体系 / internal partial repaint system for Table.
 - Table 纵向 Stretch / vertical Stretch for Table.
 - Table 结构尺寸刷新从 draw 流程前移：当前 `Table::draw()` 仍可能触发 `initTextWaH()` 并刷新结构尺寸 / moving Table structural size refresh out of the draw path; currently `Table::draw()` may still call `initTextWaH()` and refresh structural size.
@@ -1059,9 +1330,31 @@ The following items are deferred to future versions and are not implemented in v
 - TabControl 内部布局应用路径收口 / TabControl internal layout application path cleanup.
 - Tooltip 完整智能选位 / full intelligent Tooltip placement.
 - 全局字体自动缩放 / global automatic font scaling.
-- 更完整的示例和 API 文档体系 / more complete examples and API documentation system.
+- TextBox 多行、撤销/重做、富文本和 TSF 编辑器能力 / multiline TextBox, undo/redo, rich text, and TSF editor services.
+- Dialog 任意自定义控件挂载接口 / arbitrary custom-control mounting in Dialog.
+- 多显示器混合 DPI 人工兼容性保证；当前仅完成单屏 100%/125%/150% 回归 / manual mixed-DPI multi-monitor guarantee; current evidence covers one monitor at 100%/125%/150%.
 
 ## 16. 版本迁移提示 / Migration Notes
+
+从 v4.0.0 迁移到 v4.1.0：
+
+When migrating from v4.0.0 to v4.1.0:
+
+- `Control` 新增焦点、键盘、文字、组合串、选区和路由暂停/恢复虚接口，`Window` 与多个控件的对象布局也发生变化。所有静态库、应用程序和二进制派生控件必须使用同一版本源码与头文件重新编译。
+- `handleEvent(EX_KEY)` 不再接收业务键盘消息。自定义控件应覆盖 `handleKeyEvent()`；文字控件还需声明文字/组合/选区能力并实现对应定向入口。
+- TextBox 不再弹出 EasyX `InputBox`。无损 Unicode 代码应改用 `setTextUtf16()` / `getTextUtf16()`；旧 `std::string` API 继续按 Windows ACP 工作。
+- 内置 Button、TextBox、Table 分页按钮、TabControl 页签和 Dialog 现在参与统一焦点树。自定义控件若不需要焦点，保持默认 `FocusPolicy::None`。
+- Window 与 Canvas 空白处单击会清除焦点；Dialog 使用独立作用域；窗口失活会暂停输入路由而不销毁逻辑焦点。
+- 直接源码集成必须整体更新 18 个公共头、12 个私有头和 22 个 `.cpp`，不能只复制 v4.1.0 新增文件。
+- v4.1.0 需要链接 `imm32`；使用仓库 CMake 配置时会自动完成。
+
+- `Control` adds virtual focus, keyboard, text, composition, selection, and routing suspend/resume APIs, while `Window` and several controls change object layout. Rebuild every static library, application, and binary-derived control with one consistent source/header version.
+- `handleEvent(EX_KEY)` no longer receives business keyboard input. Custom controls override `handleKeyEvent()`; text controls also declare text/composition/selection capabilities and implement the matching directed entries.
+- TextBox no longer opens EasyX `InputBox`. Use `setTextUtf16()` / `getTextUtf16()` for lossless Unicode; legacy `std::string` APIs remain Windows ACP boundaries.
+- Built-in Button, TextBox, Table pagination buttons, TabControl tabs, and Dialog now participate in one focus tree. Custom controls that need no focus retain the default `FocusPolicy::None`.
+- Clicking blank Window or Canvas space clears focus; Dialog uses an independent scope; window deactivation suspends input routing without destroying logical focus.
+- Direct source integration must update all 18 public headers, 12 private headers, and 22 `.cpp` files together, not only files newly added in v4.1.0.
+- v4.1.0 links `imm32`; the repository CMake configuration does this automatically.
 
 从 v3.1.0 迁移到 v4.0.0：
 

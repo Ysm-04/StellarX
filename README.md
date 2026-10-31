@@ -14,8 +14,8 @@
 ![GitHub all releases](https://img.shields.io/github/downloads/Ysm-04/StellarX/total)
 [![Star GitHub Repo](https://img.shields.io/github/stars/Ysm-04/StellarX.svg?style=social&label=Star%20This%20Repo)](https://github.com/Ysm-04/StellarX)
 
-![Source Version](https://img.shields.io/badge/Source-4.0.0-brightgreen.svg)
-![Binary Release](https://img.shields.io/badge/Binary_Release-4.0.0-blue.svg)
+![Source Version](https://img.shields.io/badge/Source-4.1.0-brightgreen.svg)
+![Binary Release](https://img.shields.io/badge/Binary_Release-4.1.0-blue.svg)
 ![C++](https://img.shields.io/badge/C++-17+-00599C?logo=cplusplus&logoColor=white)
 ![Windows](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows)
 ![EasyX](https://img.shields.io/badge/Based_on-EasyX-00A0EA)
@@ -62,15 +62,16 @@ KEY4 Dialog 与 MessageBox 预览
 
 ## 最新版本
 
-### v4.0.0 (2026-09-30)
+### v4.1.0 (2026-10-31)
 
-v4.0.0 是一次包含破坏性 API 调整的核心稳定性版本，重点解决回调期间控件树变更、运行期几何残影、文本所有权、日志文件切换和消息积压等问题。
+v4.1.0 在 v4.0.0 的安全所有权与托管重绘基础上，补齐通用焦点、键盘、Pointer、文字输入和单行 TextBox 编辑链路，使控件不再依赖 EasyX `InputBox` 才能输入文字。
 
-- **安全的控件所有权接口**：新增稳定 `ControlHandle`，Window 与 Canvas 通过 add/remove/clear/find/handles 接口管理控件，不再公开可变 `unique_ptr` 容器。
-- **延迟结构变更事务**：事件、绘制、tick 和按钮回调期间的新增、删除与清空会在最外层事务结束后提交，避免遍历中的对象和迭代器失效。
-- **文本与页签 API 收口**：`ControlText::faceName` 改为拥有型字符串；TabControl 使用 `addTab()` / `tryAddToPage()`，并允许重复页签标题。
-- **事件循环与定时状态改进**：消息按批处理，活动轮不再固定休眠；Tooltip 等延时状态由单调时钟 tick 链驱动。
-- **缺陷修复**：修复空 TabControl、几何旧像素、Table 分页首帧覆盖、Dialog 清理、Tooltip、MBCS 截断/密码掩码、日志滚动和配置切换等问题。
+- **统一焦点系统**：新增 `FocusTargetId`、`FocusManager`、焦点作用域、Tab/Shift+Tab 遍历、失活暂停与删除回退；Button、TextBox、Table 分页按钮、TabControl 页签和 Dialog 均接入同一模型。
+- **原生输入规范化与路由**：Win32 键盘、文字、IME 和 Pointer 消息先形成严格有序事件，再由稳定控件身份定向分发；窗口失活、模态作用域和 IME 所有权都有明确门控。
+- **自绘 TextBox**：使用 UTF-16 编辑模型和宽字符 GDI 绘制，支持 caret、选区、拖选、水平滚动、常用编辑快捷键、只读/密码模式以及微软拼音、搜狗拼音候选窗定位。
+- **键盘可用性**：Button 支持 `Space` 松开激活与 `Enter` 按下激活；TabControl 支持页签键盘进入与方向键切换；Dialog 内部焦点遍历不再泄漏到底层窗口。
+- **绘制与生命周期修复**：修复焦点框延迟刷新、Dialog 交互不重绘、Table/TabControl 层级覆盖、原生窗口关闭后事件循环未退出，以及 IME 首次定位和跨 TextBox 残留等问题。
+- **DPI/IME 兼容性证据**：完成单屏 100%/125%/150% 缩放下的几何与候选窗定位回归；多显示器混合 DPI 尚未纳入当前保证。
 
 完整更新日志：[CHANGELOG.md](CHANGELOG.md)
 
@@ -84,6 +85,11 @@ StellarX/
 │   └── StellarX/
 │       ├── StellarX.h
 │       ├── CoreTypes.h
+│       ├── FocusManager.h
+│       ├── InputEvents.h
+│       ├── KeyboardRouting.h
+│       ├── TextInputRouting.h
+│       ├── TextSelectionRouting.h
 │       ├── SxLog.h
 │       ├── Control.h
 │       ├── Window.h
@@ -98,8 +104,24 @@ StellarX/
 ├── src/
 │   ├── internal/
 │   │   ├── SxEventLoopInternal.h
-│   │   └── SxTextInternal.h
+│   │   ├── SxImeCaretAnchorInternal.h
+│   │   ├── SxNativeInputInternal.h
+│   │   ├── SxKeyboardRouterInternal.h
+│   │   ├── SxTextInputRouterInternal.h
+│   │   ├── SxTextSelectionGestureInternal.h
+│   │   └── 其余 UTF-16 编辑与绘制私有头（共 12 个）
 │   ├── Control.cpp
+│   ├── FocusManager.cpp
+│   ├── KeyboardRouter.cpp
+│   ├── TextInputRouter.cpp
+│   ├── SxNativeInput.cpp
+│   ├── SxImeCaretAnchor.cpp
+│   ├── SxInputProbe.cpp
+│   ├── SxTextEditModel.cpp
+│   ├── SxTextEditController.cpp
+│   ├── SxTextSelectionGesture.cpp
+│   ├── SxUnicode.cpp
+│   ├── SxWideTextView.cpp
 │   ├── Window.cpp
 │   ├── Button.cpp
 │   ├── Label.cpp
@@ -125,7 +147,7 @@ StellarX/
 
 1. **单一职责**：每个控件类负责自身绘制、事件和状态边界。
 2. **依赖倒置**：Window、Canvas、TabControl 等容器依赖 `Control` 抽象，而不是硬编码所有控件类型。
-3. **开闭原则**：新增控件优先继承 `Control`，实现 `draw()` 与 `handleEvent()`。
+3. **开闭原则**：新增控件优先继承 `Control`，实现 `draw()` 与 Pointer 兼容入口 `handleEvent()`；需要键盘或文字能力时再覆盖对应的路由接口。
 4. **一致性**：绘制、事件、dirty、可见性、背景快照和布局接口尽量保持统一。
 5. **轻量优先**：不引入重量级 UI 依赖，保留 EasyX + C++ 的低门槛特性。
 
@@ -138,6 +160,9 @@ StellarX/
 - **容器嵌套**：Canvas 与 TabControl 支持父局部坐标到窗口世界坐标的映射。
 - **稳定句柄与延迟变更**：回调期间可安全请求新增、删除或清空控件，实际结构变更在安全点提交。
 - **托管重绘**：事件阶段只修改状态并登记脏区，Window 在收口阶段统一提交重绘。
+- **逻辑焦点与作用域**：焦点只保存稳定身份，支持 Tab 遍历、复合控件、Dialog 隔离、重入请求和失效回退。
+- **键盘与文字路由**：按键可沿冻结身份路径冒泡，正式文字和 IME 临时组合串只投递给一个有效文字叶节点。
+- **自绘文字编辑**：TextBox 使用 UTF-16 模型、宽字符布局、选区、剪贴板与系统 IME，不再弹出外部输入框。
 - **对话框体系**：Dialog 支持模态/非模态，MessageBox 提供标准消息框工厂接口。
 - **调试日志**：SxLog 支持控制台/文件输出、级别过滤、Tag 过滤和中英文日志文本选择。
 
@@ -184,13 +209,13 @@ Visual Studio 中把源码直接加入现有应用工程时：
 2. 在“C/C++ -> 常规 -> 附加包含目录”中加入：
    - `$(ProjectDir)third_party\StellarX\include\StellarX`
    - `$(ProjectDir)third_party\StellarX\src\internal`
-3. 第二个目录只是为了让框架实现找到私有头。不要在业务源码中 `#include "SxEventLoopInternal.h"` 或 `#include "SxTextInternal.h"`。
-4. 将 `src` 根目录下 11 个 `.cpp` 全部加入项目；不要 `#include` 任何 `.cpp`，也不要同时编译另一份 StellarX 静态库。
+3. 第二个目录只是为了让框架实现找到私有头。不要在业务源码中直接包含 `src/internal` 下的任何文件。
+4. 将 `src` 根目录下 22 个 `.cpp` 全部加入项目；不要 `#include` 任何 `.cpp`，也不要同时编译另一份 StellarX 静态库。
 5. 使用 C++17，并把“字符集”设为“使用多字节字符集”。MSVC 增加 `/source-charset:utf-8` 和 `/execution-charset:.936`。
-6. 配置 EasyX 的头文件与库目录，并链接 EasyX、`user32.lib`、`gdi32.lib`、`shell32.lib`。
+6. 配置 EasyX 的头文件与库目录，并链接 EasyX、`user32.lib`、`gdi32.lib`、`shell32.lib`、`imm32.lib`。
 7. 业务代码统一使用 `#include "StellarX.h"`，不要依赖聚合头内部的包含顺序。
 
-若一个解决方案有多个可执行项目，建议单独建立 `StellarX.Core` 静态库工程：把 `src/*.cpp` 和两份私有头放入该库，`include/StellarX` 作为公共包含目录，`src/internal` 只配置在库工程自身；业务工程只引用静态库和公共包含目录。
+若一个解决方案有多个可执行项目，建议单独建立 `StellarX.Core` 静态库工程：把 `src/*.cpp` 和 12 份私有头放入该库，`include/StellarX` 作为公共包含目录，`src/internal` 只配置在库工程自身；业务工程只引用静态库和公共包含目录。
 
 使用本仓库 CMake 目标时，私有包含目录已经正确封装：
 
@@ -243,6 +268,9 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | `Anchor` | 旧锚点输入 | `NoAnchor`, `Left`, `Right`, `Top`, `Bottom` |
 | `AxisSizePolicy` | 新单轴尺寸策略 | `Stretch`, `FixedSize` |
 | `AxisAlignPolicy` | 新单轴固定尺寸位移策略 | `Start`, `End`, `Center`, `Proportional` |
+| `FocusPolicy` | 焦点入口能力 | `None`, `Click`, `Tab`, `ClickAndTab` |
+| `FocusReason` | 焦点变更来源 | `Programmatic`, `Pointer`, `TabTraversal`, `RemovalFallback` 等 |
+| `KeyEventType` | 原生按键阶段 | `KeyDown`, `KeyUp` |
 
 ### 常用结构体
 
@@ -255,6 +283,10 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | `LayoutSpec` | 水平轴与垂直轴布局规格组合 |
 | `LayoutCapability` | 控件是否允许 X/Y 轴 Stretch 的能力边界 |
 | `ResolvedLayoutRect` | 布局解算后的父局部矩形与世界坐标矩形 |
+| `FocusTargetId` | 控件句柄与可选内部节点组成的不透明焦点身份；当前内置控件使用 `subNode == 0` |
+| `FocusTargetSnapshot` | 某一时刻的可见、启用、可聚焦、Tab stop、作用域和父节点快照 |
+| `KeyEvent` / `TextInputEvent` | 在窗口属主线程采集并按严格序列入队的键盘与文字事件 |
+| `ImeCaretAnchorSnapshot` | TextBox 发布给系统输入法的客户区 caret 与文本行几何 |
 
 ## 控件库
 
@@ -264,13 +296,13 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 | --- | --- | --- | --- |
 | `Button` | `Button.h` | 多功能按钮 | NORMAL / TOGGLE / DISABLED，形状、颜色、Tooltip、文本截断、点击回调 |
 | `Label` | `Label.h` | 文本标签 | 透明/不透明背景，公开 `textStyle`，内容驱动运行态尺寸 |
-| `TextBox` | `TextBox.h` | 文本框 | 输入、只读、密码模式，基于 EasyX InputBox 的轻量输入 |
+| `TextBox` | `TextBox.h` | 单行文本框 | UTF-16 自绘编辑、caret、选区、剪贴板、水平滚动、只读/密码模式与系统 IME |
 
 ### 容器控件
 
 | 控件 | 头文件 | 描述 | 重点 |
 | --- | --- | --- | --- |
-| `Window` | `Window.h` | 顶层窗口 | 背景、事件循环、resize 收口、托管重绘入口 |
+| `Window` | `Window.h` | 顶层窗口 | 原生输入采集、焦点管理、事件路由、resize 收口与托管重绘入口 |
 | `Canvas` | `Canvas.h` | 通用容器 | 子控件父局部坐标映射、嵌套容器、托管局部提交 root |
 | `TabControl` | `TabControl.h` | 页签容器 | 外层参与统一布局，内部页签栏和页面区自管 |
 
@@ -289,7 +321,7 @@ int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 
 ## 布局系统
 
-v4.0.0 继续推荐使用单轴布局 API，而不是继续扩展旧双锚点模型。
+v4.1.0 继续推荐使用单轴布局 API，而不是继续扩展旧双锚点模型。
 
 ### 核心语义
 
@@ -332,6 +364,24 @@ rightButton->setHorizontalAlignPolicy(StellarX::AxisAlignPolicy::End);
 - `TextBox`：通常 X 可拉伸、Y 固定更符合输入框视觉。
 - `Label`：默认不做双轴 Stretch，内容变化可驱动自身运行态尺寸。
 
+## 焦点、键盘与文字输入
+
+- 每个 `Window` 拥有一个 `FocusManager`；长期状态只保存 `FocusTargetId`，解析得到的 `Control*` 不会逃逸当前调用。
+- `Tab` / `Shift+Tab` 每次都从当前控件树重新收集停靠点，不缓存首次绘制前尚未物化的复合控件结果。
+- Window、Canvas 空白处单击会清除焦点；窗口失活只暂停键盘路由并保留逻辑焦点，重新激活后恢复。
+- 按键沿事件开始时冻结的身份路径冒泡；`KeyRouteResult::stopBubble` 与 `preventFrameworkDefault` 相互独立。
+- 正式文字、IME 组合串和选区手势使用独立的定向路由，不会因为回调中切换焦点而重定向当前事件。
+- EasyX `EX_KEY` 仍会被排空，防止内部队列累积，但不会再作为控件业务键盘源。
+
+## TextBox 编辑与 IME
+
+- 内部正式文本使用 `std::u16string`；`setTextUtf16()` / `getTextUtf16()` 是无损 Unicode 接口，原有 `std::string` API 保留为 Windows ACP 兼容边界。
+- 最大长度按 Unicode scalar 计数，光标移动、删除和选区不会拆开代理项对。
+- 支持方向键、Home/End、退格、Delete、Shift 扩展选区及 `Ctrl+A/C/X/V`。
+- 只读模式允许聚焦、选择和复制，但拒绝修改；密码模式禁止复制和剪切真实内容。
+- IME 临时组合串由框架内联绘制，正式结果只提交一次；焦点变化、窗口失活或输入资格丢失会取消旧组合。
+- 候选窗锚点来自 TextBox 实际宽字符布局，并在首次输入前预定位；定位坐标是 HWND 客户区物理像素。
+
 ## TabControl
 
 - 页签栏支持 `Top`、`Bottom`、`Left`、`Right`。
@@ -373,8 +423,8 @@ SX_TRACE_SCOPE("Layout", "resolve layout");
 
 ## 高级主题与最佳实践
 
-- 自定义控件应继承 `Control`，实现 `draw()` 与 `handleEvent()`。
-- 事件已处理时返回 `true`，避免继续向下层控件分发。
+- 自定义控件应继承 `Control`，实现 `draw()` 与 Pointer 兼容入口 `handleEvent()`；键盘逻辑放入 `handleKeyEvent()`，不要等待 `handleEvent(EX_KEY)`。
+- `handleKeyEvent()` 可分别控制冒泡和默认动作；文字输入应通过专用文字入口接收，不能从按键虚拟键值推导字符。
 - 绘制前确保 EasyX 输出目标正确；需要直接画屏幕时应保证 `SetWorkingImage(nullptr)`。
 - 状态变化后优先标脏并请求托管重绘，不要在事件处理中随意直接绘制。
 - 容器外部保存 `ControlHandle` 并通过 `findControl()` 临时查询；不要长期保存容器引用或在请求删除后继续使用裸指针。
@@ -393,24 +443,33 @@ SX_TRACE_SCOPE("Layout", "resolve layout");
 不适用或需谨慎的场景：
 
 - 高性能游戏或复杂动画。
-- 高 DPI、多显示器复杂缩放适配场景。
+- 多显示器混合 DPI 或由宿主动态切换 DPI awareness 的场景。
 - 大型商业前端或复杂无障碍要求项目。
 - 跨平台 GUI。
 
 ## 当前已知限制
 
-- 尚未实现焦点系统。
-- 尚未实现键盘事件系统。
-- TextBox 仍基于 EasyX InputBox，未重写自绘输入体系。
 - Table 内部局部重绘体系尚未完成。
 - Table 暂不支持纵向 Stretch。
 - Table 结构尺寸刷新仍可能发生在 draw 流程中。
 - Canvas 对 Table 的历史兜底特判仍保留。
-- TabControl 内部布局应用路径尚未完全收口。
 - Tooltip 尚未实现完整智能选位。
 - 暂无全局字体自动缩放系统。
+- TextBox 当前为单行编辑器，不提供多行排版、撤销/重做或富文本。
+- Dialog 当前只管理内置内容与按钮，不提供面向用户的任意自定义控件挂载接口。
+- 单屏 100%/125%/150% DPI 已回归；多显示器混合 DPI 尚无人工验收条件。
 
-## 从 v3.1.0 升级
+## 升级与兼容性
+
+从 v4.0.0 升级到 v4.1.0：
+
+- `Control` 新增焦点、键盘、文字、组合串和选区路由虚接口，`Window` 与多个控件类布局也发生变化；二进制派生控件和静态库必须重新编译。
+- `handleEvent(EX_KEY)` 不再接收业务键盘消息。自定义控件应覆盖 `handleKeyEvent()`；如需文字输入，还应按能力协议实现专用文字入口。
+- TextBox 不再弹出 EasyX `InputBox`。需要无损 Unicode 时改用 `setTextUtf16()` / `getTextUtf16()`；原有 `setText(std::string)` / `getText()` 仍按 Windows ACP 兼容。
+- Button、TextBox、Table 分页按钮、TabControl 页签与 Dialog 已进入统一焦点树；若自定义控件不希望参与焦点，请保持默认 `FocusPolicy::None`。
+- 应把开发仓源码视为一个整体：公共头、22 个 `.cpp` 和 12 个私有头必须来自同一版本，不能只补新增文件。
+
+从 v3.1.0 升级到 v4.0.0：
 
 - `Window::getControls()`、`Canvas::getControls()` 已移除，改用 `addControl()`、`removeControl()`、`clearControls()`、`findControl()` 和 `getControlHandles()`。
 - `Canvas::clearAllControls()` 改为 `clearControls()`。
